@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { detectSmartMoney } from './smartMoney.js';
 
 const TIMEFRAMES = [
   ['1m', '1m'], ['3m', '3m'], ['5m', '5m'], ['15m', '15m'], ['30m', '30m'],
@@ -56,52 +57,6 @@ function atr(candles, period = 14) {
   if (candles.length <= period) return null;
   const ranges = candles.slice(1).map((c, i) => Math.max(c[2] - c[3], Math.abs(c[2] - candles[i][4]), Math.abs(c[3] - candles[i][4])));
   return ranges.slice(-period).reduce((sum, value) => sum + value, 0) / period;
-}
-
-function detectSmartMoney(candles, swingLength = 3) {
-  const fairValueGaps = [], liquiditySweeps = [], structureBreaks = [], orderBlocks = [];
-  if (candles.length < swingLength * 2 + 5) return { fairValueGaps, liquiditySweeps, structureBreaks, orderBlocks };
-  let lastHigh = null, lastLow = null, trend = 0;
-  const swingHighs = [], swingLows = [];
-  for (let i = 0; i < candles.length; i += 1) {
-    if (i >= swingLength * 2) {
-      const pivot = i - swingLength;
-      const sample = candles.slice(pivot - swingLength, pivot + swingLength + 1);
-      if (sample.every((c,j) => j === swingLength || candles[pivot][2] > c[2])) {
-        lastHigh = { index: pivot, price: candles[pivot][2], broken: false };
-        swingHighs.push(lastHigh);
-      }
-      if (sample.every((c,j) => j === swingLength || candles[pivot][3] < c[3])) {
-        lastLow = { index: pivot, price: candles[pivot][3], broken: false };
-        swingLows.push(lastLow);
-      }
-    }
-    const c = candles[i], previous = candles[i-1];
-    if (i >= 2) {
-      const two = candles[i-2];
-      if (c[3] > two[2]) fairValueGaps.push({ direction:'bullish', start:i-2, end:i, top:c[3], bottom:two[2] });
-      if (c[2] < two[3]) fairValueGaps.push({ direction:'bearish', start:i-2, end:i, top:two[3], bottom:c[2] });
-    }
-    if (lastHigh && !lastHigh.broken && c[2] > lastHigh.price && c[4] < lastHigh.price) liquiditySweeps.push({ direction:'buy-side', index:i, level:lastHigh.price });
-    if (lastLow && !lastLow.broken && c[3] < lastLow.price && c[4] > lastLow.price) liquiditySweeps.push({ direction:'sell-side', index:i, level:lastLow.price });
-    if (lastHigh && !lastHigh.broken && c[4] > lastHigh.price && previous && previous[4] <= lastHigh.price) {
-      const kind = trend < 0 ? 'CHoCH' : 'BOS';
-      structureBreaks.push({ direction:'bullish', kind, index:i, level:lastHigh.price });
-      lastHigh.broken = true; trend = 1;
-      for (let j=i-1; j>=Math.max(0,i-12); j-=1) if (candles[j][4] < candles[j][1]) {
-        orderBlocks.push({ direction:'bullish', start:j, end:i, top:candles[j][2], bottom:candles[j][3] }); break;
-      }
-    }
-    if (lastLow && !lastLow.broken && c[4] < lastLow.price && previous && previous[4] >= lastLow.price) {
-      const kind = trend > 0 ? 'CHoCH' : 'BOS';
-      structureBreaks.push({ direction:'bearish', kind, index:i, level:lastLow.price });
-      lastLow.broken = true; trend = -1;
-      for (let j=i-1; j>=Math.max(0,i-12); j-=1) if (candles[j][4] > candles[j][1]) {
-        orderBlocks.push({ direction:'bearish', start:j, end:i, top:candles[j][2], bottom:candles[j][3] }); break;
-      }
-    }
-  }
-  return { fairValueGaps:fairValueGaps.slice(-30), liquiditySweeps:liquiditySweeps.slice(-20), structureBreaks:structureBreaks.slice(-20), orderBlocks:orderBlocks.slice(-20), swingHighs:swingHighs.slice(-12), swingLows:swingLows.slice(-12) };
 }
 
 const fmt = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
@@ -227,7 +182,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     };
   }, [candles]);
 
-  const smartMoney = useMemo(() => detectSmartMoney(candles), [candles]);
+  const smartMoney = useMemo(() => detectSmartMoney(candles.slice(0, -1)), [candles]);
 
   const geometry = useMemo(() => {
     if (!candles.length) return null;
@@ -329,8 +284,8 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
             </g>;
           })}
 
-          {showFvg && smartMoney.fairValueGaps.filter(z => z.end >= candles.length - geometry.count).map((z,i) => { const offset=candles.length-geometry.count; const x1=geometry.x(Math.max(0,z.start-offset)), x2=geometry.x(Math.min(geometry.count-1,z.end-offset)); const y1=geometry.y(z.top), y2=geometry.y(z.bottom); return <g key={'fvg'+i}><rect x={x1} y={Math.min(y1,y2)} width={Math.max(3,x2-x1)} height={Math.max(2,Math.abs(y2-y1))} fill={z.direction==='bullish'?'#20c997':'#f07883'} fillOpacity=".13" stroke={z.direction==='bullish'?'#20c997':'#f07883'} strokeOpacity=".55" strokeDasharray="3 3"/><text x={x1+3} y={Math.min(y1,y2)-3} fill={z.direction==='bullish'?'#20c997':'#f07883'} fontSize="9">{z.direction==='bullish'?'Bull FVG':'Bear FVG'}</text></g>; })}
-          {showOrderBlocks && smartMoney.orderBlocks.filter(z => z.end >= candles.length - geometry.count).map((z,i) => { const offset=candles.length-geometry.count; const x1=geometry.x(Math.max(0,z.start-offset)), x2=geometry.x(Math.min(geometry.count-1,z.end-offset)); const y1=geometry.y(z.top), y2=geometry.y(z.bottom); return <g key={'ob'+i}><rect x={x1} y={Math.min(y1,y2)} width={Math.max(4,x2-x1)} height={Math.max(2,Math.abs(y2-y1))} fill={z.direction==='bullish'?'#20c997':'#f07883'} fillOpacity=".10" stroke={z.direction==='bullish'?'#20c997':'#f07883'} strokeWidth="1.2"/><text x={x1+3} y={Math.min(y1,y2)-3} fill={z.direction==='bullish'?'#20c997':'#f07883'} fontSize="9">{z.direction==='bullish'?'Bull OB':'Bear OB'}</text></g>; })}
+          {showFvg && smartMoney.fairValueGaps.filter(z => z.end >= candles.length - geometry.count).map((z,i) => { const offset=candles.length-geometry.count; const x1=geometry.x(Math.max(0,z.start-offset)), x2=geometry.right; const y1=geometry.y(z.top), y2=geometry.y(z.bottom); return <g key={'fvg'+i}><rect x={x1} y={Math.min(y1,y2)} width={Math.max(3,x2-x1)} height={Math.max(2,Math.abs(y2-y1))} fill={z.direction==='bullish'?'#20c997':'#f07883'} fillOpacity=".13" stroke={z.direction==='bullish'?'#20c997':'#f07883'} strokeOpacity=".55" strokeDasharray="3 3"/><text x={x1+3} y={Math.min(y1,y2)-3} fill={z.direction==='bullish'?'#20c997':'#f07883'} fontSize="9">{z.direction==='bullish'?'Bull FVG':'Bear FVG'}</text></g>; })}
+          {showOrderBlocks && smartMoney.orderBlocks.filter(z => z.end >= candles.length - geometry.count).map((z,i) => { const offset=candles.length-geometry.count; const x1=geometry.x(Math.max(0,z.start-offset)), x2=geometry.right; const y1=geometry.y(z.top), y2=geometry.y(z.bottom); return <g key={'ob'+i}><rect x={x1} y={Math.min(y1,y2)} width={Math.max(4,x2-x1)} height={Math.max(2,Math.abs(y2-y1))} fill={z.direction==='bullish'?'#20c997':'#f07883'} fillOpacity=".10" stroke={z.direction==='bullish'?'#20c997':'#f07883'} strokeWidth="1.2"/><text x={x1+3} y={Math.min(y1,y2)-3} fill={z.direction==='bullish'?'#20c997':'#f07883'} fontSize="9">{z.direction==='bullish'?'Bull OB':'Bear OB'}</text></g>; })}
           {showStructure && smartMoney.structureBreaks.filter(e => e.index >= candles.length - geometry.count).map((e,i) => { const x=geometry.x(e.index-(candles.length-geometry.count)), y=geometry.y(e.level); return <g key={'struct'+i}><line x1={geometry.left} y1={y} x2={x} y2={y} stroke={e.direction==='bullish'?'#20c997':'#f07883'} strokeWidth="1.2" strokeDasharray="5 3"/><text x={Math.max(geometry.left,x-42)} y={y+(e.direction==='bullish'?-5:12)} fill={e.direction==='bullish'?'#20c997':'#f07883'} fontSize="10">{e.kind} {e.direction==='bullish'?'↑':'↓'}</text></g>; })}
           {showSweeps && smartMoney.liquiditySweeps.filter(e => e.index >= candles.length - geometry.count).map((e,i) => { const x=geometry.x(e.index-(candles.length-geometry.count)), y=geometry.y(e.level); return <g key={'sweep'+i}><circle cx={x} cy={y} r="3.5" fill="#e5b85c"/><text x={x+4} y={y-6} fill="#e5b85c" fontSize="9">{e.direction==='buy-side'?'BSL sweep':'SSL sweep'}</text></g>; })}
           {showVwap && metrics.vwap && <line x1={geometry.left} y1={geometry.y(metrics.vwap)} x2={geometry.right} y2={geometry.y(metrics.vwap)} stroke="#38bdf8" strokeWidth="1.6" strokeDasharray="6 3"/>}
@@ -343,7 +298,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         </svg>
       </div>}
     <div className="chart-footer">
-      <span>{candles.length} candles · {timeframe} · Auto-refresh 20s · BOS/CHoCH {smartMoney.structureBreaks.length} · FVG {smartMoney.fairValueGaps.length}</span>
+      <span>{candles.length} candles · {timeframe} · Auto-refresh 20s · SMC uses closed candles · BOS/CHoCH {smartMoney.structureBreaks.length} · FVG {smartMoney.fairValueGaps.length}</span>
       <button type="button" onClick={() => setDrawings([])}>Clear drawings</button>
       <span>EMA 20 <i className="ema20-key"/> EMA 50 <i className="ema50-key"/> Bullish <i className="bull-key"/> Bearish <i className="bear-key"/></span>
     </div>
