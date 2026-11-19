@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildCrossVenueComparison } from './market-intelligence.js';
+
+test('cross-venue comparison calculates median, spread and indicative top-of-book edge', () => {
+  const result = buildCrossVenueComparison('BTC/USDT', [
+    { exchange: 'alpha', last: 100, bid: 99, ask: 101 },
+    { exchange: 'beta', last: 102, bid: 101, ask: 103 },
+    { exchange: 'gamma', last: 101, bid: 100, ask: 102 }
+  ]);
+  assert.equal(result.venueCount, 3);
+  assert.equal(result.medianLast, 101);
+  assert.ok(result.lastPriceSpreadPercent > 0);
+  assert.equal(result.bestExecutableTopOfBook.buyVenue, 'alpha');
+  assert.equal(result.bestExecutableTopOfBook.sellVenue, 'beta');
+  assert.ok(result.bestExecutableTopOfBook.grossEdgePercent > 0);
+});
+
+test('cross-venue comparison excludes invalid last prices and avoids false arbitrage across one venue', () => {
+  const result = buildCrossVenueComparison('ETH/USDT', [
+    { exchange: 'alpha', last: 0, bid: 0, ask: 0 },
+    { exchange: 'beta', last: 2000, bid: 1999, ask: 2001 }
+  ]);
+  assert.equal(result.venueCount, 1);
+  assert.equal(result.bestExecutableTopOfBook, null);
+  assert.equal(result.medianLast, 2000);
+});
