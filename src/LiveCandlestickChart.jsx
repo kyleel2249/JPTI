@@ -94,6 +94,11 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [showBollinger, setShowBollinger] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
   const [zoom, setZoom] = useState(1);
+  const [candleSpacing, setCandleSpacing] = useState(1.35);
+  const [candleBodyPct, setCandleBodyPct] = useState(88);
+  const [volumeHeight, setVolumeHeight] = useState(78);
+  const [marketContext, setMarketContext] = useState(null);
+  const [contextError, setContextError] = useState('');
   const [crosshair, setCrosshair] = useState(null);
 
   useEffect(() => {
@@ -126,13 +131,15 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       const encodedSymbol = symbol.replace('/', '-');
       const [candleResponse, tickerResponse] = await Promise.all([
         fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
-        fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol)
+        fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
+        fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
       ]);
-      const [candleData, tickerData] = await Promise.all([candleResponse.json(), tickerResponse.json()]);
+      const [candleData, tickerData, contextResponseData] = await Promise.all([candleResponse.json(), tickerResponse.json(), contextResponse.json()]);
       if (!candleResponse.ok) throw new Error(candleData.error || 'Candlestick data unavailable for this market and timeframe.');
       setCandles((candleData.candles || []).filter((row) => row.length >= 6).map((row) => row.map(Number)));
       setError('');
       if (tickerResponse.ok) setTicker(tickerData);
+      if (contextResponse.ok) { setMarketContext(contextResponseData); setContextError(''); } else setContextError(contextResponseData.error || 'Context analysis unavailable');
     } catch (e) {
       setError(e.message);
       setCandles([]);
@@ -148,13 +155,15 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         const encodedSymbol = symbol.replace('/', '-');
         const [candleResponse, tickerResponse] = await Promise.all([
           fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
-          fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol)
+          fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
+          fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
         ]);
-        const [candleData, tickerData] = await Promise.all([candleResponse.json(), tickerResponse.json()]);
+        const [candleData, tickerData, contextResponseData] = await Promise.all([candleResponse.json(), tickerResponse.json(), contextResponse.json()]);
         if (!active) return;
         if (!candleResponse.ok) throw new Error(candleData.error || 'Candlestick data unavailable for this market and timeframe.');
         setCandles((candleData.candles || []).filter((row) => row.length >= 6).map((row) => row.map(Number)));
         if (tickerResponse.ok) setTicker(tickerData);
+        if (contextResponse.ok) { setMarketContext(contextResponseData); setContextError(''); } else setContextError(contextResponseData.error || 'Context analysis unavailable');
         setError('');
       } catch (e) {
         if (active) setError(e.message);
@@ -187,7 +196,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
 
   const geometry = useMemo(() => {
     if (!candles.length) return null;
-    const count = Math.max(25, Math.min(candles.length, Math.floor(candles.length / zoom)));
+    const count = Math.max(25, Math.min(candles.length, Math.floor(candles.length / (zoom * candleSpacing))));
     const rows = candles.slice(-count);
     const min = Math.min(...rows.map((c) => c[3]));
     const max = Math.max(...rows.map((c) => c[2]));
@@ -199,10 +208,11 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     const maxVol = Math.max(1, ...rows.map((c) => c[5]));
     const points = (values) => values.slice(candles.length - count).map((value, i) => Number.isFinite(value) ? x(i) + ',' + y(value) : null).filter(Boolean).join(' ');
     return { rows, count, min: low, max: high, left, right, top, priceBottom, volumeBottom, x, y, maxVol, points };
-  }, [candles, zoom]);
+  }, [candles, zoom, candleSpacing]);
 
   const activeCandle = crosshair !== null && geometry ? geometry.rows[crosshair] : metrics.last;
-  const candleWidth = geometry ? Math.max(2, Math.min(11, (geometry.right - geometry.left) / geometry.count * 0.66)) : 4;
+  const candleSlot = geometry ? (geometry.right - geometry.left) / geometry.count : 6;
+  const candleWidth = Math.max(2, Math.min(22, candleSlot * candleBodyPct / 100));
 
   return <section className="panel exchange-connect trading-chart-panel">
     <div className="panelhead">
@@ -226,6 +236,12 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         <button onClick={() => setZoom(1)} title="Fit all candles">Fit</button>
         <button onClick={load} title="Refresh chart">{loading ? '…' : '↻'}</button>
       </div>
+    </div>
+    <div className="chart-size-controls" aria-label="Chart sizing controls">
+      <label><span>Candle spacing <b>{candleSpacing.toFixed(2)}×</b></span><input aria-label="Candle spacing" type="range" min="0.65" max="2.4" step="0.05" value={candleSpacing} onChange={(e) => setCandleSpacing(Number(e.target.value))}/></label>
+      <label><span>Candle body width <b>{candleBodyPct}%</b></span><input aria-label="Candle body width" type="range" min="35" max="100" step="1" value={candleBodyPct} onChange={(e) => setCandleBodyPct(Number(e.target.value))}/></label>
+      <label><span>Volume height <b>{volumeHeight}px</b></span><input aria-label="Volume height" type="range" min="20" max="115" step="1" value={volumeHeight} onChange={(e) => setVolumeHeight(Number(e.target.value))}/></label>
+      <button type="button" onClick={() => { setCandleSpacing(1.35); setCandleBodyPct(88); setVolumeHeight(78); setZoom(1); }}>Reset chart sizing</button>
     </div>
     <div className="chart-indicator-controls">
       <label><input type="checkbox" checked={showEma20} onChange={(e) => setShowEma20(e.target.checked)}/> EMA 20</label>
@@ -277,7 +293,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
             const up = c[4] >= c[1], color = up ? '#20c997' : '#f07883';
             const x = geometry.x(i), bodyTop = geometry.y(Math.max(c[1], c[4])), bodyBottom = geometry.y(Math.min(c[1], c[4]));
             const bodyHeight = Math.max(1.4, bodyBottom - bodyTop);
-            const volHeight = c[5] / geometry.maxVol * 65;
+            const volHeight = c[5] / geometry.maxVol * volumeHeight;
             return <g key={c[0]}>
               <line x1={x} y1={geometry.y(c[2])} x2={x} y2={geometry.y(c[3])} stroke={color} strokeWidth="1.3"/>
               <rect x={x - candleWidth/2} y={bodyTop} width={candleWidth} height={bodyHeight} fill={color} stroke={color} rx=".5"/>
@@ -299,6 +315,15 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
           {crosshair !== null && <g><line x1={geometry.x(crosshair)} y1="10" x2={geometry.x(crosshair)} y2="385" stroke="#a9b7c9" strokeDasharray="3 4"/><line x1="12" y1={geometry.y(geometry.rows[crosshair][4])} x2="925" y2={geometry.y(geometry.rows[crosshair][4])} stroke="#a9b7c9" strokeDasharray="3 4"/></g>}
         </svg>
       </div>}
+    <div className="market-context-panel">
+      <div className="market-context-heading"><b>MARKET CONFLUENCE INTELLIGENCE</b><span>{marketContext?.generatedAt ? 'Updated ' + new Date(marketContext.generatedAt).toLocaleTimeString() : 'Awaiting evidence'}</span></div>
+      {marketContext ? <>
+        <div className="market-context-summary"><strong className={marketContext.score.score > 0 ? 'up' : marketContext.score.score < 0 ? 'down' : ''}>{marketContext.score.direction.toUpperCase()}</strong><span>Evidence score {marketContext.score.score}</span><span>Confidence: {marketContext.score.confidence}</span><span>20-bar momentum: {marketContext.market.priceChangePct}%</span><span>Relative volume: {marketContext.market.volumeChangePct == null ? '—' : marketContext.market.volumeChangePct + '%'}</span><span>Global crypto market 24h: {marketContext.broadContext.globalMarketCapChange24hPct == null ? '—' : marketContext.broadContext.globalMarketCapChange24hPct.toFixed(2) + '%'}</span></div>
+        <div className="market-context-evidence">{marketContext.score.evidence.map((item) => <span key={item.factor}>{item.factor}: <b>{item.contribution > 0 ? '+' : ''}{item.contribution}</b></span>)}</div>
+        <div className="market-context-sources">{marketContext.sources.map((item) => <span key={item.name}><i className={item.status === 'live' ? 'source-live' : 'source-down'}/>{item.name}: {item.status}</span>)}</div>
+        <p>{marketContext.limitations[0]} {marketContext.limitations[1]}</p>
+      </> : <p>{contextError || 'Calculating exchange and global market context…'}</p>}
+    </div>
     <div className="smc-event-strip">
       <div><small>FVG zones</small><strong>{smartMoney.fairValueGaps.length}</strong></div>
       <div><small>Liquidity sweeps</small><strong>{smartMoney.liquiditySweeps.length}</strong></div>
