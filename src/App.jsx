@@ -191,7 +191,7 @@ function App() {
           </div>
           <div className="quote-source-list">{(quoteConsensus.providerResults || []).map((item) => {
             const observation = (quoteConsensus.sources || []).find((source) => source.provider === item.provider);
-            return <div key={item.provider}><span>{item.provider.toUpperCase()}</span><b>{observation ? Number(observation.price).toLocaleString(undefined,{maximumFractionDigits:6}) : item.status}</b><small>{observation ? new Date(observation.timestamp).toLocaleString() + (observation.outlier ? ' · OUTLIER REVIEW' : '') : item.error || 'No usable quote'}</small></div>;
+            return <div key={item.provider}><span>{item.provider.toUpperCase()}</span><b>{observation ? Number(observation.price).toLocaleString(undefined,{maximumFractionDigits:6}) : item.status}</b><small>{observation ? new Date(observation.timestamp).toLocaleString() + (observation.outlier ? ' · OUTLIER REVIEW' : '') + (observation.stale ? ' · STALE' : '') : item.error || 'No usable quote'}</small></div>;
           })}</div>
           {quoteConsensus.currencyConflict && <p className="quote-error">Currency mismatch detected. JPTI withheld a combined consensus value.</p>}
           <p className="subtle-note">{quoteConsensus.note}</p>
