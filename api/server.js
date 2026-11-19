@@ -114,6 +114,7 @@ app.post('/api/exchanges/:id/orders', async (req, res, next) => {
     const order = orderSchema.parse(req.body);
     const result = await withExchange(id, { privateAccess: true }, async (exchange) => {
       const market = exchange.market(order.symbol);
+      if (order.type === 'market' && !exchange.has?.fetchTicker) throw Object.assign(new Error('Ticker endpoint required for market-order risk checks.'), { status: 501 });
       const ticker = order.type === 'market' ? await exchange.fetchTicker(order.symbol) : null;
       const price = order.type === 'limit' ? order.price : ticker?.last;
       const risk = assertLiveTradingAllowed(req, exchange, market, order, price);
