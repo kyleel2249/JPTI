@@ -67,7 +67,7 @@ intelligenceRouter.get('/overview', async (_req, res) => {
     generatedAt: new Date().toISOString(),
     global: global.data?.data || null,
     chains: chainRows.slice(0, 30).map((item) => ({ name: item.name, tvl: item.tvl, tokenSymbol: item.tokenSymbol, gecko_id: item.gecko_id })),
-    stablecoins: { totalCirculatingUsd: stablecoins.data?.peggedAssets ? stablecoinRows.reduce((sum, item) => sum + Object.values(item.circulating || {}).reduce((a, b) => a + (Number(b) || 0), 0), 0) : null,
+    stablecoins: { totalCirculatingUsd: stablecoins.data?.peggedAssets ? stablecoinRows.reduce((sum, item) => sum + (Number(item.circulating?.peggedUSD) || 0), 0) : null,
       leaders: stablecoinRows.slice().sort((a, b) => (Number(b.circulating?.peggedUSD) || 0) - (Number(a.circulating?.peggedUSD) || 0)).slice(0, 10).map((item) => ({ name: item.name, symbol: item.symbol, circulatingUsd: item.circulating?.peggedUSD })) },
     protocolFees: feeRows.slice().sort((a, b) => (Number(b.total24h) || 0) - (Number(a.total24h) || 0)).slice(0, 10).map((item) => ({ name: item.name, total24h: item.total24h, total7d: item.total7d })),
     sources: [global.source, chains.source, stablecoins.source, fees.source]
