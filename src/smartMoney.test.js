@@ -13,7 +13,7 @@ test('detects bullish and bearish fair value gaps from three-candle patterns', (
     candle(4, 9, 9.5, 7, 8)
   ];
   const result = detectSmartMoney(rows);
-  assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bullish' && gap.top === 11 && gap.bottom === 10));
+  assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bullish' && gap.top === 11 && gap.bottom === 10 && gap.mitigatedAt === 3));
   assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bearish' && gap.top === 11 && gap.bottom === 9.5));
 });
 
@@ -60,4 +60,5 @@ test('classifies a break against the established trend as CHoCH', () => {
   const result = detectSmartMoney(rows);
   assert.ok(result.structureBreaks.some((event) => event.kind === 'BOS' && event.direction === 'bullish'));
   assert.ok(result.structureBreaks.some((event) => event.kind === 'CHoCH' && event.direction === 'bearish'));
+  assert.ok(result.orderBlocks.some((zone) => zone.direction === 'bullish' && zone.mitigatedAt === 10));
 });
