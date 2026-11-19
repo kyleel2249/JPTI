@@ -20,6 +20,7 @@ const navigation = [
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
+  { label: 'Forecast & Strategy', icon: Gauge, group: 'RESEARCH' },
   { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' }
 ];
 
@@ -56,6 +57,11 @@ function App() {
   const [crossVenueData, setCrossVenueData] = useState(null);
   const [crossVenueLoading, setCrossVenueLoading] = useState(false);
   const [crossVenueError, setCrossVenueError] = useState('');
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastError, setForecastError] = useState('');
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastExchange, setForecastExchange] = useState('binance');
+  const [forecastTimeframe, setForecastTimeframe] = useState('1h');
 
   const refresh = useCallback(async () => {
     try {
@@ -124,6 +130,19 @@ function App() {
     finally { setCrossVenueLoading(false); }
   }, [crossVenueSymbol]);
 
+  const loadForecast = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setForecastLoading(true); setForecastError('');
+    try {
+      const url = '/api/advanced/forecast/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?timeframe=' + encodeURIComponent(forecastTimeframe);
+      const response = await fetch(url, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Forecast unavailable');
+      setForecastData(data);
+    } catch (error) { setForecastError(error.message); }
+    finally { setForecastLoading(false); }
+  }, [forecastExchange, symbol, forecastTimeframe]);
+
   const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
   const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
   const configuredProviders = (providers?.providers || []).filter((provider) => provider.configured).length;
@@ -143,6 +162,7 @@ function App() {
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
+    'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.'
     'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
   };
 
@@ -248,6 +268,20 @@ function App() {
   const renderWorkspace = () => {
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
+    if (page === 'Forecast & Strategy') return <section className="glass-panel detail-workspace">
+      <span className="eyebrow">24-HOUR HIGH / LOW FORECAST ENGINE</span><h3>Statistical range intelligence</h3>
+      <p>Forecasts are calculated from live exchange OHLCV using historical log-return volatility, ATR and bounded drift. They are estimates, not exchange-published values or calibrated probabilities.</p>
+      <form className="news-search" onSubmit={loadForecast}>
+        <select value={forecastExchange} onChange={(e) => setForecastExchange(e.target.value)}><option value="binance">Binance</option><option value="bitget">Bitget</option><option value="bybit">Bybit</option><option value="okx">OKX</option></select>
+        <select value={forecastTimeframe} onChange={(e) => setForecastTimeframe(e.target.value)}><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select>
+        <button disabled={forecastLoading}>{forecastLoading ? 'Calculating…' : 'Calculate forecast for ' + symbol}</button>
+      </form>
+      {forecastError && <p className="quote-error">{forecastError}</p>}
+      {forecastData && <><div className="quote-consensus-stats"><div><span>REFERENCE PRICE</span><b>{fmt(forecastData.referencePrice)}</b></div><div><span>ATR</span><b>{fmt(forecastData.atr)}</b></div><div><span>VOLATILITY / BAR</span><b>{Number(forecastData.volatilityPerCandlePercent).toFixed(3)}%</b></div><div><span>20-BAR MOMENTUM</span><b>{Number(forecastData.momentum20Percent).toFixed(2)}%</b></div></div>
+      <div className="scanner-table"><div><span>HORIZON</span><span>FORECAST HIGH</span><span>EXPECTED MID</span><span>FORECAST LOW</span><span>RANGE METHOD</span></div>{forecastData.forecasts.map((f) => <div key={f.horizonHours}><b>{f.horizonHours}h</b><strong className="up">{fmt(f.forecastHigh)}</strong><strong>{fmt(f.expectedMid)}</strong><strong className="down">{fmt(f.forecastLow)}</strong><span>Volatility + ATR</span></div>)}</div>
+      <p className="subtle-note">{forecastData.method}. {forecastData.limitations.join(' ')}</p></>}
+      <div className="risk-list"><p><ShieldCheck/> Derivatives and order-book routes are separately available under /api/advanced.</p><p><ShieldCheck/> Confidence calibration and walk-forward validation remain required before deployment.</p><p><ShieldCheck/> No forecast submits or authorizes an order.</p></div>
+    </section>;
     if (page === 'Spot & Markets' || page === 'Futures') return <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>;
     if (page === 'Market Scanner') return <section className="glass-panel detail-workspace"><span className="eyebrow">LIVE MARKET MONITOR</span><h3>Monitored market universe</h3><p>JPTI samples real exchange tickers on the configured market-monitor interval. Add symbols to the server-side watchlist in your .env file.</p><pre>JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT</pre><div className="scanner-table"><div><span>EXCHANGE</span><span>SYMBOL</span><span>LAST</span><span>24H CHANGE</span><span>QUOTE VOLUME</span></div>{(marketJob?.lastSnapshot || []).map((item) => <div key={item.exchange + item.symbol}><b>{item.exchange}</b><b>{item.symbol}</b><strong>{fmt(item.last)}</strong><strong className={Number(item.percentage) >= 0 ? 'up' : 'down'}>{item.percentage == null ? '—' : fmt(item.percentage) + '%'}</strong><span>{fmt(item.quoteVolume)}</span></div>)}{!marketJob?.lastSnapshot?.length && <p className="empty-state">No live watchlist snapshot yet. Configure JPTI_MONITOR_MARKETS and wait for the next scheduler cycle.</p>}</div>{renderOperations()}</section>;
     if (page === 'Portfolio & Ledger') return <section className="glass-panel detail-workspace"><span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Append-only ledger</h3><p>{ledger?.eventCount ?? 0} transaction events recorded. This count does not represent a reconciled account balance, cost basis or realized profit and loss.</p><div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div><p className="subtle-note">Authenticated transaction ingestion endpoint: POST /api/operations/ledger/events. Duplicate source/account/external IDs are rejected idempotently.</p><p className="subtle-note">Private transaction details are available from GET /api/operations/ledger/events with the x-jpti-api-token header.</p>{renderOperations()}</section>;
