@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
-import { createExchange, exchangeConnectionStatus, listExchangeCatalog, withExchange } from './exchanges.js';
+import { classifyMarket, createExchange, exchangeConnectionStatus, listExchangeCatalog, withExchange } from './exchanges.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 
 const app = express();
@@ -51,15 +51,36 @@ app.get('/api/exchanges/:id/status', (req, res) => {
 
 app.get('/api/exchanges/:id/markets', async (req, res, next) => {
   const id = req.params.id.toLowerCase();
+  const requestedType = String(req.query.type || 'all').toLowerCase();
+  const search = String(req.query.search || '').trim().toLowerCase().slice(0, 60);
+  const allowedTypes = ['all', 'spot', 'futures', 'perpetual', 'margin', 'cfd', 'options'];
+  if (!allowedTypes.includes(requestedType)) return res.status(400).json({ error: 'Unsupported market type filter.', allowedTypes });
   try {
-    const result = await withExchange(id, { privateAccess: false }, async (exchange) => ({
-      markets: Object.values(exchange.markets)
-        .filter((market) => market.active !== false && market.spot === true)
-        .slice(0, 500)
-        .map(({ symbol, base, quote, active, precision, limits }) => ({ symbol, base, quote, active, precision, limits })),
-      timeframes: exchange.timeframes ? Object.keys(exchange.timeframes) : null
-    }));
-    res.json({ exchange: id, count: result.markets.length, markets: result.markets, timeframes: result.timeframes });
+    const result = await withExchange(id, { privateAccess: false }, async (exchange) => {
+      const all = Object.values(exchange.markets).filter((market) => market.active !== false).map((market) => {
+        const meta = classifyMarket(market);
+        return { symbol: market.symbol, id: market.id, base: market.base, quote: market.quote, settle: market.settle || null,
+          active: market.active, type: meta.type, categories: meta.categories, spot: market.spot === true,
+          margin: meta.categories.includes('margin'), swap: market.swap === true, future: market.future === true,
+          option: market.option === true, cfd: meta.categories.includes('cfd'), contract: meta.contract,
+          linear: meta.linear, inverse: meta.inverse, precision: market.precision, limits: market.limits };
+      });
+      const markets = all.filter((market) => {
+        const matchesType = requestedType === 'all' || market.categories.includes(requestedType) ||
+          (requestedType === 'futures' && market.categories.includes('perpetual'));
+        const matchesSearch = !search || [market.symbol, market.base, market.quote].some((v) => String(v || '').toLowerCase().includes(search));
+        return matchesType && matchesSearch;
+      });
+      return { markets, totalMarkets: all.length,
+        counts: Object.fromEntries(['spot','futures','perpetual','margin','cfd','options'].map((type) => [type, all.filter((m) => m.categories.includes(type) || (type === 'futures' && m.categories.includes('perpetual'))).length])),
+        timeframes: exchange.timeframes ? Object.keys(exchange.timeframes) : null,
+        capabilities: { fetchTicker: Boolean(exchange.has?.fetchTicker), fetchOHLCV: Boolean(exchange.has?.fetchOHLCV),
+          fetchOrderBook: Boolean(exchange.has?.fetchOrderBook), fetchFundingRate: Boolean(exchange.has?.fetchFundingRate),
+          fetchPositions: Boolean(exchange.has?.fetchPositions), createOrder: Boolean(exchange.has?.createOrder) },
+        fetchedAt: new Date().toISOString() };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ exchange: id, filter: requestedType, count: result.markets.length, ...result });
   } catch (error) { next(error); }
 });
 
