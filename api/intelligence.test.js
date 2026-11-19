@@ -22,3 +22,12 @@ test('market context score bounds extreme inputs', () => {
   const result = scoreMarketContext({ priceChangePct: 10000, volumeChangePct: 10000, stablecoinSupplyChangePct: 10000 });
   assert.ok(result.score <= 4.5);
 });
+
+
+test('market context score includes order book, funding and timeframe evidence', () => {
+  const result = scoreMarketContext({ orderBookImbalancePct: 30, fundingRate: 0.0001, timeframeAlignment: 1 });
+  assert.equal(result.evidence.length, 3);
+  assert.ok(result.evidence.some((item) => item.factor === 'top-of-book depth imbalance' && item.contribution === 1));
+  assert.ok(result.evidence.some((item) => item.factor === 'perpetual funding (contrarian)' && item.contribution === -1));
+  assert.ok(result.evidence.some((item) => item.factor === 'multi-timeframe alignment' && item.contribution === 0.75));
+});
