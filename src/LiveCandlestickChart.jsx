@@ -87,7 +87,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         const symbols = (data.markets || []).filter((market) => market.active !== false && market.quote === 'USDT').map((market) => market.symbol);
         if (symbols.length) {
           setMarketSymbols(symbols);
-          if (!symbols.includes(symbol)) onSymbolChange(symbols[0]);
+          if (!symbols.includes(symbol)) {\n            const preferred = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];\n            onSymbolChange(preferred.find((item) => symbols.includes(item)) || symbols[0]);\n          }
         }
         const frames = Array.isArray(data.timeframes) && data.timeframes.length ? data.timeframes : null;
         setSupportedTimeframes(frames);
