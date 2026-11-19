@@ -12,7 +12,7 @@ const median = (values) => {
 };
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-export function calculateForecast(candles, horizons = [1, 4, 12, 24]) {
+export function calculateForecast(candles, horizons = [1, 4, 12, 24], barMinutes = 60) {
   const rows = candles.filter((c) => Array.isArray(c) && c.length >= 6 && c.slice(1, 6).every((v) => Number.isFinite(Number(v))) && Number(c[4]) > 0);
   if (rows.length < 30) throw Object.assign(new Error('At least 30 valid OHLCV candles are required.'), { status: 422 });
   const closes = rows.map((c) => Number(c[4]));
@@ -31,7 +31,7 @@ export function calculateForecast(candles, horizons = [1, 4, 12, 24]) {
   const rangeHigh = Math.max(...highs.slice(-24));
   const rangeLow = Math.min(...lows.slice(-24));
   const results = horizons.map((hours) => {
-    const steps = Math.max(1, hours);
+    const steps = Math.max(1, (hours * 60) / barMinutes);
     const projectedSigma = sigma * Math.sqrt(steps);
     const expected = last * Math.exp(drift * steps);
     const q = 1.28 * projectedSigma;
@@ -39,7 +39,7 @@ export function calculateForecast(candles, horizons = [1, 4, 12, 24]) {
     const upper = Math.max(expected * Math.exp(q), last + atrMove);
     const lower = Math.min(expected * Math.exp(-q), last - atrMove);
     return {
-      horizonHours: hours, referencePrice: last, expectedMid: expected,
+      horizonHours: hours, horizonBars: steps, referencePrice: last, expectedMid: expected,
       forecastHigh: upper, forecastLow: Math.max(Number.EPSILON, lower),
       upsidePercent: (upper / last - 1) * 100, downsidePercent: (lower / last - 1) * 100,
       intervalMethod: 'historical log-return volatility envelope widened by ATR',
@@ -154,7 +154,10 @@ advancedRouter.get('/advanced/forecast/:exchange/:symbol', async (req, res) => {
       if (ex.timeframes && !ex.timeframes[timeframe]) throw Object.assign(new Error('Unsupported timeframe.'), { status: 400 });
       return ex.fetchOHLCV(symbol, timeframe, undefined, limit);
     });
-    res.json({ exchange: exchangeId, symbol, timeframe, ...calculateForecast(candles) });
+    const unit = timeframe.at(-1);
+    const amount = Number.parseInt(timeframe, 10);
+    const barMinutes = unit === 'm' ? amount : unit === 'h' ? amount * 60 : unit === 'd' ? amount * 1440 : unit === 'w' ? amount * 10080 : unit === 'M' ? amount * 43200 : 60;
+    res.json({ exchange: exchangeId, symbol, timeframe, ...calculateForecast(candles, [1, 4, 12, 24], barMinutes) });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
