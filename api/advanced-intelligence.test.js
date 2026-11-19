@@ -28,7 +28,7 @@ test('order book reports depth imbalance and avoids claiming spoofing', () => {
 
 test('evidence council preserves disagreement and low-confidence states', () => {
   const result = buildEvidenceCouncil({ priceChangePct: 2, depthImbalance: -0.4, volumeChangePct: 30 });
-  assert.equal(result.consensus, 'bullish-lean');
+  assert.equal(result.consensus, 'no-directional-consensus');
   assert.ok(result.dissent);
   assert.equal(result.confidence, 'low');
 });
