@@ -56,3 +56,35 @@ All provider keys belong in the server-side `.env`, never in browser code or Git
 This integration is a data foundation, not a complete institutional financial-data terminal. Live equity, bond, FX and commodity market feeds, earnings/fundamental datasets, a durable normalized time-series store, cross-provider entity resolution, validated strategy backtests, and production-grade wallet labeling remain future work.
 
 - `GET /api/intelligence/market/:exchange/:symbol/context?timeframe=1h` — explainable multi-source pair context: closed OHLCV momentum and relative volume, 15m/1h/4h/1d trend alignment where supported, top-20 order-book notional imbalance, perpetual funding where supported, CoinGecko aggregate crypto risk context and DeFiLlama chain TVL leaders. Missing exchange capabilities are omitted rather than fabricated. A 30-second HTTP cache limits repeated broad-provider calls.
+
+
+## Multi-provider financial data gateway (new integration layer)
+
+JPTI exposes a provider registry at `GET /api/providers` and interval configuration at `GET /api/providers/intervals`. These routes report which credentials are present, the data categories available through adapters, documentation links and polling configuration. Credential presence is not a successful connection; each provider request must succeed to verify access and subscription entitlement.
+
+Implemented read-oriented adapters:
+- **Alpaca**: stock historical bars and paper-account read. Configure `JPTI_ALPACA_API_KEY` and `JPTI_ALPACA_API_SECRET`. Bars: `GET /api/providers/alpaca/bars?symbol=AAPL&timeframe=1Day&feed=iex&limit=100`. Account: `GET /api/providers/alpaca/account` (paper endpoint).
+- **Quiver Quantitative**: congressional trading dataset adapter. Configure `JPTI_QUIVER_API_KEY`. `GET /api/providers/quiver/congress`. Dataset access and endpoint availability depend on current Quiver subscription/API terms; verify against your account documentation.
+- **Finnhub**: `GET /api/providers/finnhub/quote/:symbol` and `GET /api/providers/finnhub/news?category=general|forex|crypto|merger`.
+- **Alpha Vantage**: `GET /api/providers/alphavantage/quote/:symbol` and `GET /api/providers/alphavantage/news?tickers=AAPL&limit=50`. Rate limits and realtime/US exchange coverage depend on plan.
+- **Twelve Data**: `GET /api/providers/twelvedata/time-series/:symbol?interval=1day&outputsize=100`. Asset coverage and credits depend on plan.
+- **Infura**: `POST /api/providers/infura/:network/rpc` with a JSON body containing an allowlisted read-only JSON-RPC method and params. Supported network labels: mainnet, sepolia, arbitrum-mainnet, base-mainnet, optimism-mainnet, polygon-mainnet. Write methods are not exposed.
+- **GDELT**: `GET /api/providers/news/search?q=central%20bank` for global news discovery without a key.
+- **Liquid legacy exchange adapter**: `GET /api/providers/liquid/markets`. This is a compatibility probe only. The old Liquid/Quoine endpoint may be unavailable or the venue may not provide active trading services; do not assume liquidity or account execution support.
+- Existing CoinGecko, DeFiLlama, FRED, Alchemy and Helius integrations remain available through the intelligence routes. Existing CCXT exchange adapters remain separate.
+
+All API credentials are server-side only. Never use Vite `VITE_*` variables for secrets, commit credentials, or paste keys into chat. Start with read-only keys. Alpaca account read is pinned to its paper API host; this implementation does not submit Alpaca orders. Infura RPC methods are read-only allowlisted. The Liquid adapter is not wired to the live-order execution gateway.
+
+### Operational intervals (seconds)
+
+Set these values in the server `.env`:
+- `JPTI_MM_INTERVAL_SECONDS=5` — market-monitor sampling cadence (MM here means market monitoring; it is not a market-making order loop).
+- `JPTI_MARKET_DATA_REFRESH_INTERVAL_SECONDS=5` — intended market-data refresh cadence.
+- `JPTI_RECONCILE_INTERVAL_SECONDS=30` — portfolio/order/transaction reconciliation cadence target.
+- `JPTI_INVESTOR_MONITOR_INTERVAL_SECONDS=60` — investor/watchlist monitoring cadence target.
+- `JPTI_PROVIDER_HEALTH_INTERVAL_SECONDS=300` — provider health check cadence target.
+- `JPTI_NEWS_REFRESH_INTERVAL_SECONDS=60` — news polling cadence target.
+- `JPTI_ONCHAIN_REFRESH_INTERVAL_SECONDS=30` — on-chain refresh cadence target.
+- `JPTI_SCHEDULER_ENABLED=true` — master scheduler policy flag.
+
+Read effective validated values from `GET /api/providers/intervals`. Bounds are enforced in seconds to prevent zero/negative or extreme polling values. Important: this commit exposes the operational settings and provider adapters; it does not yet create durable investor-watchlist, portfolio reconciliation or market-making workers. Do not treat a displayed interval as proof that a worker is running. Reconciliation requires a persisted ledger and exchange order/fill history; investor monitoring requires configured investor/watchlists and licensed source data; market-making requires a separately risk-approved quoting engine. Those services remain future implementation stages.
