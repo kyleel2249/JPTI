@@ -10,7 +10,8 @@ const positiveSeconds = (key, fallback, min = 1, max = 86400) => {
 
 export function getOperationalIntervals() {
   return {
-    marketMonitorSeconds: positiveSeconds('JPTI_MM_INTERVAL_SECONDS', 5, 1, 3600),
+    marketMakerIntervalSeconds: positiveSeconds('JPTI_MM_INTERVAL_SECONDS', 5, 1, 3600),
+    marketMonitorSeconds: positiveSeconds('JPTI_MARKET_MONITOR_INTERVAL_SECONDS', 5, 1, 3600),
     reconcileSeconds: positiveSeconds('JPTI_RECONCILE_INTERVAL_SECONDS', 30, 5, 86400),
     investorMonitorSeconds: positiveSeconds('JPTI_INVESTOR_MONITOR_INTERVAL_SECONDS', 60, 5, 86400),
     providerHealthSeconds: positiveSeconds('JPTI_PROVIDER_HEALTH_INTERVAL_SECONDS', 300, 30, 86400),
