@@ -94,8 +94,26 @@ providerRouter.get('/providers/alpaca/bars', async (req, res) => {
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
-providerRouter.get('/providers/alpaca/account', async (_req, res) => {
+
+providerRouter.get('/providers/alpaca/crypto-bars', async (req, res) => {
   try {
+    const key = requireKey('JPTI_ALPACA_API_KEY', 'Alpaca');
+    const secret = requireKey('JPTI_ALPACA_API_SECRET', 'Alpaca');
+    const symbol = safeSymbol(req.query.symbol || 'BTC/USD');
+    const timeframe = String(req.query.timeframe || '1Day');
+    if (!/^(1Min|5Min|15Min|30Min|1Hour|1Day)$/.test(timeframe)) return res.status(400).json({ error: 'Unsupported Alpaca timeframe.' });
+    const limit = Math.min(1000, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
+    const url = new URL(`https://data.alpaca.markets/v1beta3/crypto/us/bars`);
+    url.search = new URLSearchParams({ symbols: symbol, timeframe, limit: String(limit) }).toString();
+    const data = await requestJson(url, { headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret } });
+    res.json({ provider: 'alpaca', assetClass: 'crypto', symbol, timeframe, bars: data.bars?.[symbol] || [], fetchedAt: now() });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
+providerRouter.get('/providers/alpaca/account', async (req, res) => {
+  try {
+    const expectedToken = process.env.JPTI_API_TOKEN;
+    if (!expectedToken || req.get('x-jpti-api-token') !== expectedToken) return res.status(401).json({ error: 'Valid x-jpti-api-token required for private broker account data.' });
     const key = requireKey('JPTI_ALPACA_API_KEY', 'Alpaca');
     const secret = requireKey('JPTI_ALPACA_API_SECRET', 'Alpaca');
     const data = await requestJson('https://paper-api.alpaca.markets/v2/account', { headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret } });
