@@ -44,12 +44,28 @@ async function readEvents(limit = 20000) {
 }
 
 async function persistEvent(event) {
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => {}).then(async () => {
     await mkdir(dirname(dataFile), { recursive: true });
     await appendFile(dataFile, JSON.stringify(event) + '\n', { encoding: 'utf8', mode: 0o600 });
   });
   await writeQueue;
   return event;
+}
+
+
+async function persistLedgerTransaction(parsed) {
+  let result;
+  writeQueue = writeQueue.catch(() => {}).then(async () => {
+    const events = await readEvents();
+    const duplicate = events.find((event) => event.kind === 'ledger-transaction' && event.source === parsed.source && event.accountId === parsed.accountId && event.externalId === parsed.externalId);
+    if (duplicate) { result = { duplicate: true, event: duplicate }; return; }
+    const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
+    await mkdir(dirname(dataFile), { recursive: true });
+    await appendFile(dataFile, JSON.stringify(event) + '\\n', { encoding: 'utf8', mode: 0o600 });
+    result = { duplicate: false, event };
+  });
+  await writeQueue;
+  return result;
 }
 
 function job(id, intervalSeconds, status, detail, extra = {}) {
@@ -183,11 +199,7 @@ operationsRouter.post('/operations/ledger/events', async (req, res, next) => {
   try {
     requirePrivateApiAuth(req);
     const parsed = eventSchema.parse(req.body);
-    const events = await readEvents();
-    const duplicate = events.find((e) => e.kind === 'ledger-transaction' && e.source === parsed.source && e.accountId === parsed.accountId && e.externalId === parsed.externalId);
-    if (duplicate) return res.status(200).json({ accepted: true, duplicate: true, event: duplicate });
-    const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
-    await persistEvent(event);
-    res.status(201).json({ accepted: true, duplicate: false, event });
+    const result = await persistLedgerTransaction(parsed);
+    res.status(result.duplicate ? 200 : 201).json({ accepted: true, ...result });
   } catch (error) { next(error); }
 });
