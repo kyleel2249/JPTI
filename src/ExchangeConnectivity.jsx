@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import LiveCandlestickChart from './LiveCandlestickChart.jsx';
 
-export default function ExchangeConnectivity() {
+export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
   const [health, setHealth] = useState(null);
   const [exchanges, setExchanges] = useState([]);
   const [exchange, setExchange] = useState('binance');
-  const [symbol, setSymbol] = useState('BTC/USDT');
   const [ticker, setTicker] = useState(null);
   const [error, setError] = useState('');
 
@@ -70,6 +69,6 @@ export default function ExchangeConnectivity() {
       <span><small>24H LOW</small><strong>{ticker?.low == null ? '—' : Number(ticker.low).toLocaleString()}</strong></span>
       <span><small>24H VOLUME</small><strong>{ticker?.quoteVolume == null ? '—' : Number(ticker.quoteVolume).toLocaleString(undefined,{maximumFractionDigits:0})}</strong></span>
     </div>
-    <LiveCandlestickChart exchange={exchange} symbol={symbol} onSymbolChange={setSymbol}/>
+    <LiveCandlestickChart exchange={exchange} symbol={symbol} onSymbolChange={onSymbolChange}/>
   </section>;
 }
