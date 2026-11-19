@@ -122,6 +122,22 @@ providerRouter.get('/providers/alpaca/account', async (req, res) => {
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
+providerRouter.get('/providers/alpaca/activities', async (req, res) => {
+  try {
+    const expectedToken = process.env.JPTI_API_TOKEN;
+    if (!expectedToken || req.get('x-jpti-api-token') !== expectedToken) return res.status(401).json({ error: 'Valid x-jpti-api-token required for private broker activity.' });
+    const key = requireKey('JPTI_ALPACA_API_KEY', 'Alpaca');
+    const secret = requireKey('JPTI_ALPACA_API_SECRET', 'Alpaca');
+    const activityType = String(req.query.activity_type || 'FILL');
+    if (!['FILL','TRANS','MISC','ACATC','ACATS','CFEE','CSD','CSW','DIV','FEE','INT','JNL','JNLC','JNLS','MA','NC','OPASN','OPCA','OPTRD','PTC','PTR','REORG','SC'].includes(activityType)) return res.status(400).json({ error: 'Unsupported Alpaca activity type.' });
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '50', 10) || 50));
+    const url = new URL('https://paper-api.alpaca.markets/v2/account/activities');
+    url.search = new URLSearchParams({ activity_type: activityType, page_size: String(limit) }).toString();
+    const data = await requestJson(url, { headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret } });
+    res.json({ provider: 'alpaca', environment: 'paper', activityType, activities: Array.isArray(data) ? data : [], fetchedAt: now(), note: 'Paper-account activities only. Activity history may be paginated by Alpaca.' });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
 providerRouter.get('/providers/finnhub/quote/:symbol', async (req, res) => {
   try {
     const key = requireKey('JPTI_FINNHUB_API_KEY', 'Finnhub');
@@ -130,6 +146,25 @@ providerRouter.get('/providers/finnhub/quote/:symbol', async (req, res) => {
     url.search = new URLSearchParams({ symbol, token: key }).toString();
     const data = await requestJson(url);
     res.json({ provider: 'finnhub', symbol, quote: data, fetchedAt: now() });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
+providerRouter.get('/providers/finnhub/candles/:symbol', async (req, res) => {
+  try {
+    const key = requireKey('JPTI_FINNHUB_API_KEY', 'Finnhub');
+    const symbol = safeSymbol(req.params.symbol);
+    const resolution = String(req.query.resolution || 'D');
+    if (!['1','5','15','30','60','D','W','M'].includes(resolution)) return res.status(400).json({ error: 'Unsupported Finnhub candle resolution.' });
+    const to = Math.floor(Date.now() / 1000);
+    const from = Math.max(0, Number.parseInt(req.query.from || String(to - 30 * 86400), 10));
+    if (!Number.isFinite(from) || from >= to) return res.status(400).json({ error: 'Invalid candle from timestamp.' });
+    const url = new URL('https://finnhub.io/api/v1/stock/candle');
+    url.search = new URLSearchParams({ symbol, resolution, from: String(from), to: String(to), token: key }).toString();
+    const data = await requestJson(url);
+    if (data.s === 'no_data') return res.json({ provider: 'finnhub', symbol, resolution, candles: [], status: 'no_data', fetchedAt: now() });
+    if (data.s !== 'ok') return res.status(502).json({ error: 'Finnhub returned an unsuccessful candle response.' });
+    const candles = (data.t || []).map((timestamp, i) => ({ timestamp, open: data.o?.[i], high: data.h?.[i], low: data.l?.[i], close: data.c?.[i], volume: data.v?.[i] }));
+    res.json({ provider: 'finnhub', symbol, resolution, candles, fetchedAt: now() });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
@@ -157,6 +192,21 @@ providerRouter.get('/providers/alphavantage/quote/:symbol', async (req, res) => 
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
+providerRouter.get('/providers/alphavantage/daily/:symbol', async (req, res) => {
+  try {
+    const key = requireKey('JPTI_ALPHAVANTAGE_API_KEY', 'Alpha Vantage');
+    const symbol = safeSymbol(req.params.symbol);
+    const outputsize = String(req.query.outputsize || 'compact');
+    if (!['compact', 'full'].includes(outputsize)) return res.status(400).json({ error: 'outputsize must be compact or full.' });
+    const url = new URL('https://www.alphavantage.co/query');
+    url.search = new URLSearchParams({ function: 'TIME_SERIES_DAILY', symbol, outputsize, apikey: key }).toString();
+    const data = await requestJson(url);
+    if (data.Note || data.Information) return res.status(429).json({ error: data.Note || data.Information, provider: 'alphavantage' });
+    const seriesKey = 'Time Series (Daily)';
+    res.json({ provider: 'alphavantage', symbol, series: data[seriesKey] || {}, metadata: data['Meta Data'] || {}, fetchedAt: now(), entitlementNote: 'Full history and realtime/intraday access depend on Alpha Vantage plan and market-data licensing.' });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
 providerRouter.get('/providers/alphavantage/news', async (req, res) => {
   try {
     const key = requireKey('JPTI_ALPHAVANTAGE_API_KEY', 'Alpha Vantage');
@@ -165,6 +215,18 @@ providerRouter.get('/providers/alphavantage/news', async (req, res) => {
     const data = await requestJson(url);
     if (data.Note || data.Information) return res.status(429).json({ error: data.Note || data.Information, provider: 'alphavantage' });
     res.json({ provider: 'alphavantage', feed: data.feed || [], sentiment: data, fetchedAt: now() });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
+providerRouter.get('/providers/twelvedata/quote/:symbol', async (req, res) => {
+  try {
+    const key = requireKey('JPTI_TWELVEDATA_API_KEY', 'Twelve Data');
+    const symbol = safeSymbol(req.params.symbol);
+    const url = new URL('https://api.twelvedata.com/quote');
+    url.search = new URLSearchParams({ symbol, apikey: key }).toString();
+    const data = await requestJson(url);
+    if (data.status === 'error') return res.status(502).json({ error: data.message || 'Twelve Data quote request failed.' });
+    res.json({ provider: 'twelvedata', symbol, quote: data, fetchedAt: now(), meta: data.exchange || data.instrument_name || null });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
@@ -182,12 +244,13 @@ providerRouter.get('/providers/twelvedata/time-series/:symbol', async (req, res)
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
-providerRouter.get('/providers/quiver/congress', async (req, res) => {
+providerRouter.get('/providers/quiver/congress/:ticker', async (req, res) => {
   try {
     const key = requireKey('JPTI_QUIVER_API_KEY', 'Quiver Quantitative');
-    const url = new URL('https://api.quiverquant.com/beta/live/congresstrading');
-    const data = await requestJson(url, { headers: { Authorization: `Token ${key}` } });
-    res.json({ provider: 'quiver', dataset: 'congressional-trading', records: Array.isArray(data) ? data : data.data || [], fetchedAt: now(), note: 'Dataset access, historical depth and rate limits depend on Quiver subscription.' });
+    const ticker = safeSymbol(req.params.ticker);
+    const url = new URL(`https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`);
+    const data = await requestJson(url, { headers: { Authorization: `Bearer ${key}` } });
+    res.json({ provider: 'quiver', dataset: 'congressional-trading', ticker, records: Array.isArray(data) ? data : data.data || [], fetchedAt: now(), note: 'Access and historical depth depend on Quiver subscription. Congressional disclosures can be delayed from transaction date.' });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
