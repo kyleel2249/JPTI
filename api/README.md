@@ -165,3 +165,23 @@ A cross-provider median is only a sanity check: feeds may differ by venue, sessi
 - Returns per-venue last/bid/ask/volume/timestamp, median last price, last-price dispersion and an indicative best-ask/best-bid gross edge when two different venues provide valid top-of-book quotes.
 - A five-second per-symbol/venue-set cache limits repeated calls. Failed or unlisted markets remain visible in the per-venue result list.
 - The scanner is read-only and does not submit arbitrage orders. Gross edge excludes trading fees, funding, market depth, slippage, latency, withdrawal/deposit delays, counterparty risk and venue restrictions. Do not interpret a positive edge as executable profit.
+
+
+## Advanced forecasting and institutional intelligence
+
+These read-oriented endpoints are mounted under \`/api/advanced\`:
+
+- \`GET /advanced/forecast/:exchange/:symbol?timeframe=1h&limit=500\` — rolling statistical 24-hour and 1/4/12-hour range forecasts from exchange OHLCV. Returns expected midpoint, high/low envelopes, ATR, volatility, momentum and conservative/base/aggressive scenarios. The baseline uses historical log-return volatility and ATR; it is not an ML-trained model and its nominal interval is not calibrated probability until walk-forward validation is performed.
+- \`GET /advanced/orderbook/:exchange/:symbol?limit=50\` — visible bid/ask notional depth, imbalance, spread and large displayed liquidity levels. Consecutive snapshots are compared in process memory. A large order is not proof of spoofing; reliable spoofing detection requires order-level add/cancel/replace feeds and venue surveillance.
+- \`GET /advanced/derivatives/:exchange/:symbol\` — funding rate, open interest and ticker/index basis where CCXT and the venue expose them. Liquidation clusters explicitly report unavailable until a venue-specific liquidation stream/history is integrated.
+- \`POST /advanced/council\` — deterministic specialist evidence agents for trend, volume, microstructure, derivatives and risk. Returns evidence, disagreement and conservative confidence; these are not autonomous LLM traders.
+- \`POST /advanced/backtest/ema\` — simple EMA long/flat research baseline with configurable periods and fee assumption. It is not a complete strategy laboratory.
+- \`POST /advanced/monte-carlo\` — seeded bootstrap scenarios from supplied returns. This is a distributional stress tool, not a return guarantee.
+- \`POST /advanced/portfolio/reconcile\` — authenticated balance-versus-fill arithmetic check. Requires \`x-jpti-api-token\` and supplied balances/fills; it does not yet automatically ingest every exchange fill, account for opening inventory/transfers/fee currencies, or calculate realized/unrealized PnL.
+- \`POST /advanced/execution/estimate\` — walks a supplied order book to estimate average fill, visible depth shortfall, fees and slippage. It is indicative and does not route orders.
+
+### Institutional implementation boundaries
+
+This stage provides real exchange-fed OHLCV, order books, and exchange-reported derivatives fields where supported, plus deterministic research calculations. It does not claim calibrated forecast probabilities, trained ML models, proven spoofing identification, complete liquidation maps, automated multi-exchange fill ingestion, institutional lot accounting, autonomous AI agents, full parameter optimization, robust walk-forward orchestration, or live smart-order routing. Those require additional data coverage, durable time-series storage, venue-specific streaming adapters, portfolio accounting rules and validation. The current backtest is explicitly in-sample; do not use it as evidence of future profitability.
+
+All routes are read-only except the authenticated reconciliation calculation, which does not mutate the ledger. Existing live order controls remain separate and disabled by default. Keep API credentials server-side.
