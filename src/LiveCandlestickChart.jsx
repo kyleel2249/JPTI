@@ -67,7 +67,9 @@ const timeLabel = (stamp, timeframe) => {
 
 export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange }) {
   const [timeframe, setTimeframe] = useState('1h');
-  const [candles, setCandles] = useState([]);\n  const [marketSymbols, setMarketSymbols] = useState(SYMBOLS);\n  const [supportedTimeframes, setSupportedTimeframes] = useState(null);
+  const [candles, setCandles] = useState([]);
+  const [marketSymbols, setMarketSymbols] = useState(SYMBOLS);
+  const [supportedTimeframes, setSupportedTimeframes] = useState(null);
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -87,7 +89,10 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         const symbols = (data.markets || []).filter((market) => market.active !== false && market.quote === 'USDT').map((market) => market.symbol);
         if (symbols.length) {
           setMarketSymbols(symbols);
-          if (!symbols.includes(symbol)) {\n            const preferred = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];\n            onSymbolChange(preferred.find((item) => symbols.includes(item)) || symbols[0]);\n          }
+          if (!symbols.includes(symbol)) {
+            const preferred = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+            onSymbolChange(preferred.find((item) => symbols.includes(item)) || symbols[0]);
+          }
         }
         const frames = Array.isArray(data.timeframes) && data.timeframes.length ? data.timeframes : null;
         setSupportedTimeframes(frames);
