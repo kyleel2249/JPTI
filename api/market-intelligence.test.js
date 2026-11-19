@@ -5,7 +5,7 @@ import { buildCrossVenueComparison } from './market-intelligence.js';
 test('cross-venue comparison calculates median, spread and indicative top-of-book edge', () => {
   const result = buildCrossVenueComparison('BTC/USDT', [
     { exchange: 'alpha', last: 100, bid: 99, ask: 101 },
-    { exchange: 'beta', last: 102, bid: 101, ask: 103 },
+    { exchange: 'beta', last: 104, bid: 103, ask: 105 },
     { exchange: 'gamma', last: 101, bid: 100, ask: 102 }
   ]);
   assert.equal(result.venueCount, 3);
