@@ -10,12 +10,12 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - Multi-exchange CCXT adapter catalog (availability is detected from the installed CCXT version).
 - Server-side private account-balance endpoint for exchanges with configured credentials.
 - Locked live spot-order endpoint with explicit environment flags, API-token confirmation, active-market checks, USDT quote restriction and per-order notional cap.
-- Exchange selector with live ticker and exchange-specific active spot-market catalog.
+- Exchange selector with dynamic, searchable market discovery across spot, futures, perpetual swaps, margin-enabled instruments, CFDs and options where the selected exchange exposes those products.\n- Market type filters, per-exchange product counts and adapter capability metadata; the catalog refreshes every five minutes to discover newly listed and delisted instruments.\n- Advanced chart tools: VWAP overlay, Stoch RSI, OBV, Supertrend directional bias, horizontal support/resistance levels and two-click trend lines.
 - Live OHLCV candlestick chart with selectable exchange-supported timeframes (1m through 1M where supported), zoom controls, fit-to-view and crosshair OHLCV inspection.
 - Optional EMA 20, EMA 50 and Bollinger Band overlays; RSI(14), ATR(14), MACD histogram and volume analytics.
 
 **Not yet implemented / not to be mistaken for complete functionality**
-- The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.
+- The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Product availability and market classification are exchange-specific; an instrument is only shown when its adapter reports it in the public catalog. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.
 - No persistent user accounts, encrypted credential vault, PostgreSQL/Redis storage, authenticated multi-user cloud gateway, production WebSocket streaming, full futures/margin execution, copy-trading engine, strategy execution engine, AI model inference, institutional portfolio ledger or native Android APK yet.
 - A configured exchange key does not mean an exchange account has been authenticated until a private endpoint succeeds.
 - No exchange is connected until you configure your own credentials and verify the connection.
@@ -67,7 +67,7 @@ Never paste keys into chat, source files, frontend variables, browser local stor
 - `GET /api/health`
 - `GET /api/exchanges`
 - `GET /api/exchanges/:id/status`
-- `GET /api/exchanges/:id/markets`
+- `GET /api/exchanges/:id/markets?type=all&search=BTC`
 - `GET /api/exchanges/:id/ticker/:symbol` (example: `/api/exchanges/binance/ticker/BTC-USDT`)
 - `GET /api/exchanges/:id/ohlcv/:symbol?timeframe=1h&limit=120`
 - `GET /api/exchanges/:id/balance` (private credentials required)
