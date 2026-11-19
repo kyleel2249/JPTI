@@ -78,7 +78,8 @@ All API credentials are server-side only. Never use Vite `VITE_*` variables for 
 ### Operational intervals (seconds)
 
 Set these values in the server `.env`:
-- `JPTI_MM_INTERVAL_SECONDS=5` — market-monitor sampling cadence (MM here means market monitoring; it is not a market-making order loop).
+- `JPTI_MM_INTERVAL_SECONDS=5` — market-maker quote-cycle target cadence (not an active order loop until a separately approved market-making worker is deployed).
+- `JPTI_MARKET_MONITOR_INTERVAL_SECONDS=5` — market-monitor sampling cadence.
 - `JPTI_MARKET_DATA_REFRESH_INTERVAL_SECONDS=5` — intended market-data refresh cadence.
 - `JPTI_RECONCILE_INTERVAL_SECONDS=30` — portfolio/order/transaction reconciliation cadence target.
 - `JPTI_INVESTOR_MONITOR_INTERVAL_SECONDS=60` — investor/watchlist monitoring cadence target.
