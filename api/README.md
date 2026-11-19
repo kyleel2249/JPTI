@@ -4,14 +4,14 @@ The gateway is a Node.js server-side integration layer built on CCXT. It provide
 
 ## Supported adapter catalog
 
-The runtime catalog is generated dynamically from all exchange adapter IDs shipped in the installed CCXT version (100+ exchange APIs). JPTI reports the actual capabilities detected for each adapter. Exchange products, geographic availability, permissions and API feature support vary; live order execution is restricted to active spot markets with USDT quote currency in this initial gateway.
+The runtime catalog is generated dynamically from all exchange adapter IDs shipped in the installed CCXT version (100+ exchange APIs). JPTI reports the actual capabilities detected for each adapter. The market endpoint loads all active instruments exposed by the selected exchange and classifies spot, futures, perpetual swaps, margin-enabled spot, CFDs and options when the exchange metadata explicitly identifies them. Product availability, geographic restrictions, and metadata quality vary by provider; live order execution remains restricted to active spot markets with USDT quote currency in this initial gateway.
 
 ## Endpoints
 
 - `GET /api/health` — gateway status and mode.
 - `GET /api/exchanges` — supported exchange adapters and configured status.
 - `GET /api/exchanges/:id/status` — credential presence (never returns secrets).
-- `GET /api/exchanges/:id/markets` — active spot market catalog plus that exchange's supported OHLCV timeframes.
+- `GET /api/exchanges/:id/markets?type=all&search=BTC` — active exchange market catalog with type filters (`spot`, `futures`, `perpetual`, `margin`, `cfd`, `options`), search, product counts, settlement/contract metadata, adapter capabilities and supported OHLCV timeframes.
 - `GET /api/exchanges/:id/ticker/:symbol` — live ticker, e.g. `/api/exchanges/binance/ticker/BTC-USDT`.
 - `GET /api/exchanges/:id/ohlcv/:symbol?timeframe=1h&limit=120` — live OHLCV candle history.
 - `GET /api/exchanges/:id/balance` — private account balances; requires server-side credentials and the `x-jpti-api-token` header.
