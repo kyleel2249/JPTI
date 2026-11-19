@@ -1,3 +1,4 @@
+import { withExchange } from './exchanges.js';
 import express from 'express';
 
 export const intelligenceRouter = express.Router();
@@ -50,6 +51,56 @@ intelligenceRouter.post('/score', express.json(), (req, res) => {
   for (const field of numeric) if (input[field] !== undefined && !Number.isFinite(input[field])) return res.status(400).json({ error: `${field} must be a finite number.` });
   if (input.macroBias !== undefined && !['risk-on', 'risk-off', 'neutral'].includes(input.macroBias)) return res.status(400).json({ error: 'macroBias must be risk-on, risk-off or neutral.' });
   res.json({ generatedAt: new Date().toISOString(), ...scoreMarketContext(input) });
+});
+
+
+intelligenceRouter.get('/market/:exchange/:symbol/context', async (req, res) => {
+  const exchangeId = String(req.params.exchange || '').toLowerCase();
+  const symbol = String(req.params.symbol || '').toUpperCase().replace('-', '/');
+  const timeframe = String(req.query.timeframe || '1h');
+  if (!/^[A-Z0-9]{2,20}\/[A-Z0-9]{2,20}$/.test(symbol)) return res.status(400).json({ error: 'Invalid market symbol.' });
+  if (!/^(1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w|1M)$/.test(timeframe)) return res.status(400).json({ error: 'Unsupported timeframe.' });
+  try {
+    const market = await withExchange(exchangeId, { privateAccess: false }, async (client) => {
+      if (!client.markets[symbol]) throw Object.assign(new Error('Market is not listed on the selected exchange.'), { status: 404 });
+      if (!client.has?.fetchOHLCV) throw Object.assign(new Error('OHLCV is unavailable for this exchange.'), { status: 501 });
+      const [candles, ticker] = await Promise.all([
+        client.fetchOHLCV(symbol, timeframe, undefined, 80),
+        client.has?.fetchTicker ? client.fetchTicker(symbol) : Promise.resolve(null)
+      ]);
+      return { candles, ticker };
+    });
+    const rows = (market.candles || []).filter((row) => Array.isArray(row) && row.length >= 6 && row.slice(1,6).every((n) => Number.isFinite(Number(n))));
+    if (rows.length < 25) return res.status(422).json({ error: 'At least 25 valid candles are required for context analysis.', candleCount: rows.length });
+    const closed = rows.slice(0, -1);
+    const last = closed[closed.length - 1];
+    const base = closed[Math.max(0, closed.length - 21)];
+    const priceChangePct = base[4] ? ((last[4] - base[4]) / base[4]) * 100 : null;
+    const priorVolumes = closed.slice(-21, -1).map((row) => Number(row[5])).filter(Number.isFinite);
+    const averageVolume = priorVolumes.length ? priorVolumes.reduce((a,b)=>a+b,0) / priorVolumes.length : null;
+    const volumeChangePct = averageVolume > 0 ? ((Number(last[5]) - averageVolume) / averageVolume) * 100 : null;
+    const [globalResult, chainResult] = await Promise.all([
+      settledSource('CoinGecko global market', () => fetchJson('https://api.coingecko.com/api/v3/global')),
+      settledSource('DeFiLlama chain TVL', () => fetchJson('https://api.llama.fi/v2/chains'))
+    ]);
+    const global = globalResult.data?.data || null;
+    const globalChange = Number(global?.market_cap_change_percentage_24h_usd);
+    const score = scoreMarketContext({
+      priceChangePct,
+      volumeChangePct,
+      macroBias: Number.isFinite(globalChange) ? (globalChange > 1 ? 'risk-on' : globalChange < -1 ? 'risk-off' : 'neutral') : 'neutral'
+    });
+    const chainRows = Array.isArray(chainResult.data) ? chainResult.data : [];
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      generatedAt: new Date().toISOString(), exchange: exchangeId, symbol, timeframe,
+      market: { lastPrice: market.ticker?.last ?? last[4], quoteVolume24h: market.ticker?.quoteVolume ?? null, priceChangePct: Number(priceChangePct.toFixed(4)), latestClosedCandleAt: new Date(last[0]).toISOString(), lastClosedVolume: last[5], averagePriorVolume: averageVolume, volumeChangePct: volumeChangePct == null ? null : Number(volumeChangePct.toFixed(2)) },
+      broadContext: { globalMarketCapChange24hPct: Number.isFinite(globalChange) ? globalChange : null, btcDominancePct: global?.market_cap_percentage?.btc ?? null, chainTvlLeaders: chainRows.slice().sort((a,b)=>(Number(b.tvl)||0)-(Number(a.tvl)||0)).slice(0,5).map((x)=>({name:x.name,tvl:x.tvl})) },
+      score,
+      limitations: ['Exchange price/volume calculations use closed candles; the newest possibly incomplete candle is excluded.', 'Broad risk regime is a coarse proxy derived from aggregate crypto market-cap change, not a macroeconomic forecast.', 'Exchange netflows, wallet attribution, derivatives positioning and FRED macro releases are not included in this pair-specific score unless independently integrated and validated.', 'The score is a research aid, not a probability, recommendation or order instruction.'],
+      sources: [source('Selected CCXT exchange OHLCV/ticker', 'live', new Date().toISOString(), { timeframe, candlesUsed: closed.length }), globalResult.source, chainResult.source]
+    });
+  } catch (error) { res.status(error.status || 502).json({ error: error.message || 'Market context analysis failed' }); }
 });
 
 intelligenceRouter.get('/overview', async (_req, res) => {
