@@ -160,7 +160,8 @@ The API starts a server-side operations scheduler when the server starts (unless
 
 ### Operational endpoints
 - `GET /api/operations/overview` — scheduler uptime, job status, last-run timestamps, intervals and market snapshots.
-- `GET /api/operations/events?limit=100` — recent persisted operational events.
+- `GET /api/operations/events?limit=100` — recent persisted operational events (private ledger transaction details are excluded).
+- `GET /api/operations/ledger/events?limit=100` — private transaction history; requires `x-jpti-api-token`.
 - `GET /api/operations/ledger/summary` — transaction event counts by type; not a balance or PnL calculation.
 - `POST /api/operations/ledger/events` — authenticated append-only transaction-event ingestion.
 
