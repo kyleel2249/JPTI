@@ -41,3 +41,23 @@ test('returns empty event collections when there is insufficient candle history'
   assert.equal(result.fairValueGaps.length, 0);
   assert.equal(result.structureBreaks.length, 0);
 });
+
+
+test('classifies a break against the established trend as CHoCH', () => {
+  const rows = [
+    candle(0, 9, 10, 8, 9),
+    candle(1, 9, 11, 8.5, 10),
+    candle(2, 10, 12, 9, 11),
+    candle(3, 11, 15, 10, 11),
+    candle(4, 10, 12, 9, 10),
+    candle(5, 9.5, 11, 8, 9),
+    candle(6, 9, 10, 7.5, 8.5),
+    candle(7, 12, 16, 11, 14),
+    candle(8, 14, 17, 13, 16),
+    candle(9, 17, 19, 15, 18),
+    candle(10, 8, 9, 6, 7)
+  ];
+  const result = detectSmartMoney(rows);
+  assert.ok(result.structureBreaks.some((event) => event.kind === 'BOS' && event.direction === 'bullish'));
+  assert.ok(result.structureBreaks.some((event) => event.kind === 'CHoCH' && event.direction === 'bearish'));
+});
