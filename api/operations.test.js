@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getOperationsSnapshot } from './operations.js';
+import { eventSchema, getOperationsSnapshot } from './operations.js';
 
 test('operations snapshot exposes monitored services and honest waiting states', () => {
   const snapshot = getOperationsSnapshot();
@@ -10,3 +10,20 @@ test('operations snapshot exposes monitored services and honest waiting states',
   assert.ok(snapshot.uptimeSeconds >= 0);
 });
 
+test('transaction event schema accepts normalized fill records', () => {
+  const result = eventSchema.safeParse({
+    source: 'alpaca', eventType: 'fill', externalId: 'fill-12345',
+    accountId: 'paper-account-01', symbol: 'AAPL', side: 'buy',
+    quantity: 2, price: 190.25, fee: 0.01, feeCurrency: 'USD'
+  });
+  assert.equal(result.success, true);
+});
+
+test('transaction event schema rejects negative quantities and prices', () => {
+  const result = eventSchema.safeParse({
+    source: 'exchange', eventType: 'fill', externalId: 'fill-12345',
+    accountId: 'account-01', symbol: 'BTC/USDT', side: 'buy',
+    quantity: -1, price: 0
+  });
+  assert.equal(result.success, false);
+});
