@@ -71,7 +71,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showEma20, setShowEma20] = useState(true);
+  const [showEma20, setShowEma20] = useState(false);
   const [showEma50, setShowEma50] = useState(false);
   const [showBollinger, setShowBollinger] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
