@@ -183,7 +183,7 @@ operationsRouter.get('/operations/overview', (_req, res) => res.json(getOperatio
 operationsRouter.get('/operations/events', async (req, res, next) => {
   try {
     const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
-    const events = await readEvents(limit);
+    const events = (await readEvents(limit * 2)).filter((event) => event.kind !== 'ledger-transaction').slice(-limit);
     res.json({ count: events.length, events: events.reverse() });
   } catch (error) { next(error); }
 });
@@ -195,6 +195,16 @@ operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
     res.json({ eventCount: transactions.length, byType, lastEventAt: transactions.at(-1)?.occurredAt || null, note: 'This is an append-only transaction event count, not a reconciled balance or realized PnL statement.' });
   } catch (error) { next(error); }
 });
+
+operationsRouter.get('/operations/ledger/events', async (req, res, next) => {
+  try {
+    requirePrivateApiAuth(req);
+    const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
+    const events = (await readEvents()).filter((event) => event.kind === 'ledger-transaction').slice(-limit).reverse();
+    res.json({ count: events.length, events });
+  } catch (error) { next(error); }
+});
+
 operationsRouter.post('/operations/ledger/events', async (req, res, next) => {
   try {
     requirePrivateApiAuth(req);
