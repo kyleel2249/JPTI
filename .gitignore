@@ -5,3 +5,6 @@ dist
 !.env.example
 *.log
 .DS_Store
+
+# Local durable transaction and operations event store
+/data/
