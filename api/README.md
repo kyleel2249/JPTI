@@ -157,3 +157,11 @@ Provider limitations: Finnhub, Alpha Vantage and Twelve Data have symbol coverag
 - The Overview dashboard includes a read-only cross-source quote panel. It does not submit orders and does not claim to provide a consolidated NBBO or guaranteed executable price.
 
 A cross-provider median is only a sanity check: feeds may differ by venue, session, delay, currency, corporate-action adjustment and licensing entitlement. A flagged outlier is not proof that a provider is wrong. Review source timestamps and market status before relying on the result.
+
+
+## Cross-exchange spread scanner
+
+- `GET /api/exchanges/compare/ticker?symbol=BTC%2FUSDT&exchanges=binance,bitget,bybit,okx` requests public tickers from up to six supported CCXT venues.
+- Returns per-venue last/bid/ask/volume/timestamp, median last price, last-price dispersion and an indicative best-ask/best-bid gross edge when two different venues provide valid top-of-book quotes.
+- A five-second per-symbol/venue-set cache limits repeated calls. Failed or unlisted markets remain visible in the per-venue result list.
+- The scanner is read-only and does not submit arbitrage orders. Gross edge excludes trading fees, funding, market depth, slippage, latency, withdrawal/deposit delays, counterparty risk and venue restrictions. Do not interpret a positive edge as executable profit.
