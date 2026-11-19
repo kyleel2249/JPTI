@@ -209,18 +209,31 @@ advancedRouter.post('/advanced/monte-carlo', (req, res) => {
 });
 advancedRouter.post('/advanced/portfolio/reconcile', (req, res) => {
   try { requirePrivateApiAuth(req); } catch (e) { return res.status(401).json({ error: e.message }); }
-  const { balances = [], fills = [] } = req.body || {};
-  if (!Array.isArray(balances) || !Array.isArray(fills) || balances.length > 500 || fills.length > 5000) return res.status(400).json({ error: 'Invalid reconciliation payload.' });
-  const expected = new Map();
-  for (const fill of fills) {
-    const qty = finite(fill.quantity), price = finite(fill.price);
-    if (!qty || qty <= 0 || !price || price <= 0 || !['buy', 'sell'].includes(fill.side) || !fill.base || !fill.quote) return res.status(400).json({ error: 'Each fill requires base, quote, buy/sell side, positive quantity and price.' });
-    const base = expected.get(fill.base) || 0, quote = expected.get(fill.quote) || 0;
-    expected.set(fill.base, base + (fill.side === 'buy' ? qty : -qty));
-    expected.set(fill.quote, quote + (fill.side === 'buy' ? -qty * price : qty * price) - finite(fill.fee) || 0);
+  const { balances = [], openingBalances = [], fills = [] } = req.body || {};
+  if (!Array.isArray(balances) || !Array.isArray(openingBalances) || !Array.isArray(fills) || balances.length > 500 || openingBalances.length > 500 || fills.length > 5000) return res.status(400).json({ error: 'Invalid reconciliation payload.' });
+  const opening = new Map();
+  for (const item of openingBalances) {
+    const amount = finite(item.total);
+    if (!item.currency || amount == null) return res.status(400).json({ error: 'Opening balances require currency and numeric total.' });
+    opening.set(item.currency, amount);
   }
-  const rows = balances.map((b) => ({ currency: b.currency, reported: finite(b.total), ledgerExpected: expected.get(b.currency) ?? null, difference: expected.has(b.currency) && finite(b.total) != null ? finite(b.total) - expected.get(b.currency) : null }));
-  res.json({ generatedAt: new Date().toISOString(), balances: rows, unmatchedCurrencies: [...expected.keys()].filter((c) => !balances.some((b) => b.currency === c)), realizedPnl: 'not calculated: requires lot accounting, opening inventory, fee currencies and transfers', unrealizedPnl: 'not calculated: requires mark prices and position lots', note: 'Reconciliation is only as complete as the supplied opening balances, fills, fees and transfers. This endpoint does not fetch exchange accounts automatically.' });
+  const delta = new Map();
+  const add = (currency, amount) => delta.set(currency, (delta.get(currency) || 0) + amount);
+  for (const fill of fills) {
+    const qty = finite(fill.quantity), price = finite(fill.price), fee = finite(fill.fee ?? 0);
+    if (qty == null || qty <= 0 || price == null || price <= 0 || fee == null || fee < 0 || !['buy', 'sell'].includes(fill.side) || !fill.base || !fill.quote) return res.status(400).json({ error: 'Each fill requires base/quote, buy/sell side, positive quantity and price, and a non-negative fee.' });
+    add(fill.base, fill.side === 'buy' ? qty : -qty);
+    add(fill.quote, fill.side === 'buy' ? -qty * price : qty * price);
+    const feeCurrency = fill.feeCurrency || fill.quote;
+    if (fee > 0) add(feeCurrency, -fee);
+  }
+  const rows = balances.map((b) => {
+    const hasOpening = opening.has(b.currency);
+    const expected = hasOpening ? opening.get(b.currency) + (delta.get(b.currency) || 0) : null;
+    const reported = finite(b.total);
+    return { currency: b.currency, reported, openingBalance: hasOpening ? opening.get(b.currency) : null, fillDelta: delta.get(b.currency) || 0, ledgerExpected: expected, difference: expected != null && reported != null ? reported - expected : null, status: expected == null ? 'missing-opening-balance' : reported == null ? 'invalid-reported-balance' : Math.abs(reported - expected) < 1e-8 ? 'matched' : 'variance' };
+  });
+  res.json({ generatedAt: new Date().toISOString(), balances: rows, unmatchedCurrencies: [...delta.keys()].filter((c) => !balances.some((b) => b.currency === c)), realizedPnl: 'not calculated: requires lot accounting, trade matching and full fee/transfer history', unrealizedPnl: 'not calculated: requires mark prices and position lots', note: 'Opening balances are mandatory for meaningful comparisons. Reconciliation is only as complete as supplied opening balances, fills, fees, transfers and external cash movements. This endpoint does not fetch exchange accounts automatically.' });
 });
 
 advancedRouter.post('/advanced/execution/estimate', (req, res) => {
