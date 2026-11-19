@@ -60,14 +60,14 @@ function atr(candles, period = 14) {
 const fmt = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 8 });
 const timeLabel = (stamp, timeframe) => {
   const date = new Date(stamp);
-  return ['1d', '1w', '1M'].includes(timeframe)
+  return ['1d', '3d', '1w', '1M'].includes(timeframe)
     ? date.toLocaleDateString([], { month: 'short', day: 'numeric' })
     : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange }) {
   const [timeframe, setTimeframe] = useState('1h');
-  const [candles, setCandles] = useState([]);
+  const [candles, setCandles] = useState([]);\n  const [marketSymbols, setMarketSymbols] = useState(SYMBOLS);\n  const [supportedTimeframes, setSupportedTimeframes] = useState(null);
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +77,25 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [showVolume, setShowVolume] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [crosshair, setCrosshair] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/exchanges/' + exchange + '/markets')
+      .then((response) => response.json().then((data) => ({ response, data })))
+      .then(({ response, data }) => {
+        if (!active || !response.ok) return;
+        const symbols = (data.markets || []).filter((market) => market.active !== false && market.quote === 'USDT').map((market) => market.symbol);
+        if (symbols.length) {
+          setMarketSymbols(symbols);
+          if (!symbols.includes(symbol)) onSymbolChange(symbols[0]);
+        }
+        const frames = Array.isArray(data.timeframes) && data.timeframes.length ? data.timeframes : null;
+        setSupportedTimeframes(frames);
+        if (frames && !frames.includes(timeframe)) setTimeframe(frames.includes('1h') ? '1h' : frames[0]);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [exchange]);
 
   const load = async () => {
     setLoading(true);
@@ -164,10 +183,10 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     <div className="chart-toolbar">
       <label htmlFor="jpti-symbol">Market</label>
       <select id="jpti-symbol" value={symbol} onChange={(e) => onSymbolChange(e.target.value)}>
-        {SYMBOLS.map((item) => <option key={item} value={item}>{item}</option>)}
+        {marketSymbols.map((item) => <option key={item} value={item}>{item}</option>)}
       </select>
       <div className="timeframe-list" role="group" aria-label="Chart timeframe">
-        {TIMEFRAMES.map(([value, label]) => <button key={value} className={timeframe === value ? 'active' : ''} onClick={() => setTimeframe(value)}>{label}</button>)}
+        {TIMEFRAMES.filter(([value]) => !supportedTimeframes || supportedTimeframes.includes(value)).map(([value, label]) => <button key={value} className={timeframe === value ? 'active' : ''} onClick={() => setTimeframe(value)}>{label}</button>)}
       </div>
       <div className="chart-actions">
         <button onClick={() => setZoom((v) => Math.min(4, v * 1.35))} title="Zoom in">＋</button>
