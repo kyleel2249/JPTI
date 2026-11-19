@@ -19,6 +19,10 @@ export default function FinancialIntelligence() {
   const [score, setScore] = useState(null);
   const [scoreError, setScoreError] = useState('');
   const [error, setError] = useState('');
+  const [providerStatus, setProviderStatus] = useState(null);
+  const [providerError, setProviderError] = useState('');
+
+  const loadProviders = useCallback(async () => { try { const response = await fetch('/api/providers'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Provider registry unavailable'); setProviderStatus(data); setProviderError(''); } catch (e) { setProviderError(e.message); } }, []);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -47,7 +51,7 @@ export default function FinancialIntelligence() {
     loadMacro();
     const timer = setInterval(loadOverview, 60000);
     return () => clearInterval(timer);
-  }, [loadOverview, loadMacro]);
+  }, [loadOverview, loadMacro, loadProviders]);
 
   const inspectWallet = async (event) => {
     event.preventDefault();
@@ -85,6 +89,14 @@ export default function FinancialIntelligence() {
     </div>
 
     <article className="intel-card"><div className="intel-head"><b>EXPLAINABLE STRATEGY CONTEXT LAB</b><span>Research scoring · no orders</span></div><p className="intel-note">Enter measured changes from your selected market and validated wallet/flow sources. Leave unavailable fields blank; JPTI will not invent missing evidence.</p><form className="score-form" onSubmit={async (event) => { event.preventDefault(); setScoreError(''); setScore(null); const body = { macroBias: scoreInput.macroBias }; for (const key of ['priceChangePct','volumeChangePct','netExchangeFlow','stablecoinSupplyChangePct']) if (scoreInput[key] !== '') body[key] = Number(scoreInput[key]); try { const response = await fetch('/api/intelligence/score', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Scoring request failed'); setScore(data); } catch (e) { setScoreError(e.message); } }}><label>Price change %<input type="number" step="any" value={scoreInput.priceChangePct} onChange={e=>setScoreInput(v=>({...v,priceChangePct:e.target.value}))} placeholder="e.g. 2.4"/></label><label>Volume change %<input type="number" step="any" value={scoreInput.volumeChangePct} onChange={e=>setScoreInput(v=>({...v,volumeChangePct:e.target.value}))} placeholder="e.g. 35"/></label><label>Net exchange flow<input type="number" step="any" value={scoreInput.netExchangeFlow} onChange={e=>setScoreInput(v=>({...v,netExchangeFlow:e.target.value}))} placeholder="Negative = net outflow"/></label><label>Stablecoin supply change %<input type="number" step="any" value={scoreInput.stablecoinSupplyChangePct} onChange={e=>setScoreInput(v=>({...v,stablecoinSupplyChangePct:e.target.value}))} placeholder="e.g. 1.2"/></label><label>Macro regime<select value={scoreInput.macroBias} onChange={e=>setScoreInput(v=>({...v,macroBias:e.target.value}))}><option value="neutral">Neutral / unknown</option><option value="risk-on">Risk-on</option><option value="risk-off">Risk-off</option></select></label><button>Calculate evidence score</button></form>{scoreError && <p className="intel-warning">{scoreError}</p>}{score && <div className="score-result"><b>{score.direction.toUpperCase()}</b><strong>Score {score.score} · {score.confidence} evidence confidence</strong>{score.evidence.map((item)=><div key={item.factor}><span>{item.factor}: {String(item.value)}</span><em>{item.contribution > 0 ? '+' : ''}{item.contribution}</em></div>)}<p>{score.caveat}</p></div>}</article>
-\n    <article className="intel-card"><div className="intel-head"><b>DATA SOURCE HEALTH & COVERAGE</b><span>Provenance attached to each provider response</span></div><div className="source-grid">{(overview?.sources || []).map((item) => <div key={item.name}><i className={item.status === 'live' ? 'source-live' : 'source-down'}/><b>{item.name}</b><span>{item.status} · {new Date(item.fetchedAt).toLocaleTimeString()}</span>{item.error && <small>{item.error}</small>}</div>)}</div><p className="intel-note">Address history requires your own Alchemy or Helius API key. A wallet address is pseudonymous: JPTI cannot infer its owner, intent, complete portfolio or off-chain identity. Provider indexing may omit records or apply limits.</p></article>
+\n
+    <article className="intel-card provider-registry"><div className="intel-head"><b>CONNECTED DATA PROVIDER REGISTRY</b><span>Server-side adapters · credentials never exposed</span></div>
+      {providerError && <p className="intel-warning">{providerError}</p>}
+      <div className="provider-grid">{(providerStatus?.providers || []).map((item) => <div className="provider-item" key={item.id}><div><b>{item.name}</b><span className={item.status === 'credentials-configured-not-verified' || item.status === 'public-or-no-key' ? 'provider-ready' : 'provider-missing'}>{item.status === 'credentials-configured-not-verified' ? 'KEY CONFIGURED · VERIFY CONNECTION' : item.status === 'public-or-no-key' ? 'PUBLIC / NO KEY' : 'NEEDS API KEY'}</span></div><small>{item.capabilities.join(' · ')}</small><a href={item.docs} target="_blank" rel="noreferrer">Provider documentation ↗</a>{item.caveat && <small>{item.caveat}</small>}</div>)}</div>
+      <div className="interval-grid"><b>OPERATIONAL INTERVALS</b>{Object.entries(providerStatus?.intervals || {}).filter(([key]) => key !== 'schedulerEnabled').map(([key,value]) => <div key={key}><span>{key.replace(/([A-Z])/g,' $1')}</span><strong>{value}s</strong></div>)}</div>
+      <p className="intel-note">Intervals are server configuration values. They do not assert that a market-making engine, portfolio reconciler or investor-monitor worker is active. Live provider verification, account permissions, plan entitlements and rate limits are checked at request time.</p>
+    </article>
+
+    <article className="intel-card"><div className="intel-head"><b>DATA SOURCE HEALTH & COVERAGE</b><span>Provenance attached to each provider response</span></div><div className="source-grid">{(overview?.sources || []).map((item) => <div key={item.name}><i className={item.status === 'live' ? 'source-live' : 'source-down'}/><b>{item.name}</b><span>{item.status} · {new Date(item.fetchedAt).toLocaleTimeString()}</span>{item.error && <small>{item.error}</small>}</div>)}</div><p className="intel-note">Address history requires your own Alchemy or Helius API key. A wallet address is pseudonymous: JPTI cannot infer its owner, intent, complete portfolio or off-chain identity. Provider indexing may omit records or apply limits.</p></article>
   </section>;
 }
