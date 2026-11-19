@@ -54,7 +54,7 @@ app.get('/api/exchanges/:id/markets', async (req, res, next) => {
   try {
     const result = await withExchange(id, { privateAccess: false }, async (exchange) => ({
       markets: Object.values(exchange.markets)
-        .filter((market) => market.active !== false && market.spot !== false)
+        .filter((market) => market.active !== false && market.spot === true)
         .slice(0, 500)
         .map(({ symbol, base, quote, active, precision, limits }) => ({ symbol, base, quote, active, precision, limits })),
       timeframes: exchange.timeframes ? Object.keys(exchange.timeframes) : null
