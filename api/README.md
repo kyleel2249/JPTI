@@ -11,7 +11,7 @@ The runtime catalog is generated dynamically from all exchange adapter IDs shipp
 - `GET /api/health` — gateway status and mode.
 - `GET /api/exchanges` — supported exchange adapters and configured status.
 - `GET /api/exchanges/:id/status` — credential presence (never returns secrets).
-- `GET /api/exchanges/:id/markets` — active spot market catalog.
+- `GET /api/exchanges/:id/markets` — active spot market catalog plus that exchange's supported OHLCV timeframes.
 - `GET /api/exchanges/:id/ticker/:symbol` — live ticker, e.g. `/api/exchanges/binance/ticker/BTC-USDT`.
 - `GET /api/exchanges/:id/ohlcv/:symbol?timeframe=1h&limit=120` — live OHLCV candle history.
 - `GET /api/exchanges/:id/balance` — private account balances; requires server-side credentials and the `x-jpti-api-token` header.
