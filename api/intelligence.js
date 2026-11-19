@@ -31,13 +31,16 @@ async function settledSource(name, task) {
   catch (error) { return { data: null, source: source(name, 'unavailable', fetchedAt, { error: error.name === 'AbortError' ? 'Provider request timed out' : error.message }) }; }
 }
 
-export function scoreMarketContext({ priceChangePct = null, volumeChangePct = null, netExchangeFlow = null, stablecoinSupplyChangePct = null, macroBias = null } = {}) {
+export function scoreMarketContext({ priceChangePct = null, volumeChangePct = null, netExchangeFlow = null, stablecoinSupplyChangePct = null, orderBookImbalancePct = null, fundingRate = null, timeframeAlignment = null, macroBias = null } = {}) {
   let score = 0;
   const evidence = [];
   if (Number.isFinite(priceChangePct)) { const points = Math.max(-2, Math.min(2, priceChangePct / 3)); score += points; evidence.push({ factor: 'price momentum', value: priceChangePct, contribution: points }); }
   if (Number.isFinite(volumeChangePct)) { const points = Math.max(-1.5, Math.min(1.5, volumeChangePct / 20)) * (Number.isFinite(priceChangePct) && priceChangePct < 0 ? -1 : 1); score += points; evidence.push({ factor: 'relative volume', value: volumeChangePct, contribution: points }); }
   if (Number.isFinite(netExchangeFlow)) { const points = netExchangeFlow < 0 ? 1 : netExchangeFlow > 0 ? -1 : 0; score += points; evidence.push({ factor: 'net exchange flow', value: netExchangeFlow, contribution: points }); }
   if (Number.isFinite(stablecoinSupplyChangePct)) { const points = Math.max(-1, Math.min(1, stablecoinSupplyChangePct / 5)); score += points; evidence.push({ factor: 'stablecoin supply change', value: stablecoinSupplyChangePct, contribution: points }); }
+  if (Number.isFinite(orderBookImbalancePct)) { const points = Math.max(-1, Math.min(1, orderBookImbalancePct / 30)); score += points; evidence.push({ factor: 'top-of-book depth imbalance', value: orderBookImbalancePct, contribution: points }); }
+  if (Number.isFinite(fundingRate)) { const points = Math.max(-1, Math.min(1, -fundingRate * 10000)); score += points; evidence.push({ factor: 'perpetual funding (contrarian)', value: fundingRate, contribution: points }); }
+  if (Number.isFinite(timeframeAlignment)) { const points = Math.max(-0.75, Math.min(0.75, timeframeAlignment * 0.75)); score += points; evidence.push({ factor: 'multi-timeframe alignment', value: timeframeAlignment, contribution: points }); }
   if (macroBias === 'risk-on') { score += 0.75; evidence.push({ factor: 'macro regime', value: macroBias, contribution: 0.75 }); }
   if (macroBias === 'risk-off') { score -= 0.75; evidence.push({ factor: 'macro regime', value: macroBias, contribution: -0.75 }); }
   const direction = score >= 1.25 ? 'bullish bias' : score <= -1.25 ? 'bearish bias' : 'mixed / neutral';
@@ -47,7 +50,7 @@ export function scoreMarketContext({ priceChangePct = null, volumeChangePct = nu
 
 intelligenceRouter.post('/score', express.json(), (req, res) => {
   const input = req.body || {};
-  const numeric = ['priceChangePct', 'volumeChangePct', 'netExchangeFlow', 'stablecoinSupplyChangePct'];
+  const numeric = ['priceChangePct', 'volumeChangePct', 'netExchangeFlow', 'stablecoinSupplyChangePct', 'orderBookImbalancePct', 'fundingRate', 'timeframeAlignment'];
   for (const field of numeric) if (input[field] !== undefined && !Number.isFinite(input[field])) return res.status(400).json({ error: `${field} must be a finite number.` });
   if (input.macroBias !== undefined && !['risk-on', 'risk-off', 'neutral'].includes(input.macroBias)) return res.status(400).json({ error: 'macroBias must be risk-on, risk-off or neutral.' });
   res.json({ generatedAt: new Date().toISOString(), ...scoreMarketContext(input) });
@@ -64,11 +67,15 @@ intelligenceRouter.get('/market/:exchange/:symbol/context', async (req, res) => 
     const market = await withExchange(exchangeId, { privateAccess: false }, async (client) => {
       if (!client.markets[symbol]) throw Object.assign(new Error('Market is not listed on the selected exchange.'), { status: 404 });
       if (!client.has?.fetchOHLCV) throw Object.assign(new Error('OHLCV is unavailable for this exchange.'), { status: 501 });
-      const [candles, ticker] = await Promise.all([
+      const tfList = [...new Set([timeframe, '15m', '1h', '4h', '1d'])].filter((tf) => !client.timeframes || client.timeframes[tf]);
+      const [candles, ticker, orderBook, fundingRate, multiRows] = await Promise.all([
         client.fetchOHLCV(symbol, timeframe, undefined, 80),
-        client.has?.fetchTicker ? client.fetchTicker(symbol) : Promise.resolve(null)
+        client.has?.fetchTicker ? client.fetchTicker(symbol) : Promise.resolve(null),
+        client.has?.fetchOrderBook ? client.fetchOrderBook(symbol, 20).catch(() => null) : Promise.resolve(null),
+        (client.has?.fetchFundingRate && client.market(symbol).contract) ? client.fetchFundingRate(symbol).catch(() => null) : Promise.resolve(null),
+        Promise.all(tfList.map(async (tf) => ({ timeframe: tf, candles: await client.fetchOHLCV(symbol, tf, undefined, 40).catch(() => null) })))
       ]);
-      return { candles, ticker };
+      return { candles, ticker, orderBook, fundingRate, multiRows };
     });
     const rows = (market.candles || []).filter((row) => Array.isArray(row) && row.length >= 6 && row.slice(1,6).every((n) => Number.isFinite(Number(n))));
     if (rows.length < 25) return res.status(422).json({ error: 'At least 25 valid candles are required for context analysis.', candleCount: rows.length });
@@ -79,6 +86,20 @@ intelligenceRouter.get('/market/:exchange/:symbol/context', async (req, res) => 
     const priorVolumes = closed.slice(-21, -1).map((row) => Number(row[5])).filter(Number.isFinite);
     const averageVolume = priorVolumes.length ? priorVolumes.reduce((a,b)=>a+b,0) / priorVolumes.length : null;
     const volumeChangePct = averageVolume > 0 ? ((Number(last[5]) - averageVolume) / averageVolume) * 100 : null;
+    const multiTimeframe = (market.multiRows || []).map((item) => {
+      const valid = (item.candles || []).filter((row) => Array.isArray(row) && row.length >= 6 && Number.isFinite(Number(row[4])));
+      const closedRows = valid.slice(0, -1);
+      if (closedRows.length < 22) return { timeframe: item.timeframe, bias: 'unavailable', changePct: null };
+      const end = closedRows[closedRows.length - 1][4], start = closedRows[closedRows.length - 21][4];
+      const changePct = start ? ((end - start) / start) * 100 : 0;
+      return { timeframe: item.timeframe, bias: changePct > 0.15 ? 'bullish' : changePct < -0.15 ? 'bearish' : 'neutral', changePct: Number(changePct.toFixed(3)) };
+    });
+    const usableTf = multiTimeframe.filter((item) => item.bias !== 'unavailable' && item.bias !== 'neutral');
+    const timeframeAlignment = usableTf.length ? usableTf.reduce((sum,item)=>sum+(item.bias==='bullish'?1:-1),0) / usableTf.length : null;
+    const bidDepth = (market.orderBook?.bids || []).slice(0,20).reduce((sum,[price,amount])=>sum+Number(price)*Number(amount),0);
+    const askDepth = (market.orderBook?.asks || []).slice(0,20).reduce((sum,[price,amount])=>sum+Number(price)*Number(amount),0);
+    const orderBookImbalancePct = bidDepth + askDepth > 0 ? ((bidDepth-askDepth)/(bidDepth+askDepth))*100 : null;
+    const fundingRate = Number.isFinite(Number(market.fundingRate?.fundingRate)) ? Number(market.fundingRate.fundingRate) : null;
     const [globalResult, chainResult] = await Promise.all([
       settledSource('CoinGecko global market', () => fetchJson('https://api.coingecko.com/api/v3/global')),
       settledSource('DeFiLlama chain TVL', () => fetchJson('https://api.llama.fi/v2/chains'))
@@ -94,10 +115,11 @@ intelligenceRouter.get('/market/:exchange/:symbol/context', async (req, res) => 
     res.set('Cache-Control', 'no-store');
     res.json({
       generatedAt: new Date().toISOString(), exchange: exchangeId, symbol, timeframe,
-      market: { lastPrice: market.ticker?.last ?? last[4], quoteVolume24h: market.ticker?.quoteVolume ?? null, priceChangePct: Number(priceChangePct.toFixed(4)), latestClosedCandleAt: new Date(last[0]).toISOString(), lastClosedVolume: last[5], averagePriorVolume: averageVolume, volumeChangePct: volumeChangePct == null ? null : Number(volumeChangePct.toFixed(2)) },
+      market: { lastPrice: market.ticker?.last ?? last[4], quoteVolume24h: market.ticker?.quoteVolume ?? null, priceChangePct: Number(priceChangePct.toFixed(4)), latestClosedCandleAt: new Date(last[0]).toISOString(), lastClosedVolume: last[5], averagePriorVolume: averageVolume, volumeChangePct: volumeChangePct == null ? null : Number(volumeChangePct.toFixed(2)), orderBookImbalancePct: orderBookImbalancePct == null ? null : Number(orderBookImbalancePct.toFixed(2)), fundingRate },
+      multiTimeframe,
       broadContext: { globalMarketCapChange24hPct: Number.isFinite(globalChange) ? globalChange : null, btcDominancePct: global?.market_cap_percentage?.btc ?? null, chainTvlLeaders: chainRows.slice().sort((a,b)=>(Number(b.tvl)||0)-(Number(a.tvl)||0)).slice(0,5).map((x)=>({name:x.name,tvl:x.tvl})) },
       score,
-      limitations: ['Exchange price/volume calculations use closed candles; the newest possibly incomplete candle is excluded.', 'Broad risk regime is a coarse proxy derived from aggregate crypto market-cap change, not a macroeconomic forecast.', 'Exchange netflows, wallet attribution, derivatives positioning and FRED macro releases are not included in this pair-specific score unless independently integrated and validated.', 'The score is a research aid, not a probability, recommendation or order instruction.'],
+      limitations: ['Exchange price/volume calculations use closed candles; the newest possibly incomplete candle is excluded.', 'Broad risk regime is a coarse proxy derived from aggregate crypto market-cap change, not a macroeconomic forecast.', 'Exchange netflows, wallet attribution and FRED macro releases are not included in this pair-specific score. Funding and order-book depth are included only when the exchange adapter exposes them.', 'The score is a research aid, not a probability, recommendation or order instruction.'],
       sources: [source('Selected CCXT exchange OHLCV/ticker', 'live', new Date().toISOString(), { timeframe, candlesUsed: closed.length }), globalResult.source, chainResult.source]
     });
   } catch (error) { res.status(error.status || 502).json({ error: error.message || 'Market context analysis failed' }); }
