@@ -131,8 +131,8 @@ providerRouter.get('/providers/alpaca/activities', async (req, res) => {
     const activityType = String(req.query.activity_type || 'FILL');
     if (!['FILL','TRANS','MISC','ACATC','ACATS','CFEE','CSD','CSW','DIV','FEE','INT','JNL','JNLC','JNLS','MA','NC','OPASN','OPCA','OPTRD','PTC','PTR','REORG','SC'].includes(activityType)) return res.status(400).json({ error: 'Unsupported Alpaca activity type.' });
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '50', 10) || 50));
-    const url = new URL('https://paper-api.alpaca.markets/v2/account/activities');
-    url.search = new URLSearchParams({ activity_type: activityType, page_size: String(limit) }).toString();
+    const url = new URL(`https://paper-api.alpaca.markets/v2/account/activities/${encodeURIComponent(activityType)}`);
+    url.search = new URLSearchParams({ page_size: String(limit) }).toString();
     const data = await requestJson(url, { headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret } });
     res.json({ provider: 'alpaca', environment: 'paper', activityType, activities: Array.isArray(data) ? data : [], fetchedAt: now(), note: 'Paper-account activities only. Activity history may be paginated by Alpaca.' });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
