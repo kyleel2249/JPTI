@@ -40,6 +40,20 @@ export function detectSmartMoney(candles, swingLength = 3) {
       }
     }
   }
+  fairValueGaps.forEach((gap) => {
+    for (let j = gap.end + 1; j < candles.length; j += 1) {
+      const candle = candles[j];
+      if ((gap.direction === 'bullish' && candle[3] <= gap.bottom) || (gap.direction === 'bearish' && candle[2] >= gap.top)) { gap.mitigatedAt = j; break; }
+    }
+    gap.end = gap.mitigatedAt ?? candles.length - 1;
+  });
+  orderBlocks.forEach((zone) => {
+    for (let j = zone.end + 1; j < candles.length; j += 1) {
+      const close = candles[j][4];
+      if ((zone.direction === 'bullish' && close < zone.bottom) || (zone.direction === 'bearish' && close > zone.top)) { zone.mitigatedAt = j; break; }
+    }
+    zone.end = zone.mitigatedAt ?? candles.length - 1;
+  });
   return { fairValueGaps:fairValueGaps.slice(-30), liquiditySweeps:liquiditySweeps.slice(-20), structureBreaks:structureBreaks.slice(-20), orderBlocks:orderBlocks.slice(-20), swingHighs:swingHighs.slice(-12), swingLows:swingLows.slice(-12) };
 }
 
