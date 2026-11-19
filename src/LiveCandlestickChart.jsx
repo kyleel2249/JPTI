@@ -33,6 +33,25 @@ function rsi(values, period = 14) {
   if (avgLoss === 0) return 100;
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
+function bollinger(values, period = 20, multiplier = 2) {
+  const upper = [], lower = [];
+  values.forEach((value, index) => {
+    if (index < period - 1) { upper.push(Number.NaN); lower.push(Number.NaN); return; }
+    const window = values.slice(index - period + 1, index + 1);
+    const mean = window.reduce((sum, item) => sum + item, 0) / period;
+    const variance = window.reduce((sum, item) => sum + (item - mean) ** 2, 0) / period;
+    const deviation = Math.sqrt(variance) * multiplier;
+    upper.push(mean + deviation); lower.push(mean - deviation);
+  });
+  return { upper, lower };
+}
+function macd(values) {
+  if (values.length < 35) return null;
+  const fast = ema(values, 12), slow = ema(values, 26);
+  const line = fast.map((value, index) => value - slow[index]);
+  const signal = ema(line, 9);
+  return { line: line[line.length - 1], signal: signal[signal.length - 1], histogram: line[line.length - 1] - signal[signal.length - 1] };
+}
 function atr(candles, period = 14) {
   if (candles.length <= period) return null;
   const ranges = candles.slice(1).map((c, i) => Math.max(c[2] - c[3], Math.abs(c[2] - candles[i][4]), Math.abs(c[3] - candles[i][4])));
@@ -54,6 +73,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [error, setError] = useState('');
   const [showEma20, setShowEma20] = useState(true);
   const [showEma50, setShowEma50] = useState(false);
+  const [showBollinger, setShowBollinger] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [crosshair, setCrosshair] = useState(null);
@@ -109,6 +129,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     const previous = candles[candles.length - 2];
     return {
       ema20: ema(closes, 20), ema50: ema(closes, 50),
+      bollinger: bollinger(closes), macd: macd(closes),
       rsi: rsi(closes), atr: atr(candles),
       last, previous,
       change: last && previous ? ((last[4] - previous[4]) / previous[4]) * 100 : null,
@@ -128,7 +149,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     const x = (i) => left + (i + 0.5) * ((right - left) / rows.length);
     const y = (price) => top + ((high - price) / (high - low)) * (priceBottom - top);
     const maxVol = Math.max(1, ...rows.map((c) => c[5]));
-    const points = (values) => values.slice(candles.length - count).map((value, i) => x(i) + ',' + y(value)).join(' ');
+    const points = (values) => values.slice(candles.length - count).map((value, i) => Number.isFinite(value) ? x(i) + ',' + y(value) : null).filter(Boolean).join(' ');
     return { rows, count, min: low, max: high, left, right, top, priceBottom, volumeBottom, x, y, maxVol, points };
   }, [candles, zoom]);
 
@@ -158,9 +179,11 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     <div className="chart-indicator-controls">
       <label><input type="checkbox" checked={showEma20} onChange={(e) => setShowEma20(e.target.checked)}/> EMA 20</label>
       <label><input type="checkbox" checked={showEma50} onChange={(e) => setShowEma50(e.target.checked)}/> EMA 50</label>
+      <label><input type="checkbox" checked={showBollinger} onChange={(e) => setShowBollinger(e.target.checked)}/> Bollinger</label>
       <label><input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)}/> Volume</label>
       <span>RSI(14): <b className={metrics.rsi > 70 ? 'down' : metrics.rsi < 30 ? 'up' : ''}>{metrics.rsi == null ? '—' : metrics.rsi.toFixed(1)}</b></span>
       <span>ATR(14): <b>{metrics.atr == null ? '—' : fmt(metrics.atr)}</b></span>
+      <span>MACD: <b className={metrics.macd?.histogram >= 0 ? 'up' : 'down'}>{metrics.macd ? metrics.macd.histogram.toFixed(5) : '—'}</b></span>
       <span>Avg vol: <b>{metrics.volume ? fmt(metrics.volume) : '—'}</b></span>
     </div>
     <div className="chart-ohlc-strip">
@@ -199,6 +222,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
           })}
           {showEma20 && <polyline points={geometry.points(metrics.ema20)} fill="none" stroke="#e5b85c" strokeWidth="1.7" vectorEffect="non-scaling-stroke"/>}
           {showEma50 && <polyline points={geometry.points(metrics.ema50)} fill="none" stroke="#9b8cf5" strokeWidth="1.7" vectorEffect="non-scaling-stroke"/>}
+          {showBollinger && <><polyline points={geometry.points(metrics.bollinger.upper)} fill="none" stroke="#58a6ff" strokeWidth="1" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"/><polyline points={geometry.points(metrics.bollinger.lower)} fill="none" stroke="#58a6ff" strokeWidth="1" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"/></> }
           {crosshair !== null && <g><line x1={geometry.x(crosshair)} y1="10" x2={geometry.x(crosshair)} y2="385" stroke="#a9b7c9" strokeDasharray="3 4"/><line x1="12" y1={geometry.y(geometry.rows[crosshair][4])} x2="925" y2={geometry.y(geometry.rows[crosshair][4])} stroke="#a9b7c9" strokeDasharray="3 4"/></g>}
         </svg>
       </div>}
