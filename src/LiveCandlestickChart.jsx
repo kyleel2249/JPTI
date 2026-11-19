@@ -226,7 +226,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       <label><input type="checkbox" checked={showVwap} onChange={(e) => setShowVwap(e.target.checked)}/> VWAP</label>
       <label><input type="checkbox" checked={showStochRsi} onChange={(e) => setShowStochRsi(e.target.checked)}/> Stoch RSI</label>
       <label><input type="checkbox" checked={showObv} onChange={(e) => setShowObv(e.target.checked)}/> OBV</label>
-      <label><input type="checkbox" checked={showSupertrend} onChange={(e) => setShowSupertrend(e.target.checked)}/> Supertrend bias</label>
+      <label><input type="checkbox" checked={showSupertrend} onChange={(e) => setShowSupertrend(e.target.checked)}/> Price trend bias</label>
       <label>Draw <select value={drawMode} onChange={(e) => setDrawMode(e.target.value)}><option value="off">Off</option><option value="horizontal">S/R level</option><option value="trend">Trend line (2 clicks)</option></select></label>
       <span>RSI(14): <b className={metrics.rsi > 70 ? 'down' : metrics.rsi < 30 ? 'up' : ''}>{metrics.rsi == null ? '—' : metrics.rsi.toFixed(1)}</b></span>
       <span>ATR(14): <b>{metrics.atr == null ? '—' : fmt(metrics.atr)}</b></span>
