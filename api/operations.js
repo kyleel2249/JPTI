@@ -12,6 +12,7 @@ const dataFile = resolve(process.env.JPTI_DATA_DIR || 'data', 'jpti-events.jsonl
 let writeQueue = Promise.resolve();
 const jobState = new Map();
 let schedulerStarted = false;
+let lastMonitorPersistAt = 0;
 const startedAt = new Date().toISOString();
 
 const eventSchema = z.object({
@@ -87,7 +88,11 @@ async function marketMonitor() {
   }));
   const successes = snapshots.filter((x) => x.status === 'fulfilled').map((x) => x.value);
   const failures = snapshots.filter((x) => x.status === 'rejected').map((x) => x.reason?.message || 'Market monitor error');
-  if (successes.length) await persistEvent({ id: randomUUID(), kind: 'market-monitor-snapshot', occurredAt: new Date().toISOString(), markets: successes });
+  const persistEveryMs = Math.max(10, Number(process.env.JPTI_MONITOR_PERSIST_INTERVAL_SECONDS || 60)) * 1000;
+  if (successes.length && Date.now() - lastMonitorPersistAt >= persistEveryMs) {
+    await persistEvent({ id: randomUUID(), kind: 'market-monitor-snapshot', occurredAt: new Date().toISOString(), markets: successes });
+    lastMonitorPersistAt = Date.now();
+  }
   setJob('market-monitor', {
     lastRunAt: new Date().toISOString(), lastSuccessAt: successes.length ? new Date().toISOString() : (jobState.get('market-monitor')?.lastSuccessAt || null),
     runCount: (jobState.get('market-monitor')?.runCount || 0) + 1,
