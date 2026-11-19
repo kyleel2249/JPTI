@@ -229,10 +229,10 @@ function App() {
             <div><span>VENUES RESPONDING</span><b>{crossVenueData.venueCount}</b></div>
             <div><span>MEDIAN LAST PRICE</span><b>{crossVenueData.medianLast == null ? '—' : Number(crossVenueData.medianLast).toLocaleString(undefined,{maximumFractionDigits:6})}</b></div>
             <div><span>LAST-PRICE DISPERSION</span><b>{crossVenueData.lastPriceSpreadPercent == null ? '—' : Number(crossVenueData.lastPriceSpreadPercent).toFixed(3) + '%'}</b></div>
-            <div><span>TOP-OF-BOOK GROSS EDGE</span><b>{crossVenueData.bestExecutableTopOfBook?.grossEdgePercent == null ? '—' : Number(crossVenueData.bestExecutableTopOfBook.grossEdgePercent).toFixed(3) + '%'}</b></div>
+            <div><span>TOP-OF-BOOK GROSS EDGE</span><b>{crossVenueData.bestIndicativeTopOfBook?.grossEdgePercent == null ? '—' : Number(crossVenueData.bestIndicativeTopOfBook.grossEdgePercent).toFixed(3) + '%'}</b></div>
           </div>
           <div className="quote-source-list">{(crossVenueData.venues || []).map((venue) => <div key={venue.exchange}><span>{venue.exchange.toUpperCase()}</span><b>{Number(venue.last).toLocaleString(undefined,{maximumFractionDigits:6})}</b><small>Bid {venue.bid ?? '—'} · Ask {venue.ask ?? '—'}{venue.outlier ? ' · OUTLIER REVIEW' : ''}</small></div>)}</div>
-          <p className="subtle-note">{crossVenueData.bestExecutableTopOfBook ? 'Indicative buy on ' + crossVenueData.bestExecutableTopOfBook.buyVenue + ' / sell on ' + crossVenueData.bestExecutableTopOfBook.sellVenue + '. This is not an executable arbitrage instruction.' : 'Insufficient comparable bid/ask data to calculate a cross-venue top-of-book edge.'}</p>
+          <p className="subtle-note">{crossVenueData.bestIndicativeTopOfBook ? 'Indicative buy on ' + crossVenueData.bestIndicativeTopOfBook.buyVenue + ' / sell on ' + crossVenueData.bestIndicativeTopOfBook.sellVenue + '. This is not an executable arbitrage instruction.' : 'Insufficient comparable bid/ask data to calculate a cross-venue top-of-book edge.'}</p>
         </>}
       </section>
       <div className="section-heading ops-title"><div><span className="eyebrow">AUTOMATION & INFRASTRUCTURE</span><h3>Operational command grid</h3><p>Each service reports its actual state and unmet prerequisites.</p></div><button className="small-refresh" onClick={refresh}><RefreshCw size={13}/> Refresh</button></div>
