@@ -45,3 +45,10 @@ export function assertLiveTradingAllowed(req, exchange, market, order, reference
   }
   return { estimatedNotional: notional, maxNotional };
 }
+
+export function requirePrivateApiAuth(req) {
+  const expectedToken = process.env.JPTI_API_TOKEN;
+  if (!expectedToken || req.get('x-jpti-api-token') !== expectedToken) {
+    throw Object.assign(new Error('Missing or invalid JPTI API authorization token.'), { status: 401 });
+  }
+}
