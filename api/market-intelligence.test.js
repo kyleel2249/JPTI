@@ -25,3 +25,10 @@ test('cross-venue comparison excludes invalid last prices and avoids false arbit
   assert.equal(result.bestExecutableTopOfBook, null);
   assert.equal(result.medianLast, 2000);
 });
+
+test('cross-venue comparison never reports a same-venue quote as arbitrage', () => {
+  const result = buildCrossVenueComparison('SOL/USDT', [
+    { exchange: 'only', last: 150, bid: 149, ask: 151 }
+  ]);
+  assert.equal(result.bestExecutableTopOfBook, null);
+});
