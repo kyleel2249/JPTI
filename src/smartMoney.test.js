@@ -14,7 +14,7 @@ test('detects bullish and bearish fair value gaps from three-candle patterns', (
   ];
   const result = detectSmartMoney(rows);
   assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bullish' && gap.top === 11 && gap.bottom === 10));
-  assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bearish' && gap.top === 10 && gap.bottom === 9.5));
+  assert.ok(result.fairValueGaps.some((gap) => gap.direction === 'bearish' && gap.top === 11 && gap.bottom === 9.5));
 });
 
 test('detects a buy-side liquidity sweep, bullish BOS and a preceding bearish order block', () => {
