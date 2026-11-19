@@ -85,6 +85,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [showSweeps, setShowSweeps] = useState(true);
   const [showStructure, setShowStructure] = useState(true);
   const [showOrderBlocks, setShowOrderBlocks] = useState(true);
+  const [swingLength, setSwingLength] = useState(3);
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -182,7 +183,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     };
   }, [candles]);
 
-  const smartMoney = useMemo(() => detectSmartMoney(candles.slice(0, -1)), [candles]);
+  const smartMoney = useMemo(() => detectSmartMoney(candles.slice(0, -1), swingLength), [candles, swingLength]);
 
   const geometry = useMemo(() => {
     if (!candles.length) return null;
@@ -239,6 +240,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       <label className="smc-toggle"><input type="checkbox" checked={showSweeps} onChange={(e) => setShowSweeps(e.target.checked)}/> Liquidity sweeps</label>
       <label className="smc-toggle"><input type="checkbox" checked={showStructure} onChange={(e) => setShowStructure(e.target.checked)}/> BOS / CHoCH</label>
       <label className="smc-toggle"><input type="checkbox" checked={showOrderBlocks} onChange={(e) => setShowOrderBlocks(e.target.checked)}/> Order blocks</label>
+      <label className="smc-sensitivity">Swing <select aria-label="SMC swing sensitivity" value={swingLength} onChange={(e) => setSwingLength(Number(e.target.value))}><option value={2}>Fast (2)</option><option value={3}>Normal (3)</option><option value={5}>Strict (5)</option><option value={8}>Wide (8)</option></select></label>
       <label>Draw <select value={drawMode} onChange={(e) => setDrawMode(e.target.value)}><option value="off">Off</option><option value="horizontal">S/R level</option><option value="trend">Trend line (2 clicks)</option></select></label>
       <span>RSI(14): <b className={metrics.rsi > 70 ? 'down' : metrics.rsi < 30 ? 'up' : ''}>{metrics.rsi == null ? '—' : metrics.rsi.toFixed(1)}</b></span>
       <span>ATR(14): <b>{metrics.atr == null ? '—' : fmt(metrics.atr)}</b></span>
@@ -297,6 +299,14 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
           {crosshair !== null && <g><line x1={geometry.x(crosshair)} y1="10" x2={geometry.x(crosshair)} y2="385" stroke="#a9b7c9" strokeDasharray="3 4"/><line x1="12" y1={geometry.y(geometry.rows[crosshair][4])} x2="925" y2={geometry.y(geometry.rows[crosshair][4])} stroke="#a9b7c9" strokeDasharray="3 4"/></g>}
         </svg>
       </div>}
+    <div className="smc-event-strip">
+      <div><small>FVG zones</small><strong>{smartMoney.fairValueGaps.length}</strong></div>
+      <div><small>Liquidity sweeps</small><strong>{smartMoney.liquiditySweeps.length}</strong></div>
+      <div><small>BOS / CHoCH</small><strong>{smartMoney.structureBreaks.length}</strong></div>
+      <div><small>Order blocks</small><strong>{smartMoney.orderBlocks.length}</strong></div>
+      <div className="smc-last-event"><small>Latest structure</small><strong>{smartMoney.structureBreaks.length ? smartMoney.structureBreaks[smartMoney.structureBreaks.length - 1].kind + ' · ' + smartMoney.structureBreaks[smartMoney.structureBreaks.length - 1].direction : 'Waiting for confirmation'}</strong></div>
+    </div>
+    <div className="smc-method-note">SMC analysis uses closed candles and confirmed swing points. Zones are rule-based technical estimates, not verified institutional orders or trade recommendations.</div>
     <div className="chart-footer">
       <span>{candles.length} candles · {timeframe} · Auto-refresh 20s · SMC uses closed candles · BOS/CHoCH {smartMoney.structureBreaks.length} · FVG {smartMoney.fairValueGaps.length}</span>
       <button type="button" onClick={() => setDrawings([])}>Clear drawings</button>
