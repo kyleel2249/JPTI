@@ -53,6 +53,21 @@ export async function withExchange(id, options, operation) {
   }
 }
 
+export function classifyMarket(market) {
+  const type = String(market.type || '').toLowerCase();
+  const info = market.info || {};
+  const margin = market.margin === true || info.isMarginTradingAllowed === true || info.marginTrading === true;
+  const cfd = market.cfd === true || type === 'cfd';
+  const categories = [];
+  if (market.spot === true) categories.push('spot');
+  if (market.swap === true) categories.push('perpetual');
+  if (market.future === true) categories.push('futures');
+  if (market.option === true) categories.push('options');
+  if (margin) categories.push('margin');
+  if (cfd) categories.push('cfd');
+  return { categories, type: type || (market.spot ? 'spot' : 'unknown'), contract: market.contract === true, linear: market.linear === true, inverse: market.inverse === true, settle: market.settle || null };
+}
+
 export function listExchangeCatalog() {
   return SUPPORTED_EXCHANGES.map((id) => ({
     id,
@@ -63,7 +78,12 @@ export function listExchangeCatalog() {
       orderBook: Boolean(ccxt[id].has?.fetchOrderBook),
       ohlcv: Boolean(ccxt[id].has?.fetchOHLCV),
       balance: Boolean(ccxt[id].has?.fetchBalance),
-      createOrder: Boolean(ccxt[id].has?.createOrder)
+      createOrder: Boolean(ccxt[id].has?.createOrder),
+      fetchMarkets: Boolean(ccxt[id].has?.fetchMarkets),
+      fetchFundingRate: Boolean(ccxt[id].has?.fetchFundingRate),
+      fetchPositions: Boolean(ccxt[id].has?.fetchPositions),
+      fetchLeverage: Boolean(ccxt[id].has?.fetchLeverage),
+      fetchMarginMode: Boolean(ccxt[id].has?.fetchMarginMode)
     }
   }));
 }
