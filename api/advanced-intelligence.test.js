@@ -16,6 +16,8 @@ test('forecast produces ordered high/low scenarios from closed OHLCV history', (
     assert.ok(f.forecastHigh > f.forecastLow);
   }
   assert.throws(() => calculateForecast(candles.slice(0, 20)), /30/);
+  assert.equal(calculateForecast(candles, [24], 15).forecasts[0].horizonBars, 96);
+  assert.equal(calculateForecast(candles, [24], 240).forecasts[0].horizonBars, 6);
 });
 
 test('order book reports depth imbalance and avoids claiming spoofing', () => {
