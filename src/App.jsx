@@ -52,6 +52,10 @@ function App() {
   const [quoteConsensus, setQuoteConsensus] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState('');
+  const [crossVenueSymbol, setCrossVenueSymbol] = useState('BTC/USDT');
+  const [crossVenueData, setCrossVenueData] = useState(null);
+  const [crossVenueLoading, setCrossVenueLoading] = useState(false);
+  const [crossVenueError, setCrossVenueError] = useState('');
 
   const refresh = useCallback(async () => {
     try {
@@ -106,6 +110,19 @@ function App() {
     } catch (error) { setQuoteError(error.message); }
     finally { setQuoteLoading(false); }
   }, [quoteSymbol]);
+
+  const loadCrossVenue = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setCrossVenueLoading(true); setCrossVenueError('');
+    try {
+      const params = new URLSearchParams({ symbol: crossVenueSymbol.trim().toUpperCase() });
+      const response = await fetch('/api/exchanges/compare/ticker?' + params.toString(), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Cross-exchange comparison failed');
+      setCrossVenueData(data);
+    } catch (error) { setCrossVenueError(error.message); }
+    finally { setCrossVenueLoading(false); }
+  }, [crossVenueSymbol]);
 
   const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
   const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
@@ -198,6 +215,26 @@ function App() {
         </>}
       </section>
 
+
+      <section className="glass-panel quote-consensus-panel cross-venue-panel">
+        <div className="panel-title"><div><span className="eyebrow">MULTI-EXCHANGE MARKET MICROSTRUCTURE</span><h3>Cross-venue spread scanner</h3></div><span className="live-tag">PUBLIC TICKERS</span></div>
+        <p className="subtle-note">Compares live top-of-book snapshots across Binance, Bitget, Bybit and OKX where the selected market is listed. Indicative only; fees, depth and execution risk are excluded.</p>
+        <form className="quote-consensus-search" onSubmit={loadCrossVenue}>
+          <input value={crossVenueSymbol} onChange={(event) => setCrossVenueSymbol(event.target.value)} placeholder="Market symbol, e.g. BTC/USDT"/>
+          <button disabled={crossVenueLoading || !crossVenueSymbol.trim()}>{crossVenueLoading ? 'Scanning venues…' : 'Compare venues'}</button>
+        </form>
+        {crossVenueError && <p className="quote-error">{crossVenueError}</p>}
+        {crossVenueData && <>
+          <div className="quote-consensus-stats">
+            <div><span>VENUES RESPONDING</span><b>{crossVenueData.venueCount}</b></div>
+            <div><span>MEDIAN LAST PRICE</span><b>{crossVenueData.medianLast == null ? '—' : Number(crossVenueData.medianLast).toLocaleString(undefined,{maximumFractionDigits:6})}</b></div>
+            <div><span>LAST-PRICE DISPERSION</span><b>{crossVenueData.lastPriceSpreadPercent == null ? '—' : Number(crossVenueData.lastPriceSpreadPercent).toFixed(3) + '%'}</b></div>
+            <div><span>TOP-OF-BOOK GROSS EDGE</span><b>{crossVenueData.bestExecutableTopOfBook?.grossEdgePercent == null ? '—' : Number(crossVenueData.bestExecutableTopOfBook.grossEdgePercent).toFixed(3) + '%'}</b></div>
+          </div>
+          <div className="quote-source-list">{(crossVenueData.venues || []).map((venue) => <div key={venue.exchange}><span>{venue.exchange.toUpperCase()}</span><b>{Number(venue.last).toLocaleString(undefined,{maximumFractionDigits:6})}</b><small>Bid {venue.bid ?? '—'} · Ask {venue.ask ?? '—'}{venue.outlier ? ' · OUTLIER REVIEW' : ''}</small></div>)}</div>
+          <p className="subtle-note">{crossVenueData.bestExecutableTopOfBook ? 'Indicative buy on ' + crossVenueData.bestExecutableTopOfBook.buyVenue + ' / sell on ' + crossVenueData.bestExecutableTopOfBook.sellVenue + '. This is not an executable arbitrage instruction.' : 'Insufficient comparable bid/ask data to calculate a cross-venue top-of-book edge.'}</p>
+        </>}
+      </section>
       <div className="section-heading ops-title"><div><span className="eyebrow">AUTOMATION & INFRASTRUCTURE</span><h3>Operational command grid</h3><p>Each service reports its actual state and unmet prerequisites.</p></div><button className="small-refresh" onClick={refresh}><RefreshCw size={13}/> Refresh</button></div>
       {renderOperations()}
 
