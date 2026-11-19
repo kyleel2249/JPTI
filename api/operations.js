@@ -61,7 +61,7 @@ async function persistLedgerTransaction(parsed) {
     if (duplicate) { result = { duplicate: true, event: duplicate }; return; }
     const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
     await mkdir(dirname(dataFile), { recursive: true });
-    await appendFile(dataFile, JSON.stringify(event) + '\\n', { encoding: 'utf8', mode: 0o600 });
+    await appendFile(dataFile, JSON.stringify(event) + '\n', { encoding: 'utf8', mode: 0o600 });
     result = { duplicate: false, event };
   });
   await writeQueue;
