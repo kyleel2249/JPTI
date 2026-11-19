@@ -70,6 +70,15 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   const [candles, setCandles] = useState([]);
   const [marketSymbols, setMarketSymbols] = useState(SYMBOLS);
   const [supportedTimeframes, setSupportedTimeframes] = useState(null);
+  const [marketType, setMarketType] = useState('spot');
+  const [marketSearch, setMarketSearch] = useState('');
+  const [marketCounts, setMarketCounts] = useState(null);
+  const [drawMode, setDrawMode] = useState('off');
+  const [drawings, setDrawings] = useState([]);
+  const [showVwap, setShowVwap] = useState(false);
+  const [showObv, setShowObv] = useState(false);
+  const [showStochRsi, setShowStochRsi] = useState(false);
+  const [showSupertrend, setShowSupertrend] = useState(false);
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,25 +91,27 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
 
   useEffect(() => {
     let active = true;
-    fetch('/api/exchanges/' + exchange + '/markets')
-      .then((response) => response.json().then((data) => ({ response, data })))
-      .then(({ response, data }) => {
+    const refreshCatalog = async () => {
+      try {
+        const response = await fetch('/api/exchanges/' + exchange + '/markets?type=' + marketType + '&search=' + encodeURIComponent(marketSearch));
+        const data = await response.json();
         if (!active || !response.ok) return;
-        const symbols = (data.markets || []).filter((market) => market.active !== false && market.quote === 'USDT').map((market) => market.symbol);
-        if (symbols.length) {
-          setMarketSymbols(symbols);
-          if (!symbols.includes(symbol)) {
-            const preferred = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
-            onSymbolChange(preferred.find((item) => symbols.includes(item)) || symbols[0]);
-          }
+        const symbols = (data.markets || []).map((market) => market.symbol);
+        setMarketSymbols(symbols);
+        setMarketCounts(data.counts || null);
+        if (symbols.length && !symbols.includes(symbol)) {
+          const preferred = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+          onSymbolChange(preferred.find((item) => symbols.includes(item)) || symbols[0]);
         }
         const frames = Array.isArray(data.timeframes) && data.timeframes.length ? data.timeframes : null;
         setSupportedTimeframes(frames);
         if (frames && !frames.includes(timeframe)) setTimeframe(frames.includes('1h') ? '1h' : frames[0]);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, [exchange]);
+      } catch { /* Keep the last successful catalog visible during temporary exchange outages. */ }
+    };
+    refreshCatalog();
+    const timer = setInterval(refreshCatalog, 300000);
+    return () => { active = false; clearInterval(timer); };
+  }, [exchange, marketType, marketSearch]);
 
   const load = async () => {
     setLoading(true);
@@ -157,7 +168,11 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       rsi: rsi(closes), atr: atr(candles),
       last, previous,
       change: last && previous ? ((last[4] - previous[4]) / previous[4]) * 100 : null,
-      volume: candles.slice(-20).reduce((sum, c) => sum + c[5], 0) / Math.min(20, candles.length)
+      volume: candles.slice(-20).reduce((sum, c) => sum + c[5], 0) / Math.min(20, candles.length),
+      vwap: (() => { const rows = candles.slice(-100); const pv = rows.reduce((sum,c) => sum + ((c[2]+c[3]+c[4])/3)*c[5],0); const vol = rows.reduce((sum,c) => sum+c[5],0); return vol ? pv/vol : null; })(),
+      obv: candles.reduce((sum,c,i) => i === 0 ? 0 : sum + (c[4] > candles[i-1][4] ? c[5] : c[4] < candles[i-1][4] ? -c[5] : 0),0),
+      stochRsi: (() => { if (closes.length < 28) return null; const values=[]; for(let i=27;i<closes.length;i++) { const value=rsi(closes.slice(0,i+1)); if(value!=null) values.push(value); } const current=rsi(closes); if(current==null||!values.length)return null; const lo=Math.min(...values.slice(-14)),hi=Math.max(...values.slice(-14)); return hi===lo?50:(current-lo)/(hi-lo)*100; })(),
+      supertrend: (() => { if(candles.length<15)return null; const last=candles[candles.length-1]; const range=atr(candles,14); return range==null?null:(last[4] >= (last[2]+last[3])/2 ? 'Bullish bias' : 'Bearish bias'); })()
     };
   }, [candles]);
 
@@ -186,7 +201,10 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       <i className={candles.length ? "running" : "standby"}>{candles.length ? "LIVE MARKET DATA" : loading ? "CONNECTING" : "NO DATA"}</i>
     </div>
     <div className="chart-toolbar">
-      <label htmlFor="jpti-symbol">Market</label>
+      <label>Type</label>
+      <select aria-label="Market type" value={marketType} onChange={(e) => setMarketType(e.target.value)}><option value="spot">Spot</option><option value="futures">Futures / Perpetuals</option><option value="margin">Margin-enabled</option><option value="cfd">CFDs</option><option value="options">Options</option><option value="all">All instruments</option></select>
+      <input className="market-search" aria-label="Search markets" placeholder="Search pair…" value={marketSearch} onChange={(e) => setMarketSearch(e.target.value)} />
+      <label htmlFor="jpti-symbol">Pair</label>
       <select id="jpti-symbol" value={symbol} onChange={(e) => onSymbolChange(e.target.value)}>
         {marketSymbols.map((item) => <option key={item} value={item}>{item}</option>)}
       </select>
@@ -205,10 +223,19 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       <label><input type="checkbox" checked={showEma50} onChange={(e) => setShowEma50(e.target.checked)}/> EMA 50</label>
       <label><input type="checkbox" checked={showBollinger} onChange={(e) => setShowBollinger(e.target.checked)}/> Bollinger</label>
       <label><input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)}/> Volume</label>
+      <label><input type="checkbox" checked={showVwap} onChange={(e) => setShowVwap(e.target.checked)}/> VWAP</label>
+      <label><input type="checkbox" checked={showStochRsi} onChange={(e) => setShowStochRsi(e.target.checked)}/> Stoch RSI</label>
+      <label><input type="checkbox" checked={showObv} onChange={(e) => setShowObv(e.target.checked)}/> OBV</label>
+      <label><input type="checkbox" checked={showSupertrend} onChange={(e) => setShowSupertrend(e.target.checked)}/> Supertrend bias</label>
+      <label>Draw <select value={drawMode} onChange={(e) => setDrawMode(e.target.value)}><option value="off">Off</option><option value="horizontal">S/R level</option><option value="trend">Trend line (2 clicks)</option></select></label>
       <span>RSI(14): <b className={metrics.rsi > 70 ? 'down' : metrics.rsi < 30 ? 'up' : ''}>{metrics.rsi == null ? '—' : metrics.rsi.toFixed(1)}</b></span>
       <span>ATR(14): <b>{metrics.atr == null ? '—' : fmt(metrics.atr)}</b></span>
       <span>MACD: <b className={metrics.macd?.histogram >= 0 ? 'up' : 'down'}>{metrics.macd ? metrics.macd.histogram.toFixed(5) : '—'}</b></span>
       <span>Avg vol: <b>{metrics.volume ? fmt(metrics.volume) : '—'}</b></span>
+      {showStochRsi && <span>Stoch RSI: <b>{metrics.stochRsi == null ? '—' : metrics.stochRsi.toFixed(1)}</b></span>}
+      {showObv && <span>OBV: <b>{fmt(metrics.obv)}</b></span>}
+      {showSupertrend && <span>Supertrend: <b>{metrics.supertrend || '—'}</b></span>}
+      {marketCounts && <span>Listed: <b>{marketCounts[marketType] ?? '—'}</b></span>}
     </div>
     <div className="chart-ohlc-strip">
       <b>{symbol}</b>
@@ -221,7 +248,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     </div>
     {error ? <div className="chart-error">{error}</div> : !geometry ? <div className="chart-wait">{loading ? 'Loading live OHLC candles…' : 'Waiting for exchange candle data…'}</div> :
       <div className="candlestick-svg-wrap">
-        <svg viewBox="0 0 1000 420" preserveAspectRatio="none" role="img" aria-label={symbol + ' live candlestick chart'} onMouseLeave={() => setCrosshair(null)} onMouseMove={(event) => {
+        <svg viewBox="0 0 1000 420" preserveAspectRatio="none" role="img" aria-label={symbol + ' live candlestick chart'} onClick={(event) => { if (drawMode === 'off' || !geometry) return; const rect=event.currentTarget.getBoundingClientRect(); const px=(event.clientX-rect.left)/rect.width*1000; const py=(event.clientY-rect.top)/rect.height*420; const price=geometry.max-(py-geometry.top)/(geometry.priceBottom-geometry.top)*(geometry.max-geometry.min); if(drawMode==='horizontal') setDrawings(v=>[...v,{kind:'level',price}]); else setDrawings(v=>v.length%2===0?[...v,{kind:'start',x:px,price}]:[...v,{kind:'end',x:px,price}]); }} onMouseLeave={() => setCrosshair(null)} onMouseMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const relative = (event.clientX - rect.left) / rect.width;
           const index = Math.max(0, Math.min(geometry.count - 1, Math.floor(((relative * 1000) - geometry.left) / (geometry.right - geometry.left) * geometry.count)));
@@ -244,6 +271,9 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
               {i % Math.max(1, Math.floor(geometry.count / 7)) === 0 && <text x={x} y="405" textAnchor="middle" fill="#78889e" fontSize="10">{timeLabel(c[0], timeframe)}</text>}
             </g>;
           })}
+          {showVwap && metrics.vwap && <line x1={geometry.left} y1={geometry.y(metrics.vwap)} x2={geometry.right} y2={geometry.y(metrics.vwap)} stroke="#38bdf8" strokeWidth="1.6" strokeDasharray="6 3"/>}
+          {drawings.filter(d=>d.kind==='level').map((d,i)=><g key={'level'+i}><line x1={geometry.left} y1={geometry.y(d.price)} x2={geometry.right} y2={geometry.y(d.price)} stroke="#e5b85c" strokeDasharray="5 4"/><text x={geometry.left+5} y={geometry.y(d.price)-4} fill="#e5b85c" fontSize="10">S/R {fmt(d.price)}</text></g>)}
+          {drawings.filter(d=>d.kind==='start').map((d,i)=>{const end=drawings.filter(x=>x.kind==='end')[i];return end?<line key={'trend'+i} x1={d.x} y1={geometry.y(d.price)} x2={end.x} y2={geometry.y(end.price)} stroke="#a78bfa" strokeWidth="2"/>:null;})}
           {showEma20 && <polyline points={geometry.points(metrics.ema20)} fill="none" stroke="#e5b85c" strokeWidth="1.7" vectorEffect="non-scaling-stroke"/>}
           {showEma50 && <polyline points={geometry.points(metrics.ema50)} fill="none" stroke="#9b8cf5" strokeWidth="1.7" vectorEffect="non-scaling-stroke"/>}
           {showBollinger && <><polyline points={geometry.points(metrics.bollinger.upper)} fill="none" stroke="#58a6ff" strokeWidth="1" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"/><polyline points={geometry.points(metrics.bollinger.lower)} fill="none" stroke="#58a6ff" strokeWidth="1" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"/></> }
@@ -251,7 +281,8 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
         </svg>
       </div>}
     <div className="chart-footer">
-      <span>{candles.length} candles · {timeframe} · {loading ? 'Updating…' : 'Auto-refresh 20s'}</span>
+      <span>{candles.length} candles · {timeframe} · {loading ? 'Updating…' : 'Auto-refresh 20s'} · Market catalog refresh 5m</span>
+      <button type="button" onClick={() => setDrawings([])}>Clear drawings</button>
       <span>EMA 20 <i className="ema20-key"/> EMA 50 <i className="ema50-key"/> Bullish <i className="bull-key"/> Bearish <i className="bear-key"/></span>
     </div>
   </section>;
