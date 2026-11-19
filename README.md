@@ -10,10 +10,12 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - Multi-exchange CCXT adapter catalog (availability is detected from the installed CCXT version).
 - Server-side private account-balance endpoint for exchanges with configured credentials.
 - Locked live spot-order endpoint with explicit environment flags, API-token confirmation, active-market checks, USDT quote restriction and per-order notional cap.
-- Exchange connectivity panel in the dashboard with gateway health, exchange selection, configured-key status and live BTC/USDT ticker refresh.
+- Exchange selector with live ticker and exchange-specific active spot-market catalog.
+- Live OHLCV candlestick chart with selectable exchange-supported timeframes (1m through 1M where supported), zoom controls, fit-to-view and crosshair OHLCV inspection.
+- Optional EMA 20, EMA 50 and Bollinger Band overlays; RSI(14), ATR(14), MACD histogram and volume analytics.
 
 **Not yet implemented / not to be mistaken for complete functionality**
-- The original chart, order book, sample balances, performance metrics and some market watchlist values are still illustrative; the live ticker panel is the current real-data integration.
+- The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.
 - No persistent user accounts, encrypted credential vault, PostgreSQL/Redis storage, authenticated multi-user cloud gateway, production WebSocket streaming, full futures/margin execution, copy-trading engine, strategy execution engine, AI model inference, institutional portfolio ledger or native Android APK yet.
 - A configured exchange key does not mean an exchange account has been authenticated until a private endpoint succeeds.
 - No exchange is connected until you configure your own credentials and verify the connection.
