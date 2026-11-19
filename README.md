@@ -120,7 +120,7 @@ Crypto and especially newly launched meme tokens can lose most or all value rapi
 JPTI exposes a provider registry at `GET /api/providers` and interval configuration at `GET /api/providers/intervals`. These routes report which credentials are present, the data categories available through adapters, documentation links and polling configuration. Credential presence is not a successful connection; each provider request must succeed to verify access and subscription entitlement.
 
 Implemented read-oriented adapters:
-- **Alpaca**: stock historical bars and paper-account read. Configure `JPTI_ALPACA_API_KEY` and `JPTI_ALPACA_API_SECRET`. Bars: `GET /api/providers/alpaca/bars?symbol=AAPL&timeframe=1Day&feed=iex&limit=100`. Account: `GET /api/providers/alpaca/account` (paper endpoint).
+- **Alpaca**: stock and crypto historical bars and paper-account read. Configure `JPTI_ALPACA_API_KEY` and `JPTI_ALPACA_API_SECRET`. Bars: `GET /api/providers/alpaca/bars?symbol=AAPL&timeframe=1Day&feed=iex&limit=100`. Account: `GET /api/providers/alpaca/account` (paper endpoint).
 - **Quiver Quantitative**: congressional trading dataset adapter. Configure `JPTI_QUIVER_API_KEY`. `GET /api/providers/quiver/congress`. Dataset access and endpoint availability depend on current Quiver subscription/API terms; verify against your account documentation.
 - **Finnhub**: `GET /api/providers/finnhub/quote/:symbol` and `GET /api/providers/finnhub/news?category=general|forex|crypto|merger`.
 - **Alpha Vantage**: `GET /api/providers/alphavantage/quote/:symbol` and `GET /api/providers/alphavantage/news?tickers=AAPL&limit=50`. Rate limits and realtime/US exchange coverage depend on plan.
