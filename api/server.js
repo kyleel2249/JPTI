@@ -25,7 +25,11 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLOW_REMOTE_API || process.env.JPTI_ALLOW_REMOTE_API !== 'true' || !process.env.JPTI_API_TOKEN)) {\n  throw new Error('Remote API binding requires JPTI_ALLOW_REMOTE_API=true and a strong JPTI_API_TOKEN. Keep localhost binding for development.');\n}\n\napp.get('/api/health', (_req, res) => res.json({
+if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLOW_REMOTE_API || process.env.JPTI_ALLOW_REMOTE_API !== 'true' || !process.env.JPTI_API_TOKEN)) {
+  throw new Error('Remote API binding requires JPTI_ALLOW_REMOTE_API=true and a strong JPTI_API_TOKEN. Keep localhost binding for development.');
+}
+
+app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
   service: 'JPTI Exchange Gateway',
   mode: process.env.JPTI_TRADING_MODE || 'paper',
@@ -93,6 +97,7 @@ app.get('/api/exchanges/:id/ohlcv/:symbol', async (req, res, next) => {
 });
 
 app.get('/api/exchanges/:id/balance', async (req, res, next) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
   const id = req.params.id.toLowerCase();
   try {
     const balance = await withExchange(id, { privateAccess: true }, async (exchange) => {
