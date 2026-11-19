@@ -30,6 +30,10 @@ export function assertLiveTradingAllowed(req, exchange, market, order, reference
   if (!exchange.has?.createOrder) {
     throw Object.assign(new Error('This exchange adapter does not support order creation.'), { status: 501 });
   }
+  const minAmount = market.limits?.amount?.min;
+  const maxAmount = market.limits?.amount?.max;
+  if (Number.isFinite(minAmount) && order.amount < minAmount) throw Object.assign(new Error(`Order amount is below the exchange minimum of ${minAmount}.`), { status: 400 });
+  if (Number.isFinite(maxAmount) && order.amount > maxAmount) throw Object.assign(new Error(`Order amount exceeds the exchange maximum of ${maxAmount}.`), { status: 400 });
   const price = order.type === 'limit' ? order.price : referencePrice;
   if (!Number.isFinite(price) || price <= 0) {
     throw Object.assign(new Error('A valid reference price is required for notional risk checks.'), { status: 422 });
