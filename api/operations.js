@@ -15,7 +15,7 @@ let schedulerStarted = false;
 let lastMonitorPersistAt = 0;
 const startedAt = new Date().toISOString();
 
-const eventSchema = z.object({
+export const eventSchema = z.object({
   source: z.string().min(2).max(48),
   eventType: z.enum(['fill', 'deposit', 'withdrawal', 'fee', 'transfer', 'adjustment']),
   externalId: z.string().min(3).max(128),
