@@ -52,13 +52,14 @@ app.get('/api/exchanges/:id/status', (req, res) => {
 app.get('/api/exchanges/:id/markets', async (req, res, next) => {
   const id = req.params.id.toLowerCase();
   try {
-    const result = await withExchange(id, { privateAccess: false }, async (exchange) =>
-      Object.values(exchange.markets)
+    const result = await withExchange(id, { privateAccess: false }, async (exchange) => ({
+      markets: Object.values(exchange.markets)
         .filter((market) => market.active !== false && market.spot !== false)
         .slice(0, 500)
-        .map(({ symbol, base, quote, active, precision, limits }) => ({ symbol, base, quote, active, precision, limits }))
-    );
-    res.json({ exchange: id, count: result.length, markets: result });
+        .map(({ symbol, base, quote, active, precision, limits }) => ({ symbol, base, quote, active, precision, limits })),
+      timeframes: exchange.timeframes ? Object.keys(exchange.timeframes) : null
+    }));
+    res.json({ exchange: id, count: result.markets.length, markets: result.markets, timeframes: result.timeframes });
   } catch (error) { next(error); }
 });
 
