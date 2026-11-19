@@ -44,7 +44,10 @@ function App() {
   const [loadError, setLoadError] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
   const [query, setQuery] = useState('');
-  const [paperSession, setPaperSession] = useState(false);
+  const [newsQuery, setNewsQuery] = useState('financial markets OR central bank OR cryptocurrency');
+  const [newsData, setNewsData] = useState([]);
+  const [newsError, setNewsError] = useState('');
+  const [newsLoading, setNewsLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -70,6 +73,22 @@ function App() {
     const timer = setInterval(refresh, 10000);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  const loadNews = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setNewsLoading(true); setNewsError('');
+    try {
+      const response = await fetch('/api/providers/news/search?q=' + encodeURIComponent(newsQuery), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'News search unavailable');
+      setNewsData(data.articles || []);
+    } catch (error) { setNewsError(error.message); }
+    finally { setNewsLoading(false); }
+  }, [newsQuery]);
+
+  useEffect(() => {
+    if (page === 'News & Events' && newsData.length === 0) loadNews();
+  }, [page, newsData.length, loadNews]);
 
   const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
   const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
@@ -155,6 +174,7 @@ function App() {
     if (page === 'Spot & Markets' || page === 'Futures') return <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>;
     if (page === 'Market Scanner') return <section className="glass-panel detail-workspace"><span className="eyebrow">LIVE MARKET MONITOR</span><h3>Build your monitored universe</h3><p>JPTI can sample actual exchange tickers on the configured market-monitor interval. Add symbols to the server-side watchlist in your .env file.</p><pre>JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT</pre>{renderOperations()}</section>;
     if (page === 'Portfolio & Ledger') return <section className="glass-panel detail-workspace"><span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Append-only ledger</h3><p>{ledger?.eventCount ?? 0} transaction events recorded. This count does not represent a reconciled account balance, cost basis or realized profit and loss.</p><div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div><p className="subtle-note">Authenticated transaction ingestion endpoint: POST /api/operations/ledger/events. Duplicate source/account/external IDs are rejected idempotently.</p>{renderOperations()}</section>;
+    if (page === 'News & Events') return <section className="glass-panel detail-workspace"><span className="eyebrow">GLOBAL NEWS DISCOVERY</span><h3>Market news radar</h3><p>Searches the GDELT global news index. Verify publication time, original reporting and source credibility before using any article as trading evidence.</p><form className="news-search" onSubmit={loadNews}><input value={newsQuery} onChange={(event) => setNewsQuery(event.target.value)} placeholder="Search market, ticker, central bank, event..."/><button disabled={newsLoading}>{newsLoading ? 'Searching...' : 'Search news'}</button></form>{newsError && <p className="subtle-note">{newsError}</p>}<div className="news-results">{newsData.map((article, index) => <a href={article.url} target="_blank" rel="noreferrer" key={article.url || index}><span>{article.domain || article.sourcecountry || 'NEWS SOURCE'} · {article.seendate || 'Timestamp unavailable'}</span><b>{article.title || 'Untitled article'}</b><small>{article.sourcecountry || 'Global'} · Open original source ↗</small></a>)}{!newsData.length && !newsLoading && <p className="empty-state">Search to load current news results.</p>}</div></section>;
     if (page === 'Risk Management') return <section className="glass-panel detail-workspace"><span className="eyebrow">CAPITAL PROTECTION</span><h3>Execution guardrails</h3><div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> USDT spot-only initial live-order policy.</p><p><ShieldCheck/> Per-order notional cap enforced server-side.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>{renderOperations()}</section>;
     if (page === 'Trading Bots' || page === 'AI Intelligence') return <section className="glass-panel detail-workspace"><span className="eyebrow">AGENT ORCHESTRATION</span><h3>{page === 'AI Intelligence' ? 'Explainable intelligence services' : 'Trading automation control'}</h3><p>Agent execution is not represented as active until its worker, strategy, data sources and risk policy are implemented and verified. Current service readiness is shown below.</p>{renderOperations()}</section>;
     return <section className="glass-panel detail-workspace"><span className="eyebrow">RESEARCH WORKSPACE</span><h3>{page}</h3><p>This workspace is reserved for verified data and tested functionality. It will not display fabricated performance, positions or economic events.</p>{renderOperations()}</section>;
