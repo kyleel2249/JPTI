@@ -12,16 +12,23 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      fetch('/api/health').then((r) => { if (!r.ok) throw new Error('Gateway is not responding'); return r.json(); }),
-      fetch('/api/exchanges').then((r) => { if (!r.ok) throw new Error('Exchange catalog unavailable'); return r.json(); })
-    ]).then(([status, catalog]) => {
-      if (!active) return;
-      setHealth(status);
-      setExchanges(catalog.exchanges || []);
-      setError('');
-    }).catch((e) => { if (active) setError(e.message); });
-    return () => { active = false; };
+    const refreshGatewayCatalog = async () => {
+      try {
+        const [healthResponse, catalogResponse] = await Promise.all([
+          fetch('/api/health', { cache: 'no-store' }),
+          fetch('/api/exchanges', { cache: 'no-store' })
+        ]);
+        if (!healthResponse.ok || !catalogResponse.ok) throw new Error('Gateway or exchange catalog is unavailable');
+        const [status, catalog] = await Promise.all([healthResponse.json(), catalogResponse.json()]);
+        if (!active) return;
+        setHealth(status);
+        setExchanges(catalog.exchanges || []);
+        setError('');
+      } catch (e) { if (active) setError(e.message); }
+    };
+    refreshGatewayCatalog();
+    const timer = setInterval(refreshGatewayCatalog, 300000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
 
   useEffect(() => {
