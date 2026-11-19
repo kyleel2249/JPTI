@@ -67,6 +67,7 @@ Never paste keys into chat, source files, frontend variables, browser local stor
 - `GET /api/exchanges/:id/status`
 - `GET /api/exchanges/:id/markets`
 - `GET /api/exchanges/:id/ticker/:symbol` (example: `/api/exchanges/binance/ticker/BTC-USDT`)
+- `GET /api/exchanges/:id/ohlcv/:symbol?timeframe=1h&limit=120`
 - `GET /api/exchanges/:id/balance` (private credentials required)
 - `POST /api/exchanges/:id/orders` (live endpoint locked by default)
 
