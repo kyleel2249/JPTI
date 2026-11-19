@@ -146,3 +146,14 @@ MM interval is a target cadence only; the market-making worker remains disabled.
 
 
 Provider limitations: Finnhub, Alpha Vantage and Twelve Data have symbol coverage, market-hours, exchange licensing, per-minute quota and plan restrictions. Do not merge quotes without preserving provider timestamp, venue, currency and entitlement metadata. Quiver datasets are primarily US-company alternative data and may update after public filings/disclosures; they are not tick-level signals. Twelve Data websocket access requires eligible plans; the current Basic/Grow trial is restricted. Alpaca's Basic equities feed is IEX rather than consolidated all-venue coverage; paid market-data tiers change that coverage. Validate account eligibility and local regulatory/tax requirements before using any broker account from Ghana.
+
+
+## Advanced cross-provider quote intelligence
+
+- `GET /api/providers/consensus/quote/:symbol` queries only configured quote providers (Finnhub, Twelve Data, Alpaca, and optionally Alpha Vantage) and normalizes their observations into a common response.
+- The response preserves each provider's timestamp, currency, venue, raw provider status and price. It calculates a median cross-source reference only when currency metadata does not conflict.
+- With at least three observations, sources whose price differs from the median by more than `JPTI_QUOTE_OUTLIER_THRESHOLD_PERCENT` are flagged for manual review. Stale observations are marked using `JPTI_QUOTE_STALE_AFTER_SECONDS`.
+- The endpoint caches each symbol for `JPTI_QUOTE_CACHE_TTL_MS` (default 30 seconds) and enforces provider-specific minimum request spacing to reduce quota exhaustion. Alpha Vantage is excluded from consensus by default; set `JPTI_ENABLE_ALPHAVANTAGE_CONSENSUS=true` only if your plan and quota support it.
+- The Overview dashboard includes a read-only cross-source quote panel. It does not submit orders and does not claim to provide a consolidated NBBO or guaranteed executable price.
+
+A cross-provider median is only a sanity check: feeds may differ by venue, session, delay, currency, corporate-action adjustment and licensing entitlement. A flagged outlier is not proof that a provider is wrong. Review source timestamps and market status before relying on the result.
