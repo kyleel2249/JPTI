@@ -1,6 +1,187 @@
-import React,{useState}from'react';import ExchangeConnectivity from './ExchangeConnectivity.jsx';import FinancialIntelligence from './FinancialIntelligence.jsx';import{Activity,BarChart3,Bell,Bot,BrainCircuit,CalendarDays,CandlestickChart,ChevronDown,Copy,Gauge,LayoutDashboard,Menu,Search,Settings2,ShieldCheck,Wallet,Zap,Play,Pause,X}from'lucide-react';
-const nav=[['Overview',LayoutDashboard],['Spot & Markets',CandlestickChart],['Futures',Activity],['AI Intelligence',BrainCircuit],['Market Scanner',Search],['Copy Trading',Copy],['Trading Bots',Bot],['Risk Management',ShieldCheck],['Portfolio & PnL',Wallet],['Backtesting Lab',BarChart3],['Calendar & Sessions',CalendarDays],['Financial & On-chain',BrainCircuit]];
-const assets=[['BTC/USDT','Bitcoin','91,842.60','+2.41%',1],['ETH/USDT','Ethereum','3,146.28','+1.18%',1],['SOL/USDT','Solana','143.82','-0.86%',0],['BNB/USDT','BNB','912.40','+0.52%',1],['XRP/USDT','XRP','2.184','-1.22%',0]];
-const agents=[['Scanner','New pairs, volume & wallet flow',Search],['Rug Check','Contract, liquidity & holder checks',ShieldCheck],['Sizer','Equity-based position sizing',Gauge],['Executor','Paper execution only',Zap],['Logger','Decision and fill journal',Activity],['Equity','Balance and drawdown tracking',BarChart3]];
-function App(){const[page,S]=useState('Overview'),[run,R]=useState(false),[logs,L]=useState(['19:58:02 SYSTEM  JPTI initialized. Paper mode enabled.','19:58:03 SCANNER  Waiting for live market-data connection.','19:58:03 RUG CHECK  Execution gate armed; safety PASS required.','19:58:04 LOGGER  Session journal ready. All market values are illustrative.']),[pair,P]=useState('BTC/USDT'),[menu,M]=useState(false),[q,Q]=useState('');const log=(s)=>L(v=>[new Date().toLocaleTimeString()+' SYSTEM  '+s,...v].slice(0,30));const toggle=()=>{R(!run);log(run?'Paper agents paused by operator.':'Paper-agent session started. No live orders submitted.');};const active=assets.find(a=>a[0]===pair)||assets[0];return <div className="app"><header><button className="hamb" onClick={()=>M(!menu)}><Menu/></button><div className="brand"><b>JP</b><span><strong>JOPEARL</strong><small>TRADING INTELLIGENCE</small></span></div><div className="search"><Search size={16}/><input placeholder="Search markets, assets, tools..." value={q} onChange={e=>Q(e.target.value)}/></div><span className="feed"><i/> Demo market feed</span><Bell size={18}/><button className="profile">JP <ChevronDown size={13}/></button></header><div className="layout"><aside className={menu?'show':''}><label>WORKSPACE</label>{nav.map(([n,I])=><button className={page===n?'sel':''} onClick={()=>{S(n);M(false)}} key={n}><I size={17}/>{n}{n==='AI Intelligence'&&<em>AI</em>}</button>)}<div className="asidebottom"><label>ACCOUNT</label><button><Settings2 size={17}/>Settings</button><button><ShieldCheck size={17}/>Security</button><div className="user"><b>JP</b><span>JPTI Workspace<small>Local demo account</small></span></div></div></aside><main><div className="heading"><div><small>JOPEARL / WORKSPACE / {page.toUpperCase()}</small><h1>{page==='Overview'?'Trading Overview':page}</h1><p>Market intelligence, disciplined execution and portfolio oversight.</p></div><div className="actions"><span className="mode"><ShieldCheck size={14}/> PAPER MODE</span><button className="gold" onClick={toggle}>{run?<Pause size={15}/>:<Play size={15}/>} {run?'Pause agents':'Run paper agents'}</button></div></div><div className="notice"><ShieldCheck size={17}/><span><b>Exchange gateway with protected execution</b><small>Live candlesticks, selectable timeframes and technical indicators use the selected exchange feed. Portfolio, scanner and agent metrics remain illustrative until their services are connected.</small></span></div>{page==='Financial & On-chain'?<FinancialIntelligence/>:<ExchangeConnectivity symbol={pair} onSymbolChange={P}/>}<div className="stats">{[['Total equity','$70.00','Paper starting balance',Wallet],['24h PnL','$0.00','0.00% return',BarChart3],['Open positions','0','Maximum 2 in meme bot',Activity],['Win rate','—','No completed trades',Gauge]].map(([a,b,c,I])=><div className="stat" key={a}><span>{a}<I size={17}/></span><b>{b}</b><small>{c}</small></div>)}</div><section className="tickers"><b>MARKET SNAPSHOT <small>· SAMPLE FEED</small></b><div>{assets.slice(0,4).map(a=><button onClick={()=>P(a[0])} key={a[0]}><span>{a[0]}</span><strong>{a[2]}</strong><i className={a[4]?'up':'down'}>{a[3]}</i></button>)}</div></section><div className="lower"><section className="panel"><div className="panelhead"><span><b>JPTI autonomous intelligence</b><small>Six-agent oversight framework</small></span><i className={run?'running':'standby'}>{run?'RUNNING · PAPER':'STANDBY'}</i></div><div className="agents">{agents.map(([n,d,I])=><div className="agent" key={n}><I size={18}/><span><b>{n}</b><small>{d}</small></span><i>{run&&n==='Executor'?'Paper ready':n==='Rug Check'?'Gate armed':'Ready'}</i></div>)}</div><div className="session"><b>Solana meme-coin research session</b><small>23:00–07:00 · $70 illustrative equity · maximum 2 positions</small></div></section><section className="panel"><div className="panelhead"><span><b>Market watchlist</b><small>Liquid markets · sample values</small></span></div><div className="watchhead">Asset <span>Last price</span><span>24h</span></div>{assets.filter(a=>a[0].toLowerCase().includes(q.toLowerCase())||a[1].toLowerCase().includes(q.toLowerCase())).map(a=><button className="watch" onClick={()=>P(a[0])} key={a[0]}><span><b>{a[0]}</b><small>{a[1]}</small></span><strong>{a[2]}</strong><i className={a[4]?'up':'down'}>{a[3]}</i></button>)}</section></div><section className="panel log"><div className="panelhead"><span><b>Session event log</b><small>Audit trail · newest first</small></span><button onClick={()=>L([])}>Clear log</button></div>{logs.map((l,i)=><div className="logrow" key={i}>{l}</div>)}</section><footer>© 2026 Jopearl Trading Intelligence <span>Independent software · Not affiliated with Bitget</span><i>● Paper mode by default</i></footer></main></div></div>}
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import ExchangeConnectivity from './ExchangeConnectivity.jsx';
+import FinancialIntelligence from './FinancialIntelligence.jsx';
+import {
+  Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
+  ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2,
+  LayoutDashboard, Menu, Network, Newspaper, Radio, RefreshCw, Search,
+  Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Wallet, X, Zap
+} from 'lucide-react';
+
+const navigation = [
+  { label: 'Overview', icon: LayoutDashboard, group: 'COMMAND' },
+  { label: 'Spot & Markets', icon: CandlestickChart, group: 'MARKETS' },
+  { label: 'Futures', icon: Activity, group: 'MARKETS' },
+  { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
+  { label: 'Market Scanner', icon: Search, group: 'INTELLIGENCE' },
+  { label: 'Financial & On-chain', icon: Blocks, group: 'INTELLIGENCE' },
+  { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
+  { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
+  { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
+  { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
+  { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
+  { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' }
+];
+
+const fmt = (value) => value == null ? '—' : Number(value).toLocaleString();
+const time = (value) => value ? new Date(value).toLocaleTimeString() : 'Awaiting first run';
+
+function StatusPill({ status }) {
+  const good = ['live', 'registry-checked', 'ready', 'ok'].includes(status);
+  const warn = ['partial', 'waiting-for-watchlist', 'waiting-for-prerequisites', 'starting', 'not-started'].includes(status);
+  return <span className={'status-pill ' + (good ? 'good' : warn ? 'warn' : 'bad')}><i />{String(status || 'unknown').replaceAll('-', ' ')}</span>;
+}
+
+function App() {
+  const [page, setPage] = useState('Overview');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [symbol, setSymbol] = useState('BTC/USDT');
+  const [health, setHealth] = useState(null);
+  const [operations, setOperations] = useState(null);
+  const [providers, setProviders] = useState(null);
+  const [ledger, setLedger] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [query, setQuery] = useState('');
+  const [paperSession, setPaperSession] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const paths = ['/api/health', '/api/operations/overview', '/api/providers', '/api/operations/ledger/summary', '/api/operations/events?limit=12'];
+      const responses = await Promise.all(paths.map((path) => fetch(path, { cache: 'no-store' })));
+      const payloads = await Promise.all(responses.map((response) => response.json()));
+      const failed = responses.findIndex((response) => !response.ok);
+      if (failed >= 0) throw new Error(payloads[failed]?.error || 'JPTI service endpoint unavailable');
+      setHealth(payloads[0]);
+      setOperations(payloads[1]);
+      setProviders(payloads[2]);
+      setLedger(payloads[3]);
+      setEvents(payloads[4].events || []);
+      setLoadError('');
+      setLastRefresh(new Date().toISOString());
+    } catch (error) {
+      setLoadError(error.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 10000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
+  const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
+  const configuredProviders = (providers?.providers || []).filter((provider) => provider.configured).length;
+  const marketJob = jobById['market-monitor'];
+  const gatewayOnline = health?.status === 'ok';
+  const activeNav = (label) => { setPage(label); setMobileOpen(false); };
+
+  const pageDescription = {
+    'Overview': 'A live operational view across markets, intelligence sources and risk controls.',
+    'Spot & Markets': 'Live multi-exchange market data and technical analysis.',
+    'Futures': 'Derivatives market discovery. Contract availability depends on exchange support.',
+    'AI Intelligence': 'Signal evidence, market context and explainable analysis.',
+    'Market Scanner': 'Configure market watchlists for scheduled live ticker monitoring.',
+    'Financial & On-chain': 'Macro, digital-asset, provider and wallet intelligence.',
+    'News & Events': 'News discovery and event context from connected sources.',
+    'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
+    'Risk Management': 'Execution safeguards, service readiness and risk policy.',
+    'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
+    'Backtesting Lab': 'Strategy research and historical validation workspace.',
+    'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
+  };
+
+  const renderOperations = () => (
+    <div className="ops-grid">
+      {(operations?.jobs || []).map((job) => {
+        const Icon = job.id === 'market-monitor' ? Radio : job.id === 'provider-health' ? Network : job.id === 'reconciliation' ? Database : job.id === 'investor-monitor' ? Wallet : job.id === 'market-maker' ? Activity : job.id === 'news-monitor' ? Newspaper : Blocks;
+        return <article className="ops-card" key={job.id}>
+          <div className="ops-card-top"><span className="ops-icon"><Icon size={15}/></span><StatusPill status={job.status}/></div>
+          <b>{job.label}</b>
+          <p>{job.detail}</p>
+          <div className="ops-meta"><span>Interval <strong>{job.intervalSeconds}s</strong></span><span>Last run <strong>{time(job.lastRunAt)}</strong></span></div>
+        </article>;
+      })}
+    </div>
+  );
+
+  const renderOverview = () => (
+    <>
+      <div className="hero-grid">
+        <section className="hero-card">
+          <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" />
+          <div className="hero-kicker"><span className="pulse-dot"/> INTELLIGENCE SYSTEM / ONLINE WORKSPACE</div>
+          <h2>See the market.<br/><em>Understand the signal.</em></h2>
+          <p>One command surface for multi-exchange data, on-chain activity, macro context and disciplined execution.</p>
+          <div className="hero-actions"><button className="primary-action" onClick={() => activeNav('Spot & Markets')}><CandlestickChart size={15}/> Open trading terminal <ChevronRight size={14}/></button><button className="ghost-action" onClick={refresh}><RefreshCw size={14}/> Sync intelligence</button></div>
+          <div className="hero-foot"><span><i/> PAPER-FIRST SAFETY</span><span>BUILD 0.3 · COMMAND CENTER</span></div>
+        </section>
+        <section className="system-card">
+          <div className="section-label"><span>SYSTEM TELEMETRY</span><Cpu size={15}/></div>
+          <div className="system-state"><div className={'system-ring ' + (gatewayOnline ? 'online' : 'offline')}><Activity size={24}/></div><div><b>{gatewayOnline ? 'Gateway operational' : 'Gateway unavailable'}</b><small>{health?.mode ? health.mode.toUpperCase() + ' MODE' : 'Waiting for API service'}</small></div></div>
+          <div className="telemetry-line"><span>API gateway</span><StatusPill status={gatewayOnline ? 'ok' : 'offline'}/></div>
+          <div className="telemetry-line"><span>Configured providers</span><b>{providers ? configuredProviders + ' / ' + providers.providers.length : '—'}</b></div>
+          <div className="telemetry-line"><span>Scheduler</span><StatusPill status={operations?.schedulerEnabled ? 'ready' : 'disabled'}/></div>
+          <div className="telemetry-line"><span>Uptime</span><b>{operations ? Math.floor(operations.uptimeSeconds / 60) + 'm ' + operations.uptimeSeconds % 60 + 's' : '—'}</b></div>
+          <small className="telemetry-foot">Updated {time(lastRefresh)}</small>
+        </section>
+      </div>
+
+      <div className="metric-grid">
+        <article className="metric-card"><div><span>DATA PROVIDERS</span><Network size={16}/></div><strong>{providers ? configuredProviders : '—'}<small> / {providers?.providers?.length || '—'}</small></strong><p>Credentials or public feeds configured</p><div className="metric-track"><i style={{width: providers?.providers?.length ? (configuredProviders / providers.providers.length * 100) + '%' : '0%'}}/></div></article>
+        <article className="metric-card"><div><span>LIVE WATCHLIST</span><Radio size={16}/></div><strong>{marketJob?.lastSnapshot?.length ?? '—'}</strong><p>{marketJob?.status === 'live' ? 'Markets sampled by scheduler' : 'Configure JPTI_MONITOR_MARKETS'}</p><div className="metric-track cyan"><i style={{width: marketJob?.lastSnapshot?.length ? '70%' : '0%'}}/></div></article>
+        <article className="metric-card"><div><span>LEDGER EVENTS</span><Database size={16}/></div><strong>{fmt(ledger?.eventCount)}</strong><p>Persisted transaction events · not PnL</p><div className="metric-track violet"><i style={{width: ledger?.eventCount ? '42%' : '0%'}}/></div></article>
+        <article className="metric-card"><div><span>EXECUTION SAFETY</span><ShieldCheck size={16}/></div><strong className="safe-word">PROTECTED</strong><p>Live orders remain disabled by default</p><div className="safety-caption"><i/> AUTHORIZATION REQUIRED</div></article>
+      </div>
+
+      <div className="section-heading"><div><span className="eyebrow">LIVE MARKET WORKSPACE</span><h3>Market intelligence terminal</h3><p>Exchange-fed prices and candles. Values remain blank until a provider responds.</p></div><span className="section-tag"><span className="pulse-dot"/> EXCHANGE DATA</span></div>
+      <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>
+
+      <div className="section-heading ops-title"><div><span className="eyebrow">AUTOMATION & INFRASTRUCTURE</span><h3>Operational command grid</h3><p>Each service reports its actual state and unmet prerequisites.</p></div><button className="small-refresh" onClick={refresh}><RefreshCw size={13}/> Refresh</button></div>
+      {renderOperations()}
+
+      <div className="bottom-grid">
+        <section className="glass-panel"><div className="panel-title"><div><span className="eyebrow">PROVIDER ECOSYSTEM</span><h3>Connected intelligence</h3></div><button onClick={() => activeNav('Financial & On-chain')}>View providers <ChevronRight size={13}/></button></div><div className="provider-chips">{(providers?.providers || []).slice(0, 12).map((provider) => <span key={provider.id} className={provider.configured ? 'configured' : ''}>{provider.name}</span>)}</div><p className="subtle-note">Credential presence is not the same as successful authentication or a live data entitlement.</p></section>
+        <section className="glass-panel"><div className="panel-title"><div><span className="eyebrow">AUDIT STREAM</span><h3>Recent system events</h3></div><span className="live-tag">LOCAL LEDGER</span></div><div className="event-list">{events.slice(0, 5).map((event) => <div className="event-row" key={event.id}><i/><span><b>{event.kind === 'market-monitor-snapshot' ? 'Market monitor snapshot' : event.eventType || event.kind}</b><small>{event.source || event.markets?.length + ' market(s) sampled'} · {time(event.occurredAt)}</small></span></div>)}{!events.length && <p className="empty-state">No persisted events yet. Configure a watchlist or ingest verified transaction events.</p>}</div></section>
+      </div>
+    </>
+  );
+
+  const renderWorkspace = () => {
+    if (page === 'Overview') return renderOverview();
+    if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
+    if (page === 'Spot & Markets' || page === 'Futures') return <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>;
+    if (page === 'Market Scanner') return <section className="glass-panel detail-workspace"><span className="eyebrow">LIVE MARKET MONITOR</span><h3>Build your monitored universe</h3><p>JPTI can sample actual exchange tickers on the configured market-monitor interval. Add symbols to the server-side watchlist in your .env file.</p><pre>JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT</pre>{renderOperations()}</section>;
+    if (page === 'Portfolio & Ledger') return <section className="glass-panel detail-workspace"><span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Append-only ledger</h3><p>{ledger?.eventCount ?? 0} transaction events recorded. This count does not represent a reconciled account balance, cost basis or realized profit and loss.</p><div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div><p className="subtle-note">Authenticated transaction ingestion endpoint: POST /api/operations/ledger/events. Duplicate source/account/external IDs are rejected idempotently.</p>{renderOperations()}</section>;
+    if (page === 'Risk Management') return <section className="glass-panel detail-workspace"><span className="eyebrow">CAPITAL PROTECTION</span><h3>Execution guardrails</h3><div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> USDT spot-only initial live-order policy.</p><p><ShieldCheck/> Per-order notional cap enforced server-side.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>{renderOperations()}</section>;
+    if (page === 'Trading Bots' || page === 'AI Intelligence') return <section className="glass-panel detail-workspace"><span className="eyebrow">AGENT ORCHESTRATION</span><h3>{page === 'AI Intelligence' ? 'Explainable intelligence services' : 'Trading automation control'}</h3><p>Agent execution is not represented as active until its worker, strategy, data sources and risk policy are implemented and verified. Current service readiness is shown below.</p>{renderOperations()}</section>;
+    return <section className="glass-panel detail-workspace"><span className="eyebrow">RESEARCH WORKSPACE</span><h3>{page}</h3><p>This workspace is reserved for verified data and tested functionality. It will not display fabricated performance, positions or economic events.</p>{renderOperations()}</section>;
+  };
+
+  const groups = [...new Set(navigation.map((item) => item.group))];
+  return <div className="jpti-shell">
+    <div className="ambient ambient-a"/><div className="ambient ambient-b"/>
+    <aside className={'command-sidebar ' + (mobileOpen ? 'mobile-open' : '')}>
+      <div className="brand-lockup"><div className="brand-mark"><span>J</span><i/></div><div><b>JOPEARL</b><small>TRADING INTELLIGENCE</small></div><button className="mobile-close" onClick={() => setMobileOpen(false)}><X size={17}/></button></div>
+      <div className="workspace-pill"><span className="workspace-avatar">JP</span><span><b>JPTI COMMAND</b><small>Personal workspace</small></span><ChevronRight size={14}/></div>
+      <label className="side-label">NAVIGATION</label>
+      <div className="side-search"><Search size={14}/><input placeholder="Find a workspace" value={query} onChange={(e) => setQuery(e.target.value)}/><Command size={12}/></div>
+      <nav>{groups.map((group) => <div className="nav-group" key={group}><small>{group}</small>{filteredNav.filter((item) => item.group === group).map((item) => { const Icon = item.icon; return <button key={item.label} className={page === item.label ? 'active' : ''} onClick={() => activeNav(item.label)}><Icon size={16}/><span>{item.label}</span>{item.label === 'Financial & On-chain' && <i>DATA</i>}</button>; })}</div>)}</nav>
+      <div className="sidebar-bottom"><div className="sidebar-status"><span className="pulse-dot"/><span><b>{gatewayOnline ? 'SYSTEM OPERATIONAL' : 'CONNECTING TO API'}</b><small>{health?.mode || 'Awaiting gateway'}</small></span></div><div className="sidebar-footer"><span><Settings2 size={14}/> Settings</span><span><CircleHelp size={14}/> Help</span></div><small className="build-label">JPTI · SECURE TRADING INFRASTRUCTURE</small></div>
+    </aside>
+
+    <main className="command-main">
+      <header className="command-topbar"><div className="top-left"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={18}/></button><div className="breadcrumb">JOPEARL <ChevronRight size={12}/> <b>{page.toUpperCase()}</b></div></div><div className="top-right"><span className="market-state"><i/> {gatewayOnline ? 'API CONNECTED' : 'API DISCONNECTED'}</span><span className="top-divider"/><button className="icon-action" onClick={refresh} title="Refresh system"><RefreshCw size={15}/></button><button className="icon-action" title="Notifications"><Bell size={15}/></button><div className="user-chip"><span>JP</span><b>Operator</b></div></div></header>
+      <div className="page-content">
+        <div className="page-heading"><div><div className="heading-eyebrow"><Sparkles size={13}/> INTELLIGENCE, PRECISION, CONTROL</div><h1>{page === 'Overview' ? 'Trading command center' : page}</h1><p>{pageDescription[page] || 'JPTI intelligence workspace.'}</p></div><div className="heading-tools"><span className="paper-chip"><ShieldCheck size={13}/> PAPER-FIRST</span><button className="refresh-button" onClick={refresh}><RefreshCw size={14}/> Sync</button></div></div>
+        {loadError && <div className="connection-warning"><Zap size={15}/>{loadError} — start the JPTI API service to load live system data.</div>}
+        {renderWorkspace()}
+        <footer className="command-footer"><span>© 2026 JOPEARL TRADING INTELLIGENCE</span><span>MARKET DATA IS NOT A TRADE RECOMMENDATION</span><span>LIVE EXECUTION LOCKED BY DEFAULT</span></footer>
+      </div>
+    </main>
+  </div>;
+}
+
 export default App;
