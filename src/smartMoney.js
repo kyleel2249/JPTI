@@ -1,6 +1,5 @@
 export function detectSmartMoney(candles, swingLength = 3) {
   const fairValueGaps = [], liquiditySweeps = [], structureBreaks = [], orderBlocks = [];
-  if (candles.length < swingLength * 2 + 5) return { fairValueGaps, liquiditySweeps, structureBreaks, orderBlocks };
   let lastHigh = null, lastLow = null, trend = 0;
   const swingHighs = [], swingLows = [];
   for (let i = 0; i < candles.length; i += 1) {
