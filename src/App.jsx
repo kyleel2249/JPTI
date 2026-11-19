@@ -48,6 +48,10 @@ function App() {
   const [newsData, setNewsData] = useState([]);
   const [newsError, setNewsError] = useState('');
   const [newsLoading, setNewsLoading] = useState(false);
+  const [quoteSymbol, setQuoteSymbol] = useState('AAPL');
+  const [quoteConsensus, setQuoteConsensus] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
 
   const refresh = useCallback(async () => {
     try {
@@ -89,6 +93,19 @@ function App() {
   useEffect(() => {
     if (page === 'News & Events' && newsData.length === 0) loadNews();
   }, [page, newsData.length, loadNews]);
+
+  const loadQuoteConsensus = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setQuoteLoading(true); setQuoteError('');
+    try {
+      const normalizedSymbol = quoteSymbol.trim().toUpperCase();
+      const response = await fetch('/api/providers/consensus/quote/' + encodeURIComponent(normalizedSymbol), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Cross-provider quote check failed');
+      setQuoteConsensus(data);
+    } catch (error) { setQuoteError(error.message); }
+    finally { setQuoteLoading(false); }
+  }, [quoteSymbol]);
 
   const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
   const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
@@ -157,6 +174,29 @@ function App() {
 
       <div className="section-heading"><div><span className="eyebrow">LIVE MARKET WORKSPACE</span><h3>Market intelligence terminal</h3><p>Exchange-fed prices and candles. Values remain blank until a provider responds.</p></div><span className="section-tag"><span className="pulse-dot"/> EXCHANGE DATA</span></div>
       <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>
+      <section className="glass-panel quote-consensus-panel">
+        <div className="panel-title"><div><span className="eyebrow">CROSS-SOURCE PRICE VALIDATION</span><h3>Multi-provider quote consensus</h3></div><span className="live-tag">READ-ONLY INTELLIGENCE</span></div>
+        <p className="subtle-note">Compare independent provider observations, inspect source timestamps and identify outliers. This is not an executable consolidated quote.</p>
+        <form className="quote-consensus-search" onSubmit={loadQuoteConsensus}>
+          <input value={quoteSymbol} onChange={(event) => setQuoteSymbol(event.target.value)} placeholder="Ticker symbol, e.g. AAPL"/>
+          <button disabled={quoteLoading || !quoteSymbol.trim()}>{quoteLoading ? 'Checking sources…' : 'Run cross-check'}</button>
+        </form>
+        {quoteError && <p className="quote-error">{quoteError}</p>}
+        {quoteConsensus && <>
+          <div className="quote-consensus-stats">
+            <div><span>CONSENSUS MIDPOINT</span><b>{quoteConsensus.consensusPrice == null ? 'Unavailable' : Number(quoteConsensus.consensusPrice).toLocaleString(undefined,{maximumFractionDigits:6}) + (quoteConsensus.currency ? ' ' + quoteConsensus.currency : '')}</b></div>
+            <div><span>VALID SOURCES</span><b>{quoteConsensus.sourceCount}</b></div>
+            <div><span>PRICE DISPERSION</span><b>{quoteConsensus.spreadPercent == null ? '—' : Number(quoteConsensus.spreadPercent).toFixed(3) + '%'}</b></div>
+            <div><span>ASSESSMENT</span><b>{String(quoteConsensus.confidence || 'unavailable').replaceAll('-', ' ')}</b></div>
+          </div>
+          <div className="quote-source-list">{(quoteConsensus.providerResults || []).map((item) => {
+            const observation = (quoteConsensus.sources || []).find((source) => source.provider === item.provider);
+            return <div key={item.provider}><span>{item.provider.toUpperCase()}</span><b>{observation ? Number(observation.price).toLocaleString(undefined,{maximumFractionDigits:6}) : item.status}</b><small>{observation ? new Date(observation.timestamp).toLocaleString() + (observation.outlier ? ' · OUTLIER REVIEW' : '') : item.error || 'No usable quote'}</small></div>;
+          })}</div>
+          {quoteConsensus.currencyConflict && <p className="quote-error">Currency mismatch detected. JPTI withheld a combined consensus value.</p>}
+          <p className="subtle-note">{quoteConsensus.note}</p>
+        </>}
+      </section>
 
       <div className="section-heading ops-title"><div><span className="eyebrow">AUTOMATION & INFRASTRUCTURE</span><h3>Operational command grid</h3><p>Each service reports its actual state and unmet prerequisites.</p></div><button className="small-refresh" onClick={refresh}><RefreshCw size={13}/> Refresh</button></div>
       {renderOperations()}
