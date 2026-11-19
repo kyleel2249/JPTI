@@ -109,13 +109,16 @@ intelligenceRouter.get('/market/:exchange/:symbol/context', async (req, res) => 
     const score = scoreMarketContext({
       priceChangePct,
       volumeChangePct,
+      orderBookImbalancePct,
+      fundingRate,
+      timeframeAlignment,
       macroBias: Number.isFinite(globalChange) ? (globalChange > 1 ? 'risk-on' : globalChange < -1 ? 'risk-off' : 'neutral') : 'neutral'
     });
     const chainRows = Array.isArray(chainResult.data) ? chainResult.data : [];
-    res.set('Cache-Control', 'no-store');
+    res.set('Cache-Control', 'public, max-age=30');
     res.json({
       generatedAt: new Date().toISOString(), exchange: exchangeId, symbol, timeframe,
-      market: { lastPrice: market.ticker?.last ?? last[4], quoteVolume24h: market.ticker?.quoteVolume ?? null, priceChangePct: Number(priceChangePct.toFixed(4)), latestClosedCandleAt: new Date(last[0]).toISOString(), lastClosedVolume: last[5], averagePriorVolume: averageVolume, volumeChangePct: volumeChangePct == null ? null : Number(volumeChangePct.toFixed(2)), orderBookImbalancePct: orderBookImbalancePct == null ? null : Number(orderBookImbalancePct.toFixed(2)), fundingRate },
+      market: { lastPrice: market.ticker?.last ?? last[4], quoteVolume24h: market.ticker?.quoteVolume ?? null, priceChangePct: priceChangePct == null ? null : Number(priceChangePct.toFixed(4)), latestClosedCandleAt: new Date(last[0]).toISOString(), lastClosedVolume: last[5], averagePriorVolume: averageVolume, volumeChangePct: volumeChangePct == null ? null : Number(volumeChangePct.toFixed(2)), orderBookImbalancePct: orderBookImbalancePct == null ? null : Number(orderBookImbalancePct.toFixed(2)), fundingRate },
       multiTimeframe,
       broadContext: { globalMarketCapChange24hPct: Number.isFinite(globalChange) ? globalChange : null, btcDominancePct: global?.market_cap_percentage?.btc ?? null, chainTvlLeaders: chainRows.slice().sort((a,b)=>(Number(b.tvl)||0)-(Number(a.tvl)||0)).slice(0,5).map((x)=>({name:x.name,tvl:x.tvl})) },
       score,
