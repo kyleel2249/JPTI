@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
 import { classifyMarket, createExchange, exchangeConnectionStatus, listExchangeCatalog, withExchange } from './exchanges.js';
+import { intelligenceRouter } from './intelligence.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 
 const app = express();
@@ -28,6 +29,8 @@ app.use('/api', (req, res, next) => {
 if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLOW_REMOTE_API || process.env.JPTI_ALLOW_REMOTE_API !== 'true' || !process.env.JPTI_API_TOKEN)) {
   throw new Error('Remote API binding requires JPTI_ALLOW_REMOTE_API=true and a strong JPTI_API_TOKEN. Keep localhost binding for development.');
 }
+
+app.use('/api/intelligence', intelligenceRouter);
 
 app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
