@@ -3,7 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
 import { createExchange, exchangeConnectionStatus, listExchangeCatalog, withExchange } from './exchanges.js';
-import { assertLiveTradingAllowed, orderSchema } from './policy.js';
+import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 
 const app = express();
 const port = Number(process.env.JPTI_API_PORT || 8787);
@@ -25,7 +25,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/health', (_req, res) => res.json({
+if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLOW_REMOTE_API || process.env.JPTI_ALLOW_REMOTE_API !== 'true' || !process.env.JPTI_API_TOKEN)) {\n  throw new Error('Remote API binding requires JPTI_ALLOW_REMOTE_API=true and a strong JPTI_API_TOKEN. Keep localhost binding for development.');\n}\n\napp.get('/api/health', (_req, res) => res.json({
   status: 'ok',
   service: 'JPTI Exchange Gateway',
   mode: process.env.JPTI_TRADING_MODE || 'paper',
