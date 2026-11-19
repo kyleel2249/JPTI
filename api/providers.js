@@ -288,3 +288,144 @@ providerRouter.get('/providers/liquid/markets', async (_req, res) => {
     res.json({ provider: 'liquid', markets: Array.isArray(data) ? data : [], fetchedAt: now(), caveat: 'Legacy Liquid/Quoine API reachability does not establish current exchange operations, liquidity or account support.' });
   } catch (e) { res.status(e.status || 502).json({ error: `Liquid legacy endpoint unavailable or unsupported: ${e.message}` }); }
 });
+
+
+// Cross-provider quote consensus: normalized observations, explicit provenance and
+// anomaly flags. This is an intelligence aid, never an order trigger.
+const quoteCache = new Map();
+const quoteCacheTtlMs = Math.max(5000, Math.min(120000, Number(process.env.JPTI_QUOTE_CACHE_TTL_MS) || 15000));
+
+export function normalizeProviderQuote(provider, symbol, payload, fetchedAt = now()) {
+  let price = null;
+  let change = null;
+  let changePercent = null;
+  let timestamp = fetchedAt;
+  let currency = null;
+  let venue = null;
+  if (provider === 'finnhub') {
+    price = Number(payload?.c);
+    change = Number(payload?.d);
+    changePercent = Number(payload?.dp);
+    if (Number(payload?.t) > 0) timestamp = new Date(Number(payload.t) * 1000).toISOString();
+    currency = 'USD';
+  } else if (provider === 'alphavantage') {
+    const q = payload?.['Global Quote'] || payload || {};
+    price = Number(q['05. price']);
+    change = Number(q['09. change']);
+    changePercent = Number.parseFloat(String(q['10. change percent'] || '').replace('%', ''));
+    currency = 'USD';
+  } else if (provider === 'twelvedata') {
+    price = Number(payload?.price);
+    change = Number(payload?.change);
+    changePercent = Number(payload?.percent_change);
+    currency = payload?.currency || null;
+    venue = payload?.exchange || null;
+    if (payload?.datetime) {
+      const parsed = Date.parse(payload.datetime);
+      if (Number.isFinite(parsed)) timestamp = new Date(parsed).toISOString();
+    }
+  } else if (provider === 'alpaca') {
+    const quote = payload?.quote || payload || {};
+    const bid = Number(quote.bp);
+    const ask = Number(quote.ap);
+    price = bid > 0 && ask > 0 ? (bid + ask) / 2 : Number(quote.ap || quote.bp);
+    timestamp = quote.t || fetchedAt;
+    currency = 'USD';
+    venue = quote.x || null;
+  }
+  if (!Number.isFinite(price) || price <= 0) return null;
+  return { provider, symbol, price, change: Number.isFinite(change) ? change : null,
+    changePercent: Number.isFinite(changePercent) ? changePercent : null,
+    timestamp, currency, venue, fetchedAt };
+}
+
+export function buildQuoteConsensus(symbol, observations) {
+  const valid = observations.filter((item) => item && Number.isFinite(item.price) && item.price > 0);
+  const prices = valid.map((item) => item.price).sort((a, b) => a - b);
+  const median = prices.length ? (prices.length % 2 ? prices[(prices.length - 1) / 2] : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2) : null;
+  const spreadPercent = prices.length > 1 && median ? ((prices[prices.length - 1] - prices[0]) / median) * 100 : null;
+  const outlierThreshold = Math.max(0.75, Number(process.env.JPTI_QUOTE_OUTLIER_THRESHOLD_PERCENT) || 1.5);
+  const sources = valid.map((item) => ({ ...item,
+    deviationFromMedianPercent: median ? ((item.price - median) / median) * 100 : null,
+    outlier: valid.length >= 3 && median ? Math.abs((item.price - median) / median) * 100 > outlierThreshold : false
+  }));
+  const currencies = [...new Set(sources.map((item) => item.currency).filter(Boolean))];
+  const currencyConflict = currencies.length > 1;
+  return {
+    symbol, generatedAt: now(), sourceCount: sources.length,
+    consensusPrice: currencyConflict || !sources.length ? null : median,
+    currency: currencyConflict ? null : currencies[0] || null,
+    spreadPercent: currencyConflict ? null : spreadPercent,
+    confidence: currencyConflict ? 'currency-conflict' : sources.length >= 3 ? 'multi-source' : sources.length === 2 ? 'cross-check' : sources.length === 1 ? 'single-source' : 'unavailable',
+    sources, currencyConflict,
+    caveats: ['Sources may represent different venues, feeds, trading sessions and entitlements.',
+      'A median is a cross-check, not an executable price or guaranteed consolidated NBBO.',
+      'Outlier flags are statistical alerts and must be reviewed before any trading decision.']
+  };
+}
+
+async function quoteSource(provider, symbol) {
+  const stamp = now();
+  if (provider === 'finnhub') {
+    const key = requireKey('JPTI_FINNHUB_API_KEY', 'Finnhub');
+    const url = new URL('https://finnhub.io/api/v1/quote');
+    url.search = new URLSearchParams({ symbol, token: key }).toString();
+    return normalizeProviderQuote(provider, symbol, await requestJson(url), stamp);
+  }
+  if (provider === 'alphavantage') {
+    const key = requireKey('JPTI_ALPHAVANTAGE_API_KEY', 'Alpha Vantage');
+    const url = new URL('https://www.alphavantage.co/query');
+    url.search = new URLSearchParams({ function: 'GLOBAL_QUOTE', symbol, apikey: key }).toString();
+    const data = await requestJson(url);
+    if (data.Note || data.Information) throw Object.assign(new Error(data.Note || data.Information), { status: 429 });
+    return normalizeProviderQuote(provider, symbol, data, stamp);
+  }
+  if (provider === 'twelvedata') {
+    const key = requireKey('JPTI_TWELVEDATA_API_KEY', 'Twelve Data');
+    const url = new URL('https://api.twelvedata.com/quote');
+    url.search = new URLSearchParams({ symbol, apikey: key }).toString();
+    const data = await requestJson(url);
+    if (data.status === 'error') throw new Error(data.message || 'Twelve Data quote failed');
+    return normalizeProviderQuote(provider, symbol, data, stamp);
+  }
+  if (provider === 'alpaca') {
+    const key = requireKey('JPTI_ALPACA_API_KEY', 'Alpaca');
+    const secret = requireKey('JPTI_ALPACA_API_SECRET', 'Alpaca');
+    const url = new URL('https://data.alpaca.markets/v2/stocks/' + encodeURIComponent(symbol) + '/quotes/latest');
+    url.search = new URLSearchParams({ feed: 'iex' }).toString();
+    const data = await requestJson(url, { headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret } });
+    return normalizeProviderQuote(provider, symbol, data, stamp);
+  }
+  return null;
+}
+
+providerRouter.get('/providers/consensus/quote/:symbol', async (req, res) => {
+  const symbol = safeSymbol(req.params.symbol);
+  const cacheKey = symbol.toUpperCase();
+  const cached = quoteCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < quoteCacheTtlMs) {
+    return res.json({ ...cached.payload, cache: 'hit' });
+  }
+  const candidates = [
+    ['finnhub', Boolean(process.env.JPTI_FINNHUB_API_KEY)],
+    ['alphavantage', Boolean(process.env.JPTI_ALPHAVANTAGE_API_KEY)],
+    ['twelvedata', Boolean(process.env.JPTI_TWELVEDATA_API_KEY)],
+    ['alpaca', Boolean(process.env.JPTI_ALPACA_API_KEY && process.env.JPTI_ALPACA_API_SECRET)]
+  ].filter(([, configured]) => configured).map(([id]) => id);
+  const results = await Promise.all(candidates.map(async (provider) => {
+    try {
+      const quote = await quoteSource(provider, symbol);
+      return quote ? { provider, status: 'ok', quote } : { provider, status: 'no-quote', error: 'Provider returned no usable price.' };
+    } catch (error) {
+      return { provider, status: 'error', error: error.message, httpStatus: error.status || 502 };
+    }
+  }));
+  const observations = results.filter((item) => item.quote).map((item) => item.quote);
+  const consensus = buildQuoteConsensus(symbol, observations);
+  const payload = { ...consensus, providerResults: results.map(({ provider, status, error, httpStatus }) => ({ provider, status, ...(error ? { error } : {}), ...(httpStatus ? { httpStatus } : {}) })),
+    cache: 'miss', cacheTtlMs: quoteCacheTtlMs,
+    note: candidates.length ? 'Only configured providers were queried. Provider errors and plan restrictions remain visible.' : 'No quote providers are configured. Add server-side provider credentials to enable cross-provider checks.' };
+  quoteCache.set(cacheKey, { createdAt: Date.now(), payload });
+  if (quoteCache.size > 500) quoteCache.delete(quoteCache.keys().next().value);
+  res.json(payload);
+});
