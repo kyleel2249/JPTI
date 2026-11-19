@@ -8,11 +8,11 @@ export function detectSmartMoney(candles, swingLength = 3) {
       const pivot = i - swingLength;
       const sample = candles.slice(pivot - swingLength, pivot + swingLength + 1);
       if (sample.every((c,j) => j === swingLength || candles[pivot][2] > c[2])) {
-        lastHigh = { index: pivot, price: candles[pivot][2], broken: false };
+        lastHigh = { index: pivot, price: candles[pivot][2], broken: false, swept: false };
         swingHighs.push(lastHigh);
       }
       if (sample.every((c,j) => j === swingLength || candles[pivot][3] < c[3])) {
-        lastLow = { index: pivot, price: candles[pivot][3], broken: false };
+        lastLow = { index: pivot, price: candles[pivot][3], broken: false, swept: false };
         swingLows.push(lastLow);
       }
     }
@@ -22,8 +22,8 @@ export function detectSmartMoney(candles, swingLength = 3) {
       if (c[3] > two[2]) fairValueGaps.push({ direction:'bullish', start:i-2, end:i, top:c[3], bottom:two[2] });
       if (c[2] < two[3]) fairValueGaps.push({ direction:'bearish', start:i-2, end:i, top:two[3], bottom:c[2] });
     }
-    if (lastHigh && !lastHigh.broken && c[2] > lastHigh.price && c[4] < lastHigh.price) liquiditySweeps.push({ direction:'buy-side', index:i, level:lastHigh.price });
-    if (lastLow && !lastLow.broken && c[3] < lastLow.price && c[4] > lastLow.price) liquiditySweeps.push({ direction:'sell-side', index:i, level:lastLow.price });
+    if (lastHigh && !lastHigh.broken && !lastHigh.swept && c[2] > lastHigh.price && c[4] < lastHigh.price) { liquiditySweeps.push({ direction:'buy-side', index:i, level:lastHigh.price }); lastHigh.swept = true; }
+    if (lastLow && !lastLow.broken && !lastLow.swept && c[3] < lastLow.price && c[4] > lastLow.price) { liquiditySweeps.push({ direction:'sell-side', index:i, level:lastLow.price }); lastLow.swept = true; }
     if (lastHigh && !lastHigh.broken && c[4] > lastHigh.price && previous && previous[4] <= lastHigh.price) {
       const kind = trend < 0 ? 'CHoCH' : 'BOS';
       structureBreaks.push({ direction:'bullish', kind, index:i, level:lastHigh.price });
