@@ -4,7 +4,7 @@ The gateway is a Node.js server-side integration layer built on CCXT. It provide
 
 ## Supported adapter catalog
 
-The runtime catalog includes the exchanges available in the installed CCXT version from this list: Binance, Bybit, OKX, KuCoin, Kraken, Coinbase, Bitget, Gate.io, MEXC, HTX, Bitfinex, Gemini, Bitstamp, Crypto.com, Phemex, BingX, BitMart, Poloniex, Bitrue and WhiteBIT. The API returns the exact adapter capabilities detected at runtime. Exchange products, geographic availability, permissions and API feature support vary.
+The runtime catalog is generated dynamically from all exchange adapter IDs shipped in the installed CCXT version (100+ exchange APIs). JPTI reports the actual capabilities detected for each adapter. Exchange products, geographic availability, permissions and API feature support vary; live order execution is restricted to active spot markets with USDT quote currency in this initial gateway.
 
 ## Endpoints
 
