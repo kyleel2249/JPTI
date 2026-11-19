@@ -345,10 +345,15 @@ export function buildQuoteConsensus(symbol, observations) {
   const median = prices.length ? (prices.length % 2 ? prices[(prices.length - 1) / 2] : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2) : null;
   const spreadPercent = prices.length > 1 && median ? ((prices[prices.length - 1] - prices[0]) / median) * 100 : null;
   const outlierThreshold = Math.max(0.75, Number(process.env.JPTI_QUOTE_OUTLIER_THRESHOLD_PERCENT) || 1.5);
-  const sources = valid.map((item) => ({ ...item,
-    deviationFromMedianPercent: median ? ((item.price - median) / median) * 100 : null,
-    outlier: valid.length >= 3 && median ? Math.abs((item.price - median) / median) * 100 > outlierThreshold : false
-  }));
+  const staleAfterSeconds = Math.max(60, Math.min(3600, Number(process.env.JPTI_QUOTE_STALE_AFTER_SECONDS) || 900));
+  const sources = valid.map((item) => {
+    const timestampMs = Date.parse(item.timestamp || '');
+    const ageSeconds = Number.isFinite(timestampMs) ? Math.max(0, Math.round((Date.now() - timestampMs) / 1000)) : null;
+    return { ...item, ageSeconds, stale: ageSeconds != null && ageSeconds > staleAfterSeconds,
+      deviationFromMedianPercent: median ? ((item.price - median) / median) * 100 : null,
+      outlier: valid.length >= 3 && median ? Math.abs((item.price - median) / median) * 100 > outlierThreshold : false
+    };
+  });
   const currencies = [...new Set(sources.map((item) => item.currency).filter(Boolean))];
   const currencyConflict = currencies.length > 1;
   return {
@@ -364,7 +369,15 @@ export function buildQuoteConsensus(symbol, observations) {
   };
 }
 
+const providerLastRequestAt = new Map();
+const providerCooldowns = { finnhub: 1000, alphavantage: 3600000, twelvedata: 8000, alpaca: 500 };
+
 async function quoteSource(provider, symbol) {
+  const cooldownMs = Math.max(providerCooldowns[provider] || 1000, Number(process.env['JPTI_' + provider.toUpperCase() + '_MIN_INTERVAL_MS']) || 0);
+  const lastRequest = providerLastRequestAt.get(provider) || 0;
+  const waitMs = cooldownMs - (Date.now() - lastRequest);
+  if (waitMs > 0) throw Object.assign(new Error('Provider cooldown active. Retry in approximately ' + Math.ceil(waitMs / 1000) + ' seconds.'), { status: 429 });
+  providerLastRequestAt.set(provider, Date.now());
   const stamp = now();
   if (provider === 'finnhub') {
     const key = requireKey('JPTI_FINNHUB_API_KEY', 'Finnhub');
