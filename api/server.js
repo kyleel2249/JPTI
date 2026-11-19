@@ -76,6 +76,22 @@ app.get('/api/exchanges/:id/ticker/:symbol', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get('/api/exchanges/:id/ohlcv/:symbol', async (req, res, next) => {
+  const id = req.params.id.toLowerCase();
+  const symbol = req.params.symbol.toUpperCase().replace('-', '/');
+  const timeframe = String(req.query.timeframe || '1h');
+  const limit = Math.min(500, Math.max(20, Number.parseInt(req.query.limit || '120', 10) || 120));
+  try {
+    const candles = await withExchange(id, { privateAccess: false }, async (exchange) => {
+      if (!exchange.markets[symbol]) throw Object.assign(new Error(`Unknown market symbol: ${symbol}`), { status: 404 });
+      if (!exchange.has?.fetchOHLCV) throw Object.assign(new Error('OHLCV candles are unavailable for this exchange.'), { status: 501 });
+      if (exchange.timeframes && !exchange.timeframes[timeframe]) throw Object.assign(new Error(`Unsupported timeframe: ${timeframe}`), { status: 400 });
+      return exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
+    });
+    res.json({ exchange: id, symbol, timeframe, candles });
+  } catch (error) { next(error); }
+});
+
 app.get('/api/exchanges/:id/balance', async (req, res, next) => {
   const id = req.params.id.toLowerCase();
   try {
