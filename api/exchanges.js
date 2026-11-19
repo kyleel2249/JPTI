@@ -1,11 +1,6 @@
 import ccxt from 'ccxt';
 
-export const SUPPORTED_EXCHANGES = [
-  'binance', 'bybit', 'okx', 'kucoin', 'kraken', 'coinbase',
-  'bitget', 'gateio', 'mexc', 'htx', 'bitfinex', 'gemini',
-  'bitstamp', 'cryptocom', 'phemex', 'bingx', 'bitmart',
-  'poloniex', 'bitrue', 'whitebit'
-].filter((id) => ccxt.exchanges.includes(id));
+export const SUPPORTED_EXCHANGES = ccxt.exchanges.filter((id) => typeof ccxt[id] === 'function');
 
 const envKey = (id, suffix) => `JPTI_${id.replace(/[^a-z0-9]/gi, '_').toUpperCase()}_${suffix}`;
 
