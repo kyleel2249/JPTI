@@ -234,7 +234,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       <span>Avg vol: <b>{metrics.volume ? fmt(metrics.volume) : '—'}</b></span>
       {showStochRsi && <span>Stoch RSI: <b>{metrics.stochRsi == null ? '—' : metrics.stochRsi.toFixed(1)}</b></span>}
       {showObv && <span>OBV: <b>{fmt(metrics.obv)}</b></span>}
-      {showSupertrend && <span>Supertrend: <b>{metrics.supertrend || '—'}</b></span>}
+      {showSupertrend && <span>Trend bias: <b>{metrics.supertrend || '—'}</b></span>}
       {marketCounts && <span>Listed: <b>{marketCounts[marketType] ?? '—'}</b></span>}
     </div>
     <div className="chart-ohlc-strip">
