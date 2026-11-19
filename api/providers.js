@@ -293,7 +293,7 @@ providerRouter.get('/providers/liquid/markets', async (_req, res) => {
 // Cross-provider quote consensus: normalized observations, explicit provenance and
 // anomaly flags. This is an intelligence aid, never an order trigger.
 const quoteCache = new Map();
-const quoteCacheTtlMs = Math.max(5000, Math.min(120000, Number(process.env.JPTI_QUOTE_CACHE_TTL_MS) || 15000));
+const quoteCacheTtlMs = Math.max(10000, Math.min(300000, Number(process.env.JPTI_QUOTE_CACHE_TTL_MS) || 30000));
 
 export function normalizeProviderQuote(provider, symbol, payload, fetchedAt = now()) {
   let price = null;
@@ -408,7 +408,7 @@ providerRouter.get('/providers/consensus/quote/:symbol', async (req, res) => {
   }
   const candidates = [
     ['finnhub', Boolean(process.env.JPTI_FINNHUB_API_KEY)],
-    ['alphavantage', Boolean(process.env.JPTI_ALPHAVANTAGE_API_KEY)],
+    ['alphavantage', Boolean(process.env.JPTI_ALPHAVANTAGE_API_KEY && process.env.JPTI_ENABLE_ALPHAVANTAGE_CONSENSUS === 'true')],
     ['twelvedata', Boolean(process.env.JPTI_TWELVEDATA_API_KEY)],
     ['alpaca', Boolean(process.env.JPTI_ALPACA_API_KEY && process.env.JPTI_ALPACA_API_SECRET)]
   ].filter(([, configured]) => configured).map(([id]) => id);
