@@ -373,7 +373,10 @@ const providerLastRequestAt = new Map();
 const providerCooldowns = { finnhub: 1000, alphavantage: 3600000, twelvedata: 8000, alpaca: 500 };
 
 async function quoteSource(provider, symbol) {
-  const cooldownMs = Math.max(providerCooldowns[provider] || 1000, Number(process.env['JPTI_' + provider.toUpperCase() + '_MIN_INTERVAL_MS']) || 0);
+  const configuredCooldown = Number(process.env['JPTI_' + provider.toUpperCase() + '_MIN_INTERVAL_MS']);
+  const cooldownMs = Number.isFinite(configuredCooldown) && configuredCooldown > 0
+    ? Math.max(providerCooldowns[provider] || 1000, configuredCooldown)
+    : (providerCooldowns[provider] || 1000);
   const lastRequest = providerLastRequestAt.get(provider) || 0;
   const waitMs = cooldownMs - (Date.now() - lastRequest);
   if (waitMs > 0) throw Object.assign(new Error('Provider cooldown active. Retry in approximately ' + Math.ceil(waitMs / 1000) + ' seconds.'), { status: 429 });
