@@ -183,7 +183,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
   return <section className="panel exchange-connect trading-chart-panel">
     <div className="panelhead">
       <span><b>Live market chart</b><small>OHLCV exchange data · {exchange.toUpperCase()}</small></span>
-      <i className="running">LIVE MARKET DATA</i>
+      <i className={candles.length ? "running" : "standby"}>{candles.length ? "LIVE MARKET DATA" : loading ? "CONNECTING" : "NO DATA"}</i>
     </div>
     <div className="chart-toolbar">
       <label htmlFor="jpti-symbol">Market</label>
