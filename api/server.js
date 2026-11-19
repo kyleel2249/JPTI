@@ -7,6 +7,7 @@ import { intelligenceRouter } from './intelligence.js';
 import { providerRouter } from './providers.js';
 import { operationsRouter, startOperationsScheduler } from './operations.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
+import { buildCrossVenueComparison } from './market-intelligence.js';
 
 const app = express();
 const port = Number(process.env.JPTI_API_PORT || 8787);
@@ -49,6 +50,45 @@ app.get('/api/exchanges', (_req, res) => res.json({
   count: listExchangeCatalog().length,
   exchanges: listExchangeCatalog()
 }));
+
+
+const crossVenueCache = new Map();
+app.get('/api/exchanges/compare/ticker', async (req, res) => {
+  const symbol = String(req.query.symbol || 'BTC/USDT').trim().toUpperCase();
+  if (!/^[A-Z0-9._-]{2,20}\/[A-Z0-9._-]{2,20}$/.test(symbol)) return res.status(400).json({ error: 'Use a normalized BASE/QUOTE symbol, for example BTC/USDT.' });
+  const requested = String(req.query.exchanges || 'binance,bitget,bybit,okx').split(',').map((id) => id.trim().toLowerCase()).filter(Boolean);
+  const exchangeIds = [...new Set(requested)].slice(0, 6);
+  const supported = new Set(listExchangeCatalog().map((item) => item.id));
+  const unsupported = exchangeIds.filter((id) => !supported.has(id));
+  if (!exchangeIds.length) return res.status(400).json({ error: 'Select at least one exchange.' });
+  if (unsupported.length) return res.status(400).json({ error: 'Unsupported exchange IDs.', unsupported });
+  const cacheKey = symbol + '|' + exchangeIds.join(',');
+  const cached = crossVenueCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < 5000) return res.json({ ...cached.payload, cache: 'hit' });
+  const results = await Promise.all(exchangeIds.map(async (id) => {
+    try {
+      const ticker = await withExchange(id, { privateAccess: false }, async (exchange) => {
+        if (!exchange.has?.fetchTicker) throw Object.assign(new Error('Ticker capability unavailable.'), { status: 501 });
+        if (!exchange.markets[symbol]) throw Object.assign(new Error('Market symbol is not listed on this venue.'), { status: 404 });
+        return exchange.fetchTicker(symbol);
+      });
+      return { exchange: id, status: 'ok', observation: {
+        exchange: id, symbol, last: ticker.last, bid: ticker.bid, ask: ticker.ask,
+        baseVolume: ticker.baseVolume, quoteVolume: ticker.quoteVolume,
+        percentage: ticker.percentage, timestamp: ticker.timestamp ? new Date(ticker.timestamp).toISOString() : null
+      } };
+    } catch (error) {
+      return { exchange: id, status: 'error', error: error.message, httpStatus: error.status || 502 };
+    }
+  }));
+  const observations = results.filter((item) => item.observation).map((item) => item.observation);
+  const comparison = buildCrossVenueComparison(symbol, observations, Number(process.env.JPTI_CROSS_VENUE_OUTLIER_PERCENT) || 0.5);
+  const payload = { ...comparison, results: results.map(({ exchange, status, error, httpStatus }) => ({ exchange, status, ...(error ? { error } : {}), ...(httpStatus ? { httpStatus } : {}) })),
+    cache: 'miss', cacheTtlMs: 5000, note: 'Public exchange tickers only. No private keys or orders are used.' };
+  crossVenueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  if (crossVenueCache.size > 200) crossVenueCache.delete(crossVenueCache.keys().next().value);
+  res.json(payload);
+});
 
 app.get('/api/exchanges/:id/status', (req, res) => {
   const status = exchangeConnectionStatus(req.params.id.toLowerCase());
