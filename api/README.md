@@ -12,8 +12,9 @@ The runtime catalog includes the exchanges available in the installed CCXT versi
 - `GET /api/exchanges` — supported exchange adapters and configured status.
 - `GET /api/exchanges/:id/status` — credential presence (never returns secrets).
 - `GET /api/exchanges/:id/markets` — active spot market catalog.
-- `GET /api/exchanges/:id/ticker/:symbol` — live ticker, e.g. `binance/BTC-USDT` via `/api/exchanges/binance/ticker/BTC-USDT`.
-- `GET /api/exchanges/:id/balance` — private account balances; requires server-side credentials.
+- `GET /api/exchanges/:id/ticker/:symbol` — live ticker, e.g. `/api/exchanges/binance/ticker/BTC-USDT`.
+- `GET /api/exchanges/:id/ohlcv/:symbol?timeframe=1h&limit=120` — live OHLCV candle history.
+- `GET /api/exchanges/:id/balance` — private account balances; requires server-side credentials and the `x-jpti-api-token` header.
 - `POST /api/exchanges/:id/orders` — locked live spot order endpoint.
 
 Order JSON: `{"symbol":"BTC/USDT","side":"buy","type":"limit","amount":0.001,"price":60000}`.
