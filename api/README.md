@@ -89,3 +89,56 @@ Set these values in the server `.env`:
 - `JPTI_SCHEDULER_ENABLED=true` — master scheduler policy flag.
 
 Read effective validated values from `GET /api/providers/intervals`. Bounds are enforced in seconds to prevent zero/negative or extreme polling values. Important: this commit exposes the operational settings and provider adapters; it does not yet create durable investor-watchlist, portfolio reconciliation or market-making workers. Do not treat a displayed interval as proof that a worker is running. Reconciliation requires a persisted ledger and exchange order/fill history; investor monitoring requires configured investor/watchlists and licensed source data; market-making requires a separately risk-approved quoting engine. Those services remain future implementation stages.
+
+
+## Operations scheduler, live monitor and durable transaction ledger
+
+The futuristic command-center dashboard reads actual API health, provider registry, scheduler state, recent audit events and transaction-event counts. It deliberately does not invent balances, PnL, positions or strategy performance.
+
+The API starts a server-side operations scheduler when the server starts (unless `JPTI_SCHEDULER_ENABLED=false`):
+- Market monitor: samples live CCXT tickers for the server-side watchlist configured with `JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT`. It reports per-market errors and last successful snapshots.
+- Provider registry monitor: checks credential/public-provider configuration. This is a configuration check, not a full authenticated connectivity test.
+- Reconciliation, investor, market-making, news and on-chain jobs expose explicit prerequisite/disabled states. They do not fabricate activity or submit orders.
+- Market ticker sampling and durable snapshot persistence are separate: snapshots default to a 60-second write cadence to limit local disk growth.
+
+### Operational endpoints
+- `GET /api/operations/overview` — scheduler uptime, job status, last-run timestamps, intervals and market snapshots.
+- `GET /api/operations/events?limit=100` — recent persisted operational events.
+- `GET /api/operations/ledger/summary` — transaction event counts by type; not a balance or PnL calculation.
+- `POST /api/operations/ledger/events` — authenticated append-only transaction-event ingestion.
+
+Transaction ingestion requires `x-jpti-api-token` matching the server-side `JPTI_API_TOKEN`. Example body:
+```json
+{
+  "source": "alpaca",
+  "eventType": "fill",
+  "externalId": "provider-fill-id-123",
+  "accountId": "paper-account-01",
+  "symbol": "AAPL",
+  "side": "buy",
+  "quantity": 2,
+  "price": 190.25,
+  "fee": 0.01,
+  "feeCurrency": "USD",
+  "occurredAt": "2026-11-19T12:00:00.000Z"
+}
+```
+The source/account/external-ID tuple is used for duplicate detection. The local JSONL event store is written under `JPTI_DATA_DIR` (default `data/`) and excluded from Git. Back it up and protect the host filesystem. This is an initial single-process local persistence implementation, not yet a multi-user database, distributed queue or institutional reconciliation ledger.
+
+### Watchlist and interval configuration
+```env
+JPTI_SCHEDULER_ENABLED=true
+JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT
+JPTI_MM_INTERVAL_SECONDS=5
+JPTI_MARKET_MONITOR_INTERVAL_SECONDS=5
+JPTI_RECONCILE_INTERVAL_SECONDS=30
+JPTI_INVESTOR_MONITOR_INTERVAL_SECONDS=60
+JPTI_PROVIDER_HEALTH_INTERVAL_SECONDS=300
+JPTI_MARKET_DATA_REFRESH_INTERVAL_SECONDS=5
+JPTI_NEWS_REFRESH_INTERVAL_SECONDS=60
+JPTI_ONCHAIN_REFRESH_INTERVAL_SECONDS=30
+JPTI_MONITOR_PERSIST_INTERVAL_SECONDS=60
+JPTI_DATA_DIR=data
+```
+
+MM interval is a target cadence only; the market-making worker remains disabled. Reconciliation and investor monitoring report waiting states until real account-fill ingestion and investor/watchlist sources are connected. Do not expose the local API directly to the internet; production deployment requires managed database storage, authentication, TLS, secret management, audit retention and operational monitoring.
