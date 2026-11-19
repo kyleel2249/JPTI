@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getOperationalIntervals, providerDirectory } from './providers.js';
+import { buildQuoteConsensus, getOperationalIntervals, normalizeProviderQuote, providerDirectory } from './providers.js';
 
 test('provider registry includes requested market, news and blockchain vendors', () => {
   const ids = providerDirectory().map((item) => item.id);
@@ -30,4 +30,34 @@ test('provider directory exposes credential presence without leaking secret valu
     if (previousKey === undefined) delete process.env.JPTI_ALPACA_API_KEY; else process.env.JPTI_ALPACA_API_KEY = previousKey;
     if (previousSecret === undefined) delete process.env.JPTI_ALPACA_API_SECRET; else process.env.JPTI_ALPACA_API_SECRET = previousSecret;
   }
+});
+
+test('provider quote normalizers reject missing and non-positive prices', () => {
+  assert.equal(normalizeProviderQuote('finnhub', 'AAPL', { c: 0 }), null);
+  const quote = normalizeProviderQuote('finnhub', 'AAPL', { c: 201.5, d: 1.5, dp: 0.75, t: 1795000000 });
+  assert.equal(quote.price, 201.5);
+  assert.equal(quote.changePercent, 0.75);
+  assert.equal(quote.currency, 'USD');
+});
+
+test('quote consensus uses median and flags statistical outliers with three sources', () => {
+  const result = buildQuoteConsensus('AAPL', [
+    { provider: 'a', price: 100, currency: 'USD' },
+    { provider: 'b', price: 101, currency: 'USD' },
+    { provider: 'c', price: 140, currency: 'USD' }
+  ]);
+  assert.equal(result.consensusPrice, 101);
+  assert.equal(result.sourceCount, 3);
+  assert.equal(result.confidence, 'multi-source');
+  assert.equal(result.sources.find((item) => item.provider === 'c').outlier, true);
+});
+
+test('quote consensus refuses to combine explicit currency conflicts', () => {
+  const result = buildQuoteConsensus('XYZ', [
+    { provider: 'a', price: 100, currency: 'USD' },
+    { provider: 'b', price: 90, currency: 'EUR' }
+  ]);
+  assert.equal(result.consensusPrice, null);
+  assert.equal(result.currencyConflict, true);
+  assert.equal(result.confidence, 'currency-conflict');
 });
