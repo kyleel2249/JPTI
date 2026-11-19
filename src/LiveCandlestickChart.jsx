@@ -129,7 +129,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     setLoading(true);
     try {
       const encodedSymbol = symbol.replace('/', '-');
-      const [candleResponse, tickerResponse] = await Promise.all([
+      const [candleResponse, tickerResponse, contextResponse] = await Promise.all([
         fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
         fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
         fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
@@ -153,7 +153,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     const refresh = async () => {
       try {
         const encodedSymbol = symbol.replace('/', '-');
-        const [candleResponse, tickerResponse] = await Promise.all([
+        const [candleResponse, tickerResponse, contextResponse] = await Promise.all([
           fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
           fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
           fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
@@ -202,7 +202,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     const max = Math.max(...rows.map((c) => c[2]));
     const padding = (max - min || max * 0.002 || 1) * 0.09;
     const low = min - padding, high = max + padding;
-    const left = 12, right = 920, top = 18, priceBottom = 300, volumeBottom = 378;
+    const left = 12, right = 920, top = 18, priceBottom = 280, volumeBottom = 378;
     const x = (i) => left + (i + 0.5) * ((right - left) / rows.length);
     const y = (price) => top + ((high - price) / (high - low)) * (priceBottom - top);
     const maxVol = Math.max(1, ...rows.map((c) => c[5]));
@@ -240,7 +240,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     <div className="chart-size-controls" aria-label="Chart sizing controls">
       <label><span>Candle spacing <b>{candleSpacing.toFixed(2)}×</b></span><input aria-label="Candle spacing" type="range" min="0.65" max="2.4" step="0.05" value={candleSpacing} onChange={(e) => setCandleSpacing(Number(e.target.value))}/></label>
       <label><span>Candle body width <b>{candleBodyPct}%</b></span><input aria-label="Candle body width" type="range" min="35" max="100" step="1" value={candleBodyPct} onChange={(e) => setCandleBodyPct(Number(e.target.value))}/></label>
-      <label><span>Volume height <b>{volumeHeight}px</b></span><input aria-label="Volume height" type="range" min="20" max="115" step="1" value={volumeHeight} onChange={(e) => setVolumeHeight(Number(e.target.value))}/></label>
+      <label><span>Volume height <b>{volumeHeight}px</b></span><input aria-label="Volume height" type="range" min="20" max="90" step="1" value={volumeHeight} onChange={(e) => setVolumeHeight(Number(e.target.value))}/></label>
       <button type="button" onClick={() => { setCandleSpacing(1.35); setCandleBodyPct(88); setVolumeHeight(78); setZoom(1); }}>Reset chart sizing</button>
     </div>
     <div className="chart-indicator-controls">
