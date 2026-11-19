@@ -43,6 +43,15 @@ export function scoreMarketContext({ priceChangePct = null, volumeChangePct = nu
   return { score: Number(score.toFixed(2)), direction, confidence: evidence.length < 2 ? 'low' : evidence.length < 4 ? 'moderate' : 'higher', evidence, caveat: 'Heuristic research score, not a probability, forecast, or trade instruction. Missing inputs are not treated as zero evidence.' };
 }
 
+
+intelligenceRouter.post('/score', express.json(), (req, res) => {
+  const input = req.body || {};
+  const numeric = ['priceChangePct', 'volumeChangePct', 'netExchangeFlow', 'stablecoinSupplyChangePct'];
+  for (const field of numeric) if (input[field] !== undefined && !Number.isFinite(input[field])) return res.status(400).json({ error: `${field} must be a finite number.` });
+  if (input.macroBias !== undefined && !['risk-on', 'risk-off', 'neutral'].includes(input.macroBias)) return res.status(400).json({ error: 'macroBias must be risk-on, risk-off or neutral.' });
+  res.json({ generatedAt: new Date().toISOString(), ...scoreMarketContext(input) });
+});
+
 intelligenceRouter.get('/overview', async (_req, res) => {
   const [global, chains, stablecoins, fees] = await Promise.all([
     settledSource('CoinGecko global crypto market', () => fetchJson('https://api.coingecko.com/api/v3/global')),
