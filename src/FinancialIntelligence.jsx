@@ -49,6 +49,7 @@ export default function FinancialIntelligence() {
   useEffect(() => {
     loadOverview();
     loadMacro();
+    loadProviders();
     const timer = setInterval(loadOverview, 60000);
     return () => clearInterval(timer);
   }, [loadOverview, loadMacro, loadProviders]);
@@ -71,7 +72,7 @@ export default function FinancialIntelligence() {
   const global = overview?.global;
   const market = global?.market_cap_percentage || {};
   return <section className="intel-page">
-    <div className="intel-intro"><div><b>GLOBAL FINANCIAL & ON-CHAIN INTELLIGENCE</b><p>Cross-market context from public data providers, macroeconomic series and address-level blockchain history.</p></div><button onClick={() => { loadOverview(); loadMacro(); }}>Refresh data</button></div>
+    <div className="intel-intro"><div><b>GLOBAL FINANCIAL & ON-CHAIN INTELLIGENCE</b><p>Cross-market context from public data providers, macroeconomic series and address-level blockchain history.</p></div><button onClick={() => { loadOverview(); loadMacro(); loadProviders(); }}>Refresh data</button></div>
     {error && <div className="intel-warning">{error}</div>}
     <div className="intel-grid">
       <article className="intel-card"><small>GLOBAL CRYPTO MARKET CAP</small><strong>{usd(global?.total_market_cap?.usd)}</strong><span>24h change: {fmt(global?.market_cap_change_percentage_24h_usd)}%</span></article>
