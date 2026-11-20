@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ExchangeConnectivity from './ExchangeConnectivity.jsx';
 import FinancialIntelligence from './FinancialIntelligence.jsx';
 import UniversalEngine from './UniversalEngine.jsx';
+import ConnectionSettings from './ConnectionSettings.jsx';
+import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
   ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2,
@@ -24,7 +26,8 @@ const navigation = [
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
   { label: 'Forecast & Strategy', icon: Gauge, group: 'RESEARCH' },
   { label: 'Walk-Forward Lab', icon: SlidersHorizontal, group: 'RESEARCH' },
-  { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' }
+  { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' },
+  { label: 'Connection Settings', icon: Settings2, group: 'SYSTEM' }
 ];
 
 const fmt = (value) => value == null ? '—' : Number(value).toLocaleString();
@@ -91,7 +94,7 @@ function App() {
   const refresh = useCallback(async () => {
     try {
       const paths = ['/api/health', '/api/operations/overview', '/api/providers', '/api/operations/ledger/summary', '/api/operations/events?limit=12'];
-      const responses = await Promise.all(paths.map((path) => fetch(path, { cache: 'no-store' })));
+      const responses = await Promise.all(paths.map((path) => apiFetch(path, { cache: 'no-store' })));
       const payloads = await Promise.all(responses.map((response) => response.json()));
       const failed = responses.findIndex((response) => !response.ok);
       if (failed >= 0) throw new Error(payloads[failed]?.error || 'JPTI service endpoint unavailable');
@@ -255,7 +258,7 @@ function App() {
 
   useEffect(() => {
     if (page !== 'Forecast & Strategy') { setStreamData(null); return undefined; }
-    const source = new EventSource('/api/advanced/stream/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?intervalMs=2000');
+    const source = new EventSource(apiUrl('/api/advanced/stream/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?intervalMs=2000'));
     source.addEventListener('intelligence', event => { try { setStreamData(JSON.parse(event.data)); } catch {} });
     return () => source.close();
   }, [page, forecastExchange, symbol]);
@@ -282,7 +285,8 @@ function App() {
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
-    'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
+    'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.',
+    'Connection Settings': 'Choose local desktop mode or connect this device to your secured cloud JPTI service.'
   };
 
   const renderOperations = () => (
@@ -385,6 +389,7 @@ function App() {
   );
 
   const renderWorkspace = () => {
+    if (page === 'Connection Settings') return <ConnectionSettings/>;
     if (page === 'Universal Engine') return <UniversalEngine/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
@@ -536,7 +541,7 @@ function App() {
       <label className="side-label">NAVIGATION</label>
       <div className="side-search"><Search size={14}/><input placeholder="Find a workspace" value={query} onChange={(e) => setQuery(e.target.value)}/><Command size={12}/></div>
       <nav>{groups.map((group) => <div className="nav-group" key={group}><small>{group}</small>{filteredNav.filter((item) => item.group === group).map((item) => { const Icon = item.icon; return <button key={item.label} className={page === item.label ? 'active' : ''} onClick={() => activeNav(item.label)}><Icon size={16}/><span>{item.label}</span>{item.label === 'Financial & On-chain' && <i>DATA</i>}</button>; })}</div>)}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-status"><span className="pulse-dot"/><span><b>{gatewayOnline ? 'SYSTEM OPERATIONAL' : 'CONNECTING TO API'}</b><small>{health?.mode || 'Awaiting gateway'}</small></span></div><div className="sidebar-footer"><span><Settings2 size={14}/> Settings</span><span><CircleHelp size={14}/> Help</span></div><small className="build-label">JPTI · SECURE TRADING INFRASTRUCTURE</small></div>
+      <div className="sidebar-bottom"><div className="sidebar-status"><span className="pulse-dot"/><span><b>{gatewayOnline ? 'SYSTEM OPERATIONAL' : 'CONNECTING TO API'}</b><small>{health?.mode || 'Awaiting gateway'}</small></span></div><div className="sidebar-footer"><button type="button" onClick={() => activeNav('Connection Settings')}><Settings2 size={14}/> Settings</button><span><CircleHelp size={14}/> Help</span></div><small className="build-label">JPTI · SECURE TRADING INFRASTRUCTURE</small></div>
     </aside>
 
     <main className="command-main">
