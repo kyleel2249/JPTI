@@ -450,7 +450,7 @@ function App() {
            <div><span>RECORDED FILLS</span><b>{performanceData.fillCount}</b></div>
            <div><span>MATCHED EXIT EXECUTIONS</span><b>{performanceData.matchedExitCount}</b></div>
            <div><span>UNMATCHED SELL EXECUTIONS</span><b>{performanceData.unmatchedSellExecutions}</b></div>
-           <div><span>STRATEGY LABEL COVERAGE</span><b>{performanceData.fillCount ? Math.round((1-performanceData.dataQuality.unattributedExits/Math.max(1,performanceData.matchedExitCount))*100) + '%' : '—'}</b></div>
+           <div><span>STRATEGY LABEL COVERAGE</span><b>{performanceData.matchedExitCount ? Math.round((1-performanceData.dataQuality.unattributedExits/performanceData.matchedExitCount)*100) + '%' : '—'}</b></div>
          </div>
          <h4>Realized performance by quote currency</h4>
          <div className="scanner-table"><div><span>QUOTE</span><span>NET REALIZED PNL</span><span>WIN RATE</span><span>PROFIT FACTOR</span><span>EXPECTANCY / EXIT</span></div>
@@ -470,8 +470,8 @@ function App() {
            {performanceData.bySession.map((row,index)=><div key={row.session+row.quoteCurrency+index}><b>{row.session}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
          </div>
          <h4>Daily realized PnL calendar data</h4>
-         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span><span>MAX DRAWDOWN</span></div>
-           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong><span>{fmt(currency.maxDrawdownCurrency)} {currency.quoteCurrency}</span></div>))}
+         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span><span>DAILY REALIZED PNL</span></div>
+           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong><span>{fmt(day.pnl)} {currency.quoteCurrency}</span></div>))}
          </div>
          <div className="risk-list">{performanceData.dataQuality.warnings.map((warning,index)=><p key={index}><ShieldCheck/>{warning}</p>)}</div>
          <p className="subtle-note">{performanceData.methodology} {performanceData.limitations.join(' ')}</p>
