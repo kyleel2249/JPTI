@@ -78,6 +78,9 @@ function App() {
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [reconciliationRun, setReconciliationRun] = useState(null);
   const [reconciliationBusy, setReconciliationBusy] = useState(false);
+  const [backfillSince, setBackfillSince] = useState(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [backfillResult, setBackfillResult] = useState(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
   const [riskData, setRiskData] = useState(null);
   const [riskError, setRiskError] = useState('');
   const [riskLoading, setRiskLoading] = useState(false);
@@ -187,6 +190,23 @@ function App() {
     } catch (error) { setRiskError(error.message); }
     finally { setRiskLoading(false); }
   }, [portfolioToken]);
+
+  const runHistoricalBackfill = useCallback(async () => {
+    if (!backfillSince) { setPortfolioError('Choose a historical start date first.'); return; }
+    setBackfillBusy(true); setBackfillResult(null); setPortfolioError('');
+    try {
+      const response = await fetch('/api/operations/fills/backfill', {
+        method: 'POST',
+        headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since: new Date(backfillSince + 'T00:00:00.000Z').toISOString() })
+      });
+      const data = await response.json();
+      if (!response.ok && response.status !== 207) throw new Error(data.error || 'Historical backfill failed.');
+      setBackfillResult(data);
+      await refresh();
+    } catch (error) { setPortfolioError(error.message); }
+    finally { setBackfillBusy(false); }
+  }, [backfillSince, portfolioToken, refresh]);
 
   const loadPortfolioAccounting = useCallback(async (event) => {
     if (event) event.preventDefault();
@@ -396,6 +416,17 @@ function App() {
        <div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div>
        <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (kept in this page's memory only)"/><button disabled={portfolioLoading || !portfolioToken}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
        <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || !portfolioToken}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
+       <div className="glass-panel detail-workspace">
+         <span className="eyebrow">HISTORICAL TRADE RECOVERY</span>
+         <h4>Backfill exchange trade history</h4>
+         <p className="subtle-note">Import earlier fills for the exchanges and markets in JPTI_FILL_SYNC_MARKETS. Existing fills are deduplicated. Backfill uses a separate cursor and does not move the scheduled live-sync cursor.</p>
+         <div className="news-search"><label>Import starting date <input type="date" value={backfillSince} onChange={event => setBackfillSince(event.target.value)} /></label><button type="button" onClick={runHistoricalBackfill} disabled={backfillBusy || !portfolioToken || !backfillSince}>{backfillBusy ? 'Importing historical trades…' : 'Start historical backfill'}</button></div>
+         {backfillResult && <div className="quote-consensus-stats">
+           <div><span>FETCHED</span><b>{backfillResult.fetched}</b></div><div><span>NEWLY IMPORTED</span><b>{backfillResult.ingested}</b></div><div><span>DUPLICATES</span><b>{backfillResult.duplicates}</b></div><div><span>PAGE-CAPPED MARKETS</span><b>{backfillResult.cappedMarkets}</b></div>
+           {backfillResult.markets.map(market => <p className="subtle-note" key={market.exchange+market.symbol}>{market.exchange} · {market.symbol}: {market.pages} page(s), {market.fetched} fetched, {market.ingested} new, {market.invalidOrUnsupported} unsupported. {market.pageLimitReached ? 'More pages remain; run again to continue.' : 'History window completed.'}</p>)}
+           {backfillResult.errors.map((error,index) => <p className="quote-error" key={index}>{error}</p>)}
+         </div>}
+       </div>
        {portfolioError && <p className="quote-error">{portfolioError}</p>}
        {portfolioData && <>
          <div className="quote-consensus-stats"><div><span>OPEN POSITIONS</span><b>{portfolioData.positions.length}</b></div><div><span>ASSET MOVEMENT LINES</span><b>{portfolioData.assetMovements.length}</b></div><div><span>EXCHANGE ACCOUNTS</span><b>{portfolioData.exchangeBalances.length}</b></div><div><span>REALIZED PNL CURRENCIES</span><b>{Object.keys(portfolioData.realizedPnlByQuoteCurrency).length}</b></div></div>
