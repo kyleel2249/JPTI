@@ -101,7 +101,7 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
 function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
 
 export function calculateExchangeRealized(events, now = Date.now()) {
-  const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={},unmatchedSellQuantity={};
+  const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={},unmatchedSellQuantityBySymbol={};
   let invalidBaseFeeEvents=0;
   const fills=events.filter(e=>e.eventType==='fill'&&e.symbol&&!String(e.symbol).includes(':')&&e.side&&finite(e.quantity)>0&&finite(e.price)>0)
     .sort((a,b)=>(Date.parse(a.occurredAt)||0)-(Date.parse(b.occurredAt)||0));
@@ -126,7 +126,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
       const matchedSale=Math.min(qty,Math.max(0,matched-matchedFee));
       realized=matchedSale*price-averageCost*matched;
       if(feeCurrency===quote)realized-=fee*(qty>0?matchedSale/qty:0);
-      if(matched+1e-12<requestedOut)unmatchedSellQuantity[quote]=(unmatchedSellQuantity[quote]||0)+(requestedOut-matched);
+      if(matched+1e-12<requestedOut)unmatchedSellQuantityBySymbol[e.symbol]=(unmatchedSellQuantityBySymbol[e.symbol]||0)+(requestedOut-matched);
       row.quantity-=matched;row.cost=Math.max(0,row.cost-averageCost*matched);
       if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
       realizedByQuote[quote]=(realizedByQuote[quote]||0)+realized;
@@ -135,7 +135,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     }
     inventory.set(key,row);
   }
-  return {realizedByQuote,dailyByQuote,feeTotals,unmatchedSellQuantity,invalidBaseFeeEvents,
+  return {realizedByQuote,dailyByQuote,feeTotals,unmatchedSellQuantityBySymbol,invalidBaseFeeEvents,
     openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
     caveat:'Weighted-average cost on recorded spot fills only. Base-denominated fees reduce acquired/disposed inventory; quote-denominated fees affect cost/proceeds. Missing opening inventory, transfers, funding, taxes and third-token fee conversion prevent a complete account PnL statement.'};
 }
@@ -474,7 +474,7 @@ universalRouter.get('/universal/portfolio',async(req,res)=>{
     res.set('Cache-Control','no-store').json({
       generatedAt:new Date().toISOString(),valuation:'Public exchange last/close price; no FX conversion or account-balance reconciliation.',
       positions,byQuote,realizedPnlByQuote:accounting.realizedByQuote,feesByCurrency:accounting.feeTotals,
-      unmatchedSellQuantityByQuote:accounting.unmatchedSellQuantity,invalidBaseFeeEvents:accounting.invalidBaseFeeEvents,
+      unmatchedSellQuantityBySymbol:accounting.unmatchedSellQuantityBySymbol,invalidBaseFeeEvents:accounting.invalidBaseFeeEvents,
       completeness:{openSpotInventory:'recorded fills only',unrealizedPnl:'only positions with a current public mark',cashBalances:'not included',paperPositions:'reported separately in paper performance',derivatives:'not included'},
       caveat:accounting.caveat
     });
