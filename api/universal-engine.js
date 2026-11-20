@@ -66,7 +66,7 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
 
 export function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
 
-function calculateExchangeRealized(events, now = Date.now()) {
+export function calculateExchangeRealized(events, now = Date.now()) {
   const inventory = new Map(), realizedByQuote = {}, dailyByQuote = {}, feeTotals = {};
   const fills = events.filter(e=>e.eventType==='fill' && e.symbol && e.side && finite(e.quantity)>0 && finite(e.price)>0)
     .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
@@ -121,7 +121,7 @@ export function calculateUnifiedRisk(events, options = {}) {
     maxDailyLossUsd, rolling24hUsdLoss:usdLoss,
     sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)}, exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote, exchangeFeesByCurrency:exchangeRealized.feeTotals,
     exitsRemainEnabled:true, mode:'paper-first',
-    caveat:'This first unified guard computes T-Bots closed paper PnL. Exchange fills are exposed in the unified performance report but are not silently converted or combined across currencies without FX marks.' };
+    caveat:'T-Bots paper PnL is USD-denominated. Exchange realized PnL is calculated from recorded fills; USD/USDT/USDC/DAI/FDUSD quote amounts are treated as approximate USD equivalents for the daily guard. Other quote currencies remain separate until an FX source is available.' };
 }
 
 export function buildUnifiedPerformance(events) {
