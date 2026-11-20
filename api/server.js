@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { classifyMarket, createExchange, exchangeConnectionStatus, listExchangeCatalog, withExchange } from './exchanges.js';
 import { intelligenceRouter } from './intelligence.js';
 import { providerRouter } from './providers.js';
-import { operationsRouter, startOperationsScheduler } from './operations.js';
+import { operationsRouter, startOperationsScheduler, stopOperationsScheduler } from './operations.js';
+import { initializeSchedulerLease, closeSchedulerLease } from './scheduler-lease.js';
 import { initializeStorage, closeStorage } from './storage.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 import { buildCrossVenueComparison } from './market-intelligence.js';
@@ -217,6 +218,7 @@ app.use((error, _req, res, _next) => {
 });
 
 await initializeStorage();
+await initializeSchedulerLease();
 const server = app.listen(port, host, () => {
   console.log(`JPTI API listening on http://${host}:${port}`);
   console.log(`Trading mode: ${process.env.JPTI_TRADING_MODE || 'paper'} | Live orders enabled: ${process.env.JPTI_ENABLE_LIVE_TRADING === 'true'}`);
@@ -227,7 +229,7 @@ const server = app.listen(port, host, () => {
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
     server.close(async () => {
-      try { await closeStorage(); } finally { process.exit(0); }
+      try { await stopOperationsScheduler(); await closeSchedulerLease(); await closeStorage(); } finally { process.exit(0); }
     });
   });
 }
