@@ -25,7 +25,7 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { poli
 app.use(express.json({ limit: '32kb', strict: true }));
 
 // Capacitor Android uses its own WebView origin. Only explicitly configured origins
-// receive CORS permission; same-origin web and Cloudflare Pages proxy need no CORS.
+// receive CORS permission; same-origin local web clients need no CORS.
 const allowedCorsOrigins = new Set(String(process.env.JPTI_CORS_ORIGINS || 'https://localhost,capacitor://localhost').split(',').map(value => value.trim()).filter(Boolean));
 app.use('/api', (req, res, next) => {
   const origin = req.get('origin');
