@@ -15,6 +15,7 @@ import { ExecutorAgent } from '../public/js/agents/executor.js';
 import { LoggerAgent } from '../public/js/agents/logger.js';
 import { mapPair, mapRugCheck, LiveFeed } from '../public/js/market/live-feed.js';
 import { runNight } from '../scripts/sweep.mjs';
+import { JptiBridge } from '../public/js/services/jpti-bridge.js';
 
 const cfg = () => cloneConfig(DEFAULT_CONFIG);
 const goodSec = () => ({ frozenMint: false, mintAuthorityOpen: false, lpUnlocked: false, devPct: 2, top10Pct: 20, bundledLaunch: false, lpLockedDays: 365, honeypot: false });
@@ -309,4 +310,45 @@ test('live feed: DexScreener and RugCheck mapping, fail-closed enrichment', asyn
   await failing.tick();
   assert.equal(failing.snapshot().length, 0);
   assert.ok(failing.errors.length > 0);
+});
+
+
+test('JPTI bridge sends fresh token evidence to the paper preflight and caches its response', async () => {
+  const originalFetch=globalThis.fetch;
+  let calls=0;
+  let payload=null;
+  globalThis.fetch=async (url,options={})=>{
+    calls++;
+    payload=JSON.parse(options.body);
+    return {ok:true,status:200,json:async()=>({allowed:true,decision:'paper_candidate',reasons:[]})};
+  };
+  try {
+    const bridge=new JptiBridge();
+    bridge.setToken('test-local-token');
+    const token={id:'base:0x123',symbol:'TEST',fetchedAt:new Date().toISOString(),
+      change1hPct:10,volume5mUsd:200,volume5mAvgUsd:100,liquidityUsd:50000,assetClass:'dex_token'};
+    const first=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
+    const second=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
+    assert.equal(first.allowed,true);
+    assert.equal(second.allowed,true);
+    assert.equal(calls,1);
+    assert.equal(payload.profileId,'meme_new_pair');
+    assert.equal(payload.securityStatus,'passed');
+    assert.equal(payload.evidence.relativeVolume,2);
+    assert.equal(payload.observedAt,token.fetchedAt);
+  } finally { globalThis.fetch=originalFetch; }
+});
+
+test('JPTI bridge fails closed when the paper preflight service is unavailable', async () => {
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async()=>{throw new Error('offline');};
+  try {
+    const bridge=new JptiBridge();
+    bridge.setToken('test-local-token');
+    const result=await bridge.preflightEntry({token:{id:'x',symbol:'X',fetchedAt:new Date().toISOString(),
+      change1hPct:10,volume5mUsd:20,volume5mAvgUsd:10,liquidityUsd:50000,assetClass:'dex_token'},
+      profileId:'meme_new_pair',securityPassed:true});
+    assert.equal(result.allowed,false);
+    assert.ok(result.reasons.some(reason=>reason.includes('fail-closed')));
+  } finally { globalThis.fetch=originalFetch; }
 });
