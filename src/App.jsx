@@ -64,6 +64,7 @@ function App() {
   const [forecastExchange, setForecastExchange] = useState('binance');
   const [forecastTimeframe, setForecastTimeframe] = useState('1h');
   const [labData, setLabData] = useState(null);
+  const [labStrategy, setLabStrategy] = useState('ema');
   const [labError, setLabError] = useState('');
   const [labLoading, setLabLoading] = useState(false);
   const [labTrainBars, setLabTrainBars] = useState(300);
@@ -158,7 +159,7 @@ function App() {
     if (event) event.preventDefault();
     setLabLoading(true); setLabError('');
     try {
-      const params = new URLSearchParams({ timeframe: forecastTimeframe, limit: '1000', trainBars: String(labTrainBars), testBars: String(labTestBars), stepBars: String(labTestBars), feeBps: '10' });
+      const params = new URLSearchParams({ strategy: labStrategy, timeframe: forecastTimeframe, limit: '1000', trainBars: String(labTrainBars), testBars: String(labTestBars), stepBars: String(labTestBars), feeBps: '10' });
       const url = '/api/advanced/lab/walk-forward/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?' + params.toString();
       const response = await fetch(url, { cache: 'no-store' });
       const data = await response.json();
@@ -166,7 +167,7 @@ function App() {
       setLabData(data);
     } catch (error) { setLabError(error.message); }
     finally { setLabLoading(false); }
-  }, [forecastExchange, forecastTimeframe, symbol, labTrainBars, labTestBars]);
+  }, [forecastExchange, forecastTimeframe, symbol, labTrainBars, labTestBars, labStrategy]);
 
   const loadPortfolioAccounting = useCallback(async (event) => {
     if (event) event.preventDefault();
@@ -336,15 +337,16 @@ function App() {
        <form className="news-search" onSubmit={runWalkForward}>
          <select value={forecastExchange} onChange={e => setForecastExchange(e.target.value)}><option value="binance">Binance</option><option value="bitget">Bitget</option><option value="bybit">Bybit</option><option value="okx">OKX</option></select>
          <select value={forecastTimeframe} onChange={e => setForecastTimeframe(e.target.value)}><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select>
+         <select value={labStrategy} onChange={e => setLabStrategy(e.target.value)}><option value="ema">EMA crossover</option><option value="rsi">RSI mean reversion</option><option value="donchian">Donchian breakout</option></select>
          <input type="number" min="100" max="900" value={labTrainBars} onChange={e => setLabTrainBars(e.target.value)} aria-label="Training candles"/>
          <input type="number" min="20" max="300" value={labTestBars} onChange={e => setLabTestBars(e.target.value)} aria-label="Test candles"/>
          <button disabled={labLoading}>{labLoading ? 'Validating…' : 'Run walk-forward on ' + symbol}</button>
        </form>
-       <p className="subtle-note">Training candles · test candles · 10 bps fee assumption · default EMA parameter grid. Requires enough history for at least one complete fold.</p>
+       <p className="subtle-note">Training candles · test candles · 10 bps fee assumption · strategy-specific parameter grid for EMA, RSI or Donchian. Requires enough history for at least one complete fold.</p>
        {labError && <p className="quote-error">{labError}</p>}
        {labData && <>
          <div className="quote-consensus-stats"><div><span>AGGREGATE OOS RETURN</span><b>{Number(labData.aggregateOutOfSample.totalReturnPercent).toFixed(2)}%</b></div><div><span>OOS MAX DRAWDOWN</span><b>{Number(labData.aggregateOutOfSample.maxDrawdownPercent).toFixed(2)}%</b></div><div><span>OOS OBSERVATIONS</span><b>{labData.aggregateOutOfSample.observations}</b></div><div><span>WALK-FORWARD FOLDS</span><b>{labData.folds.length}</b></div></div>
-         <div className="scanner-table"><div><span>FOLD</span><span>SELECTED EMA</span><span>OOS RETURN</span><span>OOS DRAWDOWN</span><span>OOS BARS</span></div>{labData.folds.map(f => <div key={f.fold}><b>{f.fold}</b><strong className="up">{f.selectedParameters.fast}/{f.selectedParameters.slow}</strong><strong className={f.outOfSample.totalReturnPercent >= 0 ? 'up' : 'down'}>{Number(f.outOfSample.totalReturnPercent).toFixed(2)}%</strong><span>{Number(f.outOfSample.maxDrawdownPercent).toFixed(2)}%</span><span>{f.outOfSample.observations}</span></div>)}</div>
+         <div className="scanner-table"><div><span>FOLD</span><span>SELECTED PARAMETERS</span><span>OOS RETURN</span><span>OOS DRAWDOWN</span><span>OOS BARS</span></div>{labData.folds.map(f => <div key={f.fold}><b>{f.fold}</b><strong className="up">{f.selectedParameters.fast}/{f.selectedParameters.slow}</strong><strong className={f.outOfSample.totalReturnPercent >= 0 ? 'up' : 'down'}>{Number(f.outOfSample.totalReturnPercent).toFixed(2)}%</strong><span>{Number(f.outOfSample.maxDrawdownPercent).toFixed(2)}%</span><span>{f.outOfSample.observations}</span></div>)}</div>
          <p className="subtle-note">{labData.caveats.join(' ')}</p>
        </>}
      </section>;
