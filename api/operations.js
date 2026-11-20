@@ -155,7 +155,7 @@ async function exchangeFillMonitor() {
       const saved = await persistLedgerTransaction(eventSchema.parse({ source: exchangeId, eventType: 'fill', externalId: String(trade.id),
         accountId: exchangeId, symbol: trade.symbol, side: trade.side, quantity: Number(trade.amount), price: Number(trade.price),
         fee: Number(fee.cost || 0), feeCurrency: fee.currency || quote,
-        occurredAt: trade.datetime || new Date(trade.timestamp || Date.now()).toISOString(),
+        occurredAt: new Date(Number(trade.timestamp) || Date.parse(trade.datetime) || Date.now()).toISOString(),
         metadata: { base, quote, orderId: String(trade.order || ''), tradeId: String(trade.id) } }));
       if (saved.duplicate) duplicates++; else ingested++;
       newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
