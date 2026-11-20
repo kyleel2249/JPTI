@@ -71,3 +71,8 @@ T-Bots requests fresh per-asset evidence from JPTI before new entries. If the ev
 - Macro and news sources provide context, not automated sentiment labels or guaranteed predictive value. FRED observations can be delayed and require `JPTI_FRED_API_KEY`.
 - Unified realized-risk accounting uses recorded fills and T-Bots paper closes. It does not yet combine open CEX/DEX positions, cash balances, unrealized PnL, cross-currency FX, deposits/withdrawals, funding, borrow or transfers into one verified account equity curve.
 - No production database/event bus, exchange WebSocket client, DEX swap router, wallet signing or live T-Bots execution is enabled.
+
+
+### Shared global regime and derivatives
+
+The JPTI bridge now prefers a Binance BTC/USDT perpetual benchmark through the Universal Engine, collecting OHLCV, multi-timeframe trend, order-book depth, funding and open-interest where the adapter supports them. It falls back to the earlier BTC spot context if the perpetual market is unavailable. T-Bots also refreshes CoinGecko global crypto market metrics, DeFiLlama chain TVL and optional FRED FEDFUNDS context. A broad crypto market-cap fall of 8% or more over 24 hours pauses new entries; BTC benchmark risk-off state and the shared realized-loss guard can also pause new entries. Existing exits remain enabled.
