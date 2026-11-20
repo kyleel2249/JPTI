@@ -116,7 +116,7 @@ cd android
 gradlew.bat assembleDebug
 ```
 
-For day-to-day development, start the local API and web interface with `npm run dev:all`. Use the Connection Settings workspace in Android to configure the PC's reachable LAN HTTPS API endpoint when connecting from a phone. Do not expose the API to the public internet; use a trusted private network and a strong API token. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
+For development, start the local API and web interface with `npm run dev:all`. Configure Android Connection Settings with the PC's reachable API address on your trusted local network. Do not expose the API to the public internet. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
 
 ## Architecture direction
 
