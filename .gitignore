@@ -8,3 +8,9 @@ dist
 
 # Local durable transaction and operations event store
 /data/
+
+# Desktop/mobile build output
+release/
+android/.gradle/
+android/build/
+android/app/build/
