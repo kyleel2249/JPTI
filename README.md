@@ -251,3 +251,8 @@ JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
 Universal Engine endpoints are documented in `integrations/t-bots/JPTI-MULTI-ASSET.md` and exposed under `/api/universal/*`.
 
 **Scope boundaries:** This is not literally every token pair on every chain or every instrument on every exchange. DexScreener's discovery feed is provider-limited; CEX markets are explicitly watchlisted. The T-Bots executor is still paper-only and supports DEX paper positions and selected CEX spot paper instruments. It does not place live CEX orders, sign Solana/EVM transactions, bridge assets or withdraw funds. Strategy registry coverage for equities, FX, commodities, indices and bonds is a research framework; dedicated live feeds, exchange adapters and validated asset-class strategies remain separate work. Unified risk is based on recorded closed paper trades and recorded exchange fills, not a fully reconciled cross-account equity ledger with unrealized PnL and FX.
+
+
+### T-Bots upstream adapter safety
+
+The hourly upstream sync continues to bring in T-Bots changes and open a review PR. JPTI-owned integration-critical files now have pinned upstream baselines and separate overlays. If upstream modifies one of those files, the sync script deliberately stops rather than overwriting either side; the change must be reconciled and the baseline/overlay refreshed before the sync PR can proceed. Other upstream files continue to sync normally. This is a guarded review process, not automatic live synchronization or automatic merging.
