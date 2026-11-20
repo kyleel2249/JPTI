@@ -24,7 +24,7 @@ npm install
 npm run desktop:dev
 ```
 
-The desktop shell builds the Vite UI, starts the API on `127.0.0.1:8787`, waits for its health endpoint, then opens a secured Electron window. The API is loopback-only. In desktop mode private read-only portfolio/reconciliation actions may use loopback-only authorization; requests from other machines cannot use that exception. The desktop always forces paper mode and disables live execution.
+The desktop shell builds the Vite UI, starts the API on `127.0.0.1:8787`, waits for its health endpoint, then opens a secured Electron window. The API is loopback-only. In desktop mode private read-only portfolio/reconciliation actions may use loopback-only authorization; requests from other machines cannot use that exception. The desktop always forces paper mode and disables live execution. It starts its local API/scheduler when the desktop process launches, even if you later switch the dashboard's Connection Settings to a cloud URL. Do not configure the same exchange accounts/watchlists on both local and cloud schedulers unless you intentionally coordinate them; otherwise you may duplicate polling and ledger ingestion.
 
 ### Build Windows installers
 
