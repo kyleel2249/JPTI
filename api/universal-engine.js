@@ -96,6 +96,64 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
     caveat:'Profile-specific required evidence must be present. Scores are deterministic heuristics, not calibrated probabilities or validated live strategies.' };
 }
 
+function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
+
+export function calculateExchangeRealized(events, now = Date.now()) {
+  const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={};
+  const fills=events.filter(e=>e.eventType==='fill'&&e.symbol&&!String(e.symbol).includes(':')&&e.side&&finite(e.quantity)>0&&finite(e.price)>0)
+    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+  for(const e of fills){
+    const key=e.source+':'+e.accountId+':'+e.symbol;
+    const [base,quote]=String(e.symbol).split('/');
+    if(!base||!quote)continue;
+    const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,symbol:e.symbol};
+    const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
+    if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
+    let realized=0;
+    if(e.side==='buy'){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=qty;}
+    else{
+      const matched=Math.min(qty,row.quantity),avg=row.quantity>0?row.cost/row.quantity:0;
+      realized=(price-avg)*matched;row.quantity-=matched;row.cost=Math.max(0,row.cost-avg*matched);
+      if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
+      if(e.feeCurrency===quote)realized-=fee;
+      realizedByQuote[quote]=(realizedByQuote[quote]||0)+realized;
+      if(Date.parse(e.occurredAt)>=now-86400000)dailyByQuote[quote]=(dailyByQuote[quote]||0)+realized;
+    }
+    inventory.set(key,row);
+  }
+  return {realizedByQuote,dailyByQuote,feeTotals,openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
+    caveat:'Weighted-average cost on recorded spot fills only. Missing opening inventory, transfers, funding, taxes and fees paid in third tokens prevent a complete account PnL statement.'};
+}
+
+export function calculateUnifiedRisk(events, options = {}) {
+  const now=options.now??Date.now();
+  const maxConsecutiveLosses=clamp(Number(options.maxConsecutiveLosses??3),1,20);
+  const maxDailyLossUsd=Math.max(0,Number(options.maxDailyLossUsd??100));
+  const botEvents=events.filter(e=>e.source==='tbots'&&e.eventType==='bot_trade'&&e.metadata?.action==='paper_closed')
+    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+  const closed=botEvents.map(e=>({at:e.occurredAt,pnl:finite(e.metadata?.pnl)})).filter(e=>e.pnl!==null);
+  const dayAgo=now-86400000,recent=closed.filter(e=>Date.parse(e.at)>=dayAgo);
+  let streak=0;for(const trade of [...closed].reverse()){if(trade.pnl<0)streak++;else break;}
+  const exchangeRealized=calculateExchangeRealized(events,now);
+  const dailyByQuote={...exchangeRealized.dailyByQuote};
+  for(const trade of recent)dailyByQuote.USD=(dailyByQuote.USD||0)+trade.pnl;
+  const stableDailyUsd=['USDT','USDC','DAI','FDUSD'].reduce((sum,q)=>sum+(exchangeRealized.dailyByQuote[q]||0),0);
+  const paperDailyUsd=recent.reduce((sum,e)=>sum+e.pnl,0);
+  const usdDaily=paperDailyUsd+stableDailyUsd+(exchangeRealized.dailyByQuote.USD||0);
+  dailyByQuote.USD=usdDaily;
+  const usdLoss=Math.max(0,-usdDaily);
+  const reasons=[];
+  if(streak>=maxConsecutiveLosses)reasons.push('consecutive_paper_loss_limit');
+  if(maxDailyLossUsd>0&&usdLoss>=maxDailyLossUsd)reasons.push('daily_usd_loss_limit');
+  return {generatedAt:new Date(now).toISOString(),newEntriesAllowed:reasons.length===0,pauseReasons:reasons,
+    consecutiveLosses:streak,maxConsecutiveLosses,rolling24hRealizedPnlByQuote:dailyByQuote,
+    maxDailyLossUsd,rolling24hUsdLoss:usdLoss,
+    sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)},
+    exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote,exchangeFeesByCurrency:exchangeRealized.feeTotals,
+    exitsRemainEnabled:true,mode:'paper-first',
+    caveat:'T-Bots paper PnL is USD-denominated. Exchange realized PnL uses recorded spot fills; USD/USDT/USDC/DAI/FDUSD are approximate USD equivalents for the daily guard. Other quote currencies remain separate until FX marks exist. Unrealized PnL and full cashflow reconciliation are not included.'};
+}
+
 export function buildUnifiedPerformance(events) {
   const trades = events.filter(e=>e.source==='tbots' && e.eventType==='bot_trade' && e.metadata?.action==='paper_closed');
   const pnl = trades.map(e=>finite(e.metadata?.pnl)).filter(v=>v!==null);
