@@ -13,6 +13,7 @@ test('walk-forward selects parameters only from prior training windows and repor
   assert.ok(Number.isFinite(result.aggregateOutOfSample.totalReturnPercent));
   assert.ok(result.folds.every(f => f.testStart > f.trainEnd));
   assert.ok(result.folds.every(f => f.selectedParameters.slow > f.selectedParameters.fast));
+  assert.ok(result.folds.every(f => f.outOfSample.observations === 100));
   assert.match(result.method, /out-of-sample/);
 });
 
