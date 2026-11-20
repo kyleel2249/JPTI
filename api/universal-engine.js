@@ -206,6 +206,11 @@ universalRouter.get('/universal/cex-watchlist',async(req,res)=>{
         ]);
         const rows=candles||[],last=rows.at(-1),prev=rows.length>=13?rows.at(-13):rows[0];
         const volumeUsd=rows.map(row=>(finite(row[5])||0)*(finite(row[4])||0));
+        const closes=rows.map(row=>finite(row[4])).filter(v=>v!==null);
+        const changes=closes.slice(-15).slice(1).map((v,i)=>v-closes.slice(-15)[i]);
+        const gains=changes.filter(v=>v>0),losses=changes.filter(v=>v<0).map(v=>-v);
+        const avgGain=gains.reduce((a,b)=>a+b,0)/14,avgLoss=losses.reduce((a,b)=>a+b,0)/14;
+        const rsi14=avgLoss===0?(avgGain>0?100:50):100-100/(1+avgGain/avgLoss);
         const avg=volumeUsd.length>1?volumeUsd.slice(0,-1).reduce((a,b)=>a+b,0)/(volumeUsd.length-1):null;
         const bidDepth=(book?.bids||[]).slice(0,10).reduce((s,x)=>s+x[0]*x[1],0);
         const askDepth=(book?.asks||[]).slice(0,10).reduce((s,x)=>s+x[0]*x[1],0);
@@ -213,7 +218,7 @@ universalRouter.get('/universal/cex-watchlist',async(req,res)=>{
         return {id:'cex:'+exchange+':'+symbol,chain:'cex',marketType:'cex',exchange,symbol,base:market.base,quote:market.quote,
           price:finite(ticker?.last),quoteVolume24h:finite(ticker?.quoteVolume),liquidityUsd:bidDepth+askDepth,
           volume5mUsd:volumeUsd.at(-1)??0,volume5mAvgUsd:avg,change1hPct:last&&prev&&prev[4]>0?(last[4]/prev[4]-1)*100:null,
-          spreadPct:spread,exchangeMarketActive:true,security:{exchangeListed:true},fetchedAt:new Date().toISOString()};
+          spreadPct:spread,rsi14,exchangeMarketActive:true,security:{exchangeListed:true},fetchedAt:new Date().toISOString()};
       });
     }));
     const markets=outcomes.filter(x=>x.status==='fulfilled').map(x=>x.value);
@@ -292,7 +297,7 @@ universalRouter.post('/universal/asset-evidence',(req,res)=>{
       priceChange1hPercent:finite(item.change1hPct),txns:{h1:{buys:finite(item.buys)??0,sells:finite(item.sells)??0}},ageHours:finite(item.ageMin)===null?null:Number(item.ageMin)/60};
     const score=scoreAssetEvidence(asset);
     return {id:String(item.id||item.chain+':'+item.address),chain:asset.chain,address:asset.base.address,symbol:asset.base.symbol,
-      score:score.score,verdict:score.verdict,warnings:score.warnings,components:score.components,
+      score:score.score,verdict:score.verdict,warnings:score.warnings,components:score.components,rsi14:finite(item.rsi14),
       sources:{dexMarketObservation:'T-Bots live DEX feed',jptiEvidenceModel:'JPTI explainable heuristic'},
       observedAt:new Date().toISOString(),decision:'research-only'};
   });
