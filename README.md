@@ -103,7 +103,7 @@ Live order execution is disabled by default. The API requires all of the followi
 5. An active spot market with USDT quote currency and adapter order support.
 6. Estimated order notional within `JPTI_MAX_ORDER_NOTIONAL_USDT` (default 100 USDT).
 
-These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. Do not expose it directly to the public internet or deploy it to Cloudflare as-is. JPTI is designed to run as a locally hosted Node.js API with a local web interface, Windows desktop application, and Android client. Keep the API bound to localhost on the PC; use the secured device connection settings only when connecting Android over your trusted local network.
+These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. JPTI is designed to run locally with a Node.js API, web interface, Windows desktop application and Android client. Keep the API bound to localhost on the PC; use secured device settings only over a trusted local network.
 
 ## Android
 
