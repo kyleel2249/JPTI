@@ -88,7 +88,7 @@ Set these values in the server `.env`:
 - `JPTI_ONCHAIN_REFRESH_INTERVAL_SECONDS=30` — on-chain refresh cadence target.
 - `JPTI_SCHEDULER_ENABLED=true` — master scheduler policy flag.
 
-Read effective validated values from `GET /api/providers/intervals`. Bounds are enforced in seconds to prevent zero/negative or extreme polling values. Important: this commit exposes the operational settings and provider adapters; it does not yet create durable investor-watchlist, portfolio reconciliation or market-making workers. Do not treat a displayed interval as proof that a worker is running. Reconciliation requires a persisted ledger and exchange order/fill history; investor monitoring requires configured investor/watchlists and licensed source data; market-making requires a separately risk-approved quoting engine. Those services remain future implementation stages.
+Read effective validated values from `GET /api/providers/intervals`. Bounds are enforced in seconds to prevent zero/negative or extreme polling values. Important: the scheduler now includes real market monitoring and optional private fill-history polling when JPTI_FILL_SYNC_MARKETS is configured. Portfolio accounting and current balance snapshots are available from the authenticated advanced endpoint, but a fully automated balance reconciliation still requires verified opening balances and complete external cash-flow history. Investor monitoring and market-making remain prerequisite-gated; a displayed interval is not proof that those workers are active.
 
 
 ## Operations scheduler, live monitor and durable transaction ledger
@@ -182,9 +182,9 @@ These read-oriented endpoints are mounted under \`/api/advanced\`:
 
 ### Institutional implementation boundaries
 
-This stage provides real exchange-fed OHLCV, order books, and exchange-reported derivatives fields where supported, plus deterministic research calculations. It does not claim calibrated forecast probabilities, trained ML models, proven spoofing identification, complete liquidation maps, automated multi-exchange fill ingestion, institutional lot accounting, autonomous AI agents, full parameter optimization, robust walk-forward orchestration, or live smart-order routing. Those require additional data coverage, durable time-series storage, venue-specific streaming adapters, portfolio accounting rules and validation. The current backtest is explicitly in-sample; do not use it as evidence of future profitability.
+The current implementation now includes rolling walk-forward validation for an EMA baseline, configurable scheduled exchange trade-history polling, authenticated weighted-average cost-basis accounting, ledger cash-flow movements, current private balance snapshots, and a server-sent event stream that polls exchange order-book and supported derivatives endpoints. The stream is polling-based, not a native exchange WebSocket. It does not claim calibrated forecast probabilities, trained ML models, proven spoofing identification, complete liquidation maps across venues, broad multi-strategy parameter optimization, institutional-grade database durability, full tax-lot/corporate-action accounting, autonomous AI agents, or live smart-order routing. Those require additional venue coverage, durable storage, market-impact/funding models, and independent validation. Walk-forward results remain a research baseline, not evidence of future profitability.
 
-All routes are read-only except the authenticated reconciliation calculation, which does not mutate the ledger. Existing live order controls remain separate and disabled by default. Keep API credentials server-side.
+Public market-data routes are read-only. Authenticated fill synchronization and ledger ingestion append normalized records to the local journal; portfolio accounting reads that journal and current exchange balances. Existing live-order controls remain separate and disabled by default. Keep API credentials server-side.
 
 
 ## Walk-forward research, automatic fill ingestion and portfolio accounting
