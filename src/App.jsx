@@ -435,20 +435,20 @@ function App() {
        <span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Portfolio accounting & reconciliation</h3>
        <p>{ledger?.eventCount ?? 0} transaction events recorded. Configure read-only trade-history keys and the fill watchlist to keep the ledger current.</p>
        <div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div>
-       <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (kept in this page's memory only)"/><button disabled={portfolioLoading || !portfolioToken}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
-       <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || !portfolioToken}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
+       <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (required for cloud; optional in local desktop)"/><button disabled={portfolioLoading || (!portfolioToken && !health?.localPrivateAccess)}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
+       <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || (!portfolioToken && !health?.localPrivateAccess)}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
        <div className="glass-panel detail-workspace">
          <span className="eyebrow">HISTORICAL TRADE RECOVERY</span>
          <h4>Backfill exchange trade history</h4>
          <p className="subtle-note">Import earlier fills for the exchanges and markets in JPTI_FILL_SYNC_MARKETS. Existing fills are deduplicated. Backfill uses a separate cursor and does not move the scheduled live-sync cursor.</p>
-         <div className="news-search"><label>Import starting date <input type="date" value={backfillSince} onChange={event => setBackfillSince(event.target.value)} /></label><button type="button" onClick={runHistoricalBackfill} disabled={backfillBusy || !portfolioToken || !backfillSince}>{backfillBusy ? 'Importing historical trades…' : 'Start historical backfill'}</button></div>
+         <div className="news-search"><label>Import starting date <input type="date" value={backfillSince} onChange={event => setBackfillSince(event.target.value)} /></label><button type="button" onClick={runHistoricalBackfill} disabled={backfillBusy || (!portfolioToken && !health?.localPrivateAccess) || !backfillSince}>{backfillBusy ? 'Importing historical trades…' : 'Start historical backfill'}</button></div>
          {backfillResult && <div className="quote-consensus-stats">
            <div><span>FETCHED</span><b>{backfillResult.fetched}</b></div><div><span>NEWLY IMPORTED</span><b>{backfillResult.ingested}</b></div><div><span>DUPLICATES</span><b>{backfillResult.duplicates}</b></div><div><span>PAGE-CAPPED MARKETS</span><b>{backfillResult.cappedMarkets}</b></div>
            {backfillResult.markets.map(market => <p className="subtle-note" key={market.exchange+market.symbol}>{market.exchange} · {market.symbol}: {market.pages} page(s), {market.fetched} fetched, {market.ingested} new, {market.invalidOrUnsupported} unsupported. {market.pageLimitReached ? 'More pages remain; run again to continue.' : 'History window completed.'}</p>)}
            {backfillResult.errors.map((error,index) => <p className="quote-error" key={index}>{error}</p>)}
          </div>}
        </div>
-       <div className="section-heading ops-title"><div><span className="eyebrow">PERFORMANCE & STRATEGY ATTRIBUTION</span><h3>Trade performance intelligence</h3><p>Closed exit executions only; results are separated by quote currency.</p></div><button className="small-refresh" onClick={loadTradePerformance} disabled={performanceLoading || !portfolioToken}>{performanceLoading ? 'Analyzing…' : 'Analyze ledger performance'}</button></div>
+       <div className="section-heading ops-title"><div><span className="eyebrow">PERFORMANCE & STRATEGY ATTRIBUTION</span><h3>Trade performance intelligence</h3><p>Closed exit executions only; results are separated by quote currency.</p></div><button className="small-refresh" onClick={loadTradePerformance} disabled={performanceLoading || (!portfolioToken && !health?.localPrivateAccess)}>{performanceLoading ? 'Analyzing…' : 'Analyze ledger performance'}</button></div>
        {performanceError && <p className="quote-error">{performanceError}</p>}
        {performanceData && <>
          <div className="quote-consensus-stats">
@@ -515,7 +515,7 @@ function App() {
     if (page === 'Risk Management') return <section className="glass-panel detail-workspace">
       <span className="eyebrow">CAPITAL PROTECTION · QUANTITATIVE RISK</span><h3>Portfolio VaR, concentration & stress testing</h3>
       <div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> Server-side per-order notional and market restrictions.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>
-      <form className="news-search" onSubmit={loadPortfolioRisk}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token"/><button disabled={riskLoading || !portfolioToken}>{riskLoading ? 'Calculating risk…' : 'Run portfolio risk analysis'}</button></form>
+      <form className="news-search" onSubmit={loadPortfolioRisk}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token"/><button disabled={riskLoading || (!portfolioToken && !health?.localPrivateAccess)}>{riskLoading ? 'Calculating risk…' : 'Run portfolio risk analysis'}</button></form>
       {riskError && <p className="quote-error">{riskError}</p>}
       {riskData && <>
         <p className="subtle-note">Generated {new Date(riskData.generatedAt).toLocaleString()}. Quote-currency exposures are reported separately; no cross-currency aggregation is performed.</p>
