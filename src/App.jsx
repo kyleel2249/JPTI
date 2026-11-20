@@ -519,6 +519,9 @@ function App() {
       {riskError && <p className="quote-error">{riskError}</p>}
       {riskData && <>
         <p className="subtle-note">Generated {new Date(riskData.generatedAt).toLocaleString()}. Quote-currency exposures are reported separately; no cross-currency aggregation is performed.</p>
+        {riskData.warnings?.map((warning,index)=><p className={warning.severity==='warning'?'quote-error':'subtle-note'} key={index}>{warning.quoteCurrency ? warning.quoteCurrency+' · ' : ''}{warning.message}</p>)}
+        {riskData.dataQuality?.marketDataErrors?.map((error,index)=><p className="subtle-note" key={'market-'+index}>Market data: {error}</p>)}
+        {riskData.portfolios.length===0 && <p className="empty-state">No marked ledger positions are available. Import fills and wait for supported public market prices before running portfolio risk analysis.</p>}
         {riskData.portfolios.map(p => <div className="glass-panel detail-workspace" key={p.quoteCurrency}>
           <div className="section-heading"><div><span className="eyebrow">RISK BOOK · {p.quoteCurrency}</span><h4>{fmt(p.grossExposure)} {p.quoteCurrency} gross exposure</h4></div></div>
           <div className="quote-consensus-stats"><div><span>1D VaR · 95%</span><b>{p.historical.var95Percent == null ? '—' : p.historical.var95Percent.toFixed(2) + '%'}</b></div><div><span>EXPECTED SHORTFALL · 95%</span><b>{p.historical.expectedShortfall95Percent == null ? '—' : p.historical.expectedShortfall95Percent.toFixed(2) + '%'}</b></div><div><span>1D VaR · 99%</span><b>{p.historical.var99Percent == null ? '—' : p.historical.var99Percent.toFixed(2) + '%'}</b></div><div><span>STRESS LOSS</span><b>{fmt(p.stress.estimatedLoss)} {p.quoteCurrency}</b></div></div>
