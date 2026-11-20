@@ -230,7 +230,7 @@ export async function claimOutboxMessages({ workerId, limit = 25, leaseMs = 3000
   const safeLease = Math.max(5000, Math.min(300000, Math.floor(Number(leaseMs) || 30000)));
   const db = await getPool();
   const result = await db.query(
-    "WITH candidates AS (SELECT id FROM jpti_outbox WHERE (status='pending' AND available_at<=NOW()) OR (status='processing' AND locked_until<=NOW()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1) UPDATE jpti_outbox o SET status='processing',locked_by=$2,locked_until=NOW()+($3 * INTERVAL '1 millisecond'),attempts=o.attempts+1,updated_at=NOW() FROM candidates c WHERE o.id=c.id RETURNING o.id,o.event_id,o.event_type,o.payload,o.attempts",
+    "WITH candidates AS (SELECT id FROM jpti_outbox WHERE (status='pending' AND available_at<=NOW()) OR (status='processing' AND locked_until<=NOW()) ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED) UPDATE jpti_outbox o SET status='processing',locked_by=$2,locked_until=NOW()+($3 * INTERVAL '1 millisecond'),attempts=o.attempts+1,updated_at=NOW() FROM candidates c WHERE o.id=c.id RETURNING o.id,o.event_id,o.event_type,o.payload,o.attempts",
     [safeLimit, workerId, safeLease]
   );
   return result.rows;
