@@ -100,7 +100,7 @@ export function buildUnifiedPerformance(events) {
   const trades = events.filter(e=>e.source==='tbots' && e.eventType==='bot_trade' && e.metadata?.action==='paper_closed');
   const pnl = trades.map(e=>finite(e.metadata?.pnl)).filter(v=>v!==null);
   const wins=pnl.filter(v=>v>0).length;
-  const bySymbol={},byStrategy={},byAssetClass={},byVenue={};
+  const bySymbol={},byStrategy={},byAssetClass={},byVenue={},byChain={},bySession={};
   const add=(map,key,value)=>{const row=map[key]||(map[key]={trades:0,pnl:0,wins:0,losses:0});row.trades++;row.pnl+=value;if(value>0)row.wins++;if(value<0)row.losses++;};
   for(const e of trades){
     const value=finite(e.metadata?.pnl);if(value===null)continue;
@@ -108,12 +108,14 @@ export function buildUnifiedPerformance(events) {
     add(byStrategy,e.metadata?.strategyProfile||'untagged',value);
     add(byAssetClass,e.metadata?.assetClass||'untagged',value);
     add(byVenue,e.metadata?.venue||'untagged',value);
+    add(byChain,e.metadata?.chain||'unknown',value);
+    add(bySession,e.metadata?.runId||'untagged',value);
   }
   const fills=events.filter(e=>e.eventType==='fill');
   const venueFills={};
   for(const e of fills){const row=venueFills[e.source]||(venueFills[e.source]={fills:0,buyQty:0,sellQty:0,feesByCurrency:{}});row.fills++;if(e.side==='buy')row.buyQty+=e.quantity||0;if(e.side==='sell')row.sellQty+=e.quantity||0;if(e.feeCurrency)row.feesByCurrency[e.feeCurrency]=(row.feesByCurrency[e.feeCurrency]||0)+(e.fee||0);}
   const realized=calculateExchangeRealized(events);
-  return {generatedAt:new Date().toISOString(),paperStrategy:{closedTrades:pnl.length,wins,losses:pnl.length-wins,winRatePercent:pnl.length?wins/pnl.length*100:null,realizedPnlUsd:pnl.reduce((a,b)=>a+b,0),bySymbol,byStrategy,byAssetClass,byVenue},
+  return {generatedAt:new Date().toISOString(),paperStrategy:{closedTrades:pnl.length,wins,losses:pnl.length-wins,winRatePercent:pnl.length?wins/pnl.length*100:null,realizedPnlUsd:pnl.reduce((a,b)=>a+b,0),bySymbol,byStrategy,byAssetClass,byVenue,byChain,bySession},
     exchangeExecution:{fillCount:fills.length,byVenue:venueFills,realizedPnlByQuote:realized.realizedByQuote,feesByCurrency:realized.feeTotals,openInventory:realized.openInventory,realizedPnl:'weighted-average on recorded spot fills only; quote currencies remain separate'},
     attributionDimensions:['asset/pair','venue','paper-vs-exchange','strategy profile','asset class','chain','session'],
     caveat:'Paper trade attribution uses metadata recorded by connected T-Bots runs. Exchange fills are activity records; weighted-average realized PnL covers recorded spot fills only and does not equal a complete reconciled account statement.'};
