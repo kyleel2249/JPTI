@@ -46,6 +46,9 @@ export function mapRugCheck(report) {
   const creator = report.creator;
   const lpPct = num(report.markets?.[0]?.lp?.lpLockedPct);
   const locked = lpPct !== null && lpPct >= 95;
+  const lockRows = (report.markets || []).flatMap(m => Array.isArray(m.lp?.lockers) ? m.lp.lockers : []);
+  const lockEnds = lockRows.map(row => num(row.lockedUntil ?? row.endTime ?? row.end_time)).filter(v => v !== null).map(v => v < 1e12 ? v * 1000 : v);
+  const lpLockedDays = lockEnds.length ? Math.max(0, (Math.max(...lockEnds) - now) / 86400000) : 0;
   const hasRisk = (re) => risks.some((r) => re.test(`${r?.name || ''} ${r?.description || ''}`));
   return {
     holders: num(report.totalHolders),
@@ -55,7 +58,8 @@ export function mapRugCheck(report) {
     devPct: creator ? num(top.find((h) => h?.address === creator)?.pct) ?? 0 : null,
     top10Pct: top.length ? top.slice(0, 10).reduce((a, h) => a + (num(h?.pct) ?? 0), 0) : null,
     bundledLaunch: hasRisk(/bundl|sniper/i),
-    lpLockedDays: locked ? 3650 : 0, // API exposes locked %, not duration: >=95% is treated as satisfying the lock
+    lpLockedPercent: lpPct,
+    lpLockedDays, // Only explicit lock end timestamps count; a locked percentage alone does not prove duration.
     honeypot: hasRisk(/honeypot|cannot sell|unable to sell/i),
   };
 }
