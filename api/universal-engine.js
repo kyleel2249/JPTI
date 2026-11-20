@@ -63,6 +63,38 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
     decision:'research-only; not an order instruction' };
 }
 
+
+export function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
+
+function calculateExchangeRealized(events, now = Date.now()) {
+  const inventory = new Map(), realizedByQuote = {}, dailyByQuote = {}, feeTotals = {};
+  const fills = events.filter(e=>e.eventType==='fill' && e.symbol && e.side && finite(e.quantity)>0 && finite(e.price)>0)
+    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+  for(const e of fills){
+    const key=e.source+':'+e.accountId+':'+e.symbol;
+    const [base,quote]=String(e.symbol).split('/');
+    if(!base||!quote)continue;
+    const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,symbol:e.symbol};
+    const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
+    if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
+    let realized=0;
+    if(e.side==='buy'){row.cost+=qty*price;row.quantity+=qty;}
+    else{
+      const matched=Math.min(qty,row.quantity),avg=row.quantity>0?row.cost/row.quantity:0;
+      realized=(price-avg)*matched;
+      row.quantity-=matched;row.cost=Math.max(0,row.cost-avg*matched);
+      if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
+      // Only quote-denominated fees are subtracted from quote PnL; other fee tokens remain separate.
+      if(e.feeCurrency===quote)realized-=fee;
+      realizedByQuote[quote]=(realizedByQuote[quote]||0)+realized;
+      if(Date.parse(e.occurredAt)>=now-86400000)dailyByQuote[quote]=(dailyByQuote[quote]||0)+realized;
+    }
+    inventory.set(key,row);
+  }
+  return {realizedByQuote,dailyByQuote,feeTotals,openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
+    caveat:'Weighted-average cost on recorded fills only. Missing opening inventory, transfers, funding, taxes and fees paid in third tokens prevent a complete account PnL statement.'};
+}
+
 export function calculateUnifiedRisk(events, options = {}) {
   const now = options.now ?? Date.now();
   const maxConsecutiveLosses = clamp(Number(options.maxConsecutiveLosses ?? 3),1,20);
@@ -74,16 +106,20 @@ export function calculateUnifiedRisk(events, options = {}) {
   const recent = closed.filter(e=>Date.parse(e.at)>=dayAgo);
   let streak=0;
   for(const trade of [...closed].reverse()){if(trade.pnl<0)streak++;else break;}
-  const dailyByQuote = {};
+  const exchangeRealized = calculateExchangeRealized(events, now);
+  const dailyByQuote = { ...exchangeRealized.dailyByQuote };
   for(const trade of recent) dailyByQuote[trade.quote]=(dailyByQuote[trade.quote]||0)+trade.pnl;
-  const usdLoss = Math.max(0,-(dailyByQuote.USD||0));
+  dailyByQuote.USD = (dailyByQuote.USD || 0) + (dailyByQuote.USDT || 0) + (dailyByQuote.USDC || 0) + (dailyByQuote.DAI || 0) + (dailyByQuote.FDUSD || 0);
+  const paperDailyUsd = closed.filter(e=>Date.parse(e.at)>=dayAgo).reduce((sum,e)=>sum+e.pnl,0);
+  const stableDailyUsd = ['USDT','USDC','DAI','FDUSD'].reduce((sum,q)=>sum+(exchangeRealized.dailyByQuote[q]||0),0);
+  const usdLoss = Math.max(0,-(paperDailyUsd + stableDailyUsd + (exchangeRealized.dailyByQuote.USD||0)));
   const reasons=[];
   if(streak>=maxConsecutiveLosses) reasons.push('consecutive_paper_loss_limit');
   if(maxDailyLossUsd>0 && usdLoss>=maxDailyLossUsd) reasons.push('daily_usd_loss_limit');
   return { generatedAt:new Date(now).toISOString(), newEntriesAllowed:reasons.length===0, pauseReasons:reasons,
     consecutiveLosses:streak, maxConsecutiveLosses, rolling24hRealizedPnlByQuote:dailyByQuote,
     maxDailyLossUsd, rolling24hUsdLoss:usdLoss,
-    sources:{tbotsPaperClosedTrades:closed.length, jptiExchangeFillHistory:'not yet incorporated into unified realized-PnL guard'},
+    sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)}, exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote, exchangeFeesByCurrency:exchangeRealized.feeTotals,
     exitsRemainEnabled:true, mode:'paper-first',
     caveat:'This first unified guard computes T-Bots closed paper PnL. Exchange fills are exposed in the unified performance report but are not silently converted or combined across currencies without FX marks.' };
 }
@@ -95,10 +131,11 @@ export function buildUnifiedPerformance(events) {
   const bySymbol={};
   for(const e of trades){const key=e.symbol||'unknown';const v=finite(e.metadata?.pnl);if(v===null)continue;const row=bySymbol[key]||(bySymbol[key]={trades:0,pnl:0,wins:0});row.trades++;row.pnl+=v;if(v>0)row.wins++;}
   const fills=events.filter(e=>e.eventType==='fill');
+  const realized=calculateExchangeRealized(events);
   const byVenue={};
   for(const e of fills){const row=byVenue[e.source]||(byVenue[e.source]={fills:0,buyQty:0,sellQty:0,feesByCurrency:{}});row.fills++;if(e.side==='buy')row.buyQty+=e.quantity||0;if(e.side==='sell')row.sellQty+=e.quantity||0;if(e.feeCurrency)row.feesByCurrency[e.feeCurrency]=(row.feesByCurrency[e.feeCurrency]||0)+(e.fee||0);}
   return {generatedAt:new Date().toISOString(),paperStrategy:{closedTrades:pnl.length,wins,losses:pnl.length-wins,winRatePercent:pnl.length?wins/pnl.length*100:null,realizedPnlUsd:pnl.reduce((a,b)=>a+b,0),bySymbol},
-    exchangeExecution:{fillCount:fills.length,byVenue,realizedPnl:'not computed here; use lot-based portfolio accounting and preserve quote currencies'},
+    exchangeExecution:{fillCount:fills.length,byVenue,realizedPnlByQuote:realized.realizedByQuote,feesByCurrency:realized.feeTotals,openInventory:realized.openInventory,realizedPnl:'weighted-average on recorded fills only; quote currencies remain separate'},
     attributionDimensions:['asset/pair','venue','paper-vs-exchange','strategy profile when tagged','session'],
     caveat:'No untagged trade is assigned to a strategy. Exchange fills are activity records, not automatically equivalent to closed trades.'};
 }
