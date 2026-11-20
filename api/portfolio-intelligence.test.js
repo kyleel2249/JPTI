@@ -38,8 +38,8 @@ test('base-currency fees reduce acquired inventory and increase disposed quantit
     fill({quantity:2, fee:0.1, feeCurrency:'BTC'}),
     fill({side:'sell', quantity:1, price:120, fee:0.05, feeCurrency:'BTC', occurredAt:'2026-01-02T00:00:00.000Z'})
   ]);
-  assert.equal(result.positions[0].quantity,0.85);
-  assert.equal(result.positions[0].averageCost,200/1.9);
+  assert.ok(Math.abs(result.positions[0].quantity - 0.85) < 1e-12);
+  assert.ok(Math.abs(result.positions[0].averageCost - 200/1.9) < 1e-12);
   assert.ok(result.warnings.some(value=>value.includes('Unmatched sell quantity')) === false);
 });
 
