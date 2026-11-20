@@ -76,6 +76,8 @@ function App() {
   const [portfolioData, setPortfolioData] = useState(null);
   const [portfolioError, setPortfolioError] = useState('');
   const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [reconciliationRun, setReconciliationRun] = useState(null);
+  const [reconciliationBusy, setReconciliationBusy] = useState(false);
   const [riskData, setRiskData] = useState(null);
   const [riskError, setRiskError] = useState('');
   const [riskLoading, setRiskLoading] = useState(false);
@@ -196,6 +198,23 @@ function App() {
       setPortfolioData(data);
     } catch (error) { setPortfolioError(error.message); }
     finally { setPortfolioLoading(false); }
+  }, [portfolioToken]);
+
+  const runPortfolioReconciliation = useCallback(async () => {
+    setReconciliationBusy(true);
+    setReconciliationRun(null);
+    setPortfolioError('');
+    try {
+      const response = await fetch('/api/operations/reconciliation/run', {
+        method: 'POST',
+        headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.errors?.join('; ') || data.error || 'Reconciliation could not run. Check exchange credentials and opening balances.');
+      setReconciliationRun(data);
+    } catch (error) { setPortfolioError(error.message); }
+    finally { setReconciliationBusy(false); }
   }, [portfolioToken]);
 
   useEffect(() => {
@@ -376,6 +395,7 @@ function App() {
        <p>{ledger?.eventCount ?? 0} transaction events recorded. Configure read-only trade-history keys and the fill watchlist to keep the ledger current.</p>
        <div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div>
        <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (kept in this page's memory only)"/><button disabled={portfolioLoading || !portfolioToken}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
+       <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || !portfolioToken}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
        {portfolioError && <p className="quote-error">{portfolioError}</p>}
        {portfolioData && <>
          <div className="quote-consensus-stats"><div><span>OPEN POSITIONS</span><b>{portfolioData.positions.length}</b></div><div><span>ASSET MOVEMENT LINES</span><b>{portfolioData.assetMovements.length}</b></div><div><span>EXCHANGE ACCOUNTS</span><b>{portfolioData.exchangeBalances.length}</b></div><div><span>REALIZED PNL CURRENCIES</span><b>{Object.keys(portfolioData.realizedPnlByQuoteCurrency).length}</b></div></div>
@@ -384,6 +404,18 @@ function App() {
          <h4>Current exchange balances</h4><div className="scanner-table"><div><span>EXCHANGE</span><span>CURRENCY</span><span>FREE</span><span>USED</span><span>TOTAL</span></div>{portfolioData.exchangeBalances.flatMap(b => b.status === 'ok' ? Object.entries(b.total || {}).filter(([, amount]) => Number(amount) > 0).map(([currency, amount]) => <div key={b.exchange + currency}><b>{b.exchange}</b><span>{currency}</span><span>{fmt(b.free?.[currency])}</span><span>{fmt(b.used?.[currency])}</span><strong>{fmt(amount)}</strong></div>) : [<div key={b.exchange}><b>{b.exchange}</b><span>{b.status}</span><span>{b.error || 'Balance capability unavailable'}</span></div>])}</div>
          <h4>Realized PnL by quote currency</h4><div className="ledger-summary">{Object.entries(portfolioData.realizedPnlByQuoteCurrency).map(([currency, amount]) => <div key={currency}><span>{currency}</span><b>{fmt(amount)}</b></div>)}</div>
          <p className="subtle-note">{portfolioData.reconciliationNote} {portfolioData.limitations.join(' ')}</p>
+         {reconciliationRun && <section className="detail-workspace">
+           <h4>Latest reconciliation · {reconciliationRun.status.replaceAll('-', ' ')}</h4>
+           <p className="subtle-note">{reconciliationRun.accountsChecked} account(s) checked · {reconciliationRun.errors.length} account error(s) · {new Date(reconciliationRun.generatedAt).toLocaleString()}</p>
+           {reconciliationRun.snapshots.map(snapshot => <div key={snapshot.exchange}>
+             <h4>{snapshot.exchange} · {snapshot.status.replaceAll('_', ' ')}</h4>
+             <div className="scanner-table"><div><span>ASSET</span><span>EXCHANGE TOTAL</span><span>EXPECTED TOTAL</span><span>DIFFERENCE</span><span>STATUS</span></div>
+               {snapshot.rows.map(row => <div key={snapshot.exchange + row.currency}><b>{row.currency}</b><span>{fmt(row.actualTotal)}</span><span>{row.expectedTotal == null ? 'Baseline required' : fmt(row.expectedTotal)}</span><strong>{row.difference == null ? '—' : fmt(row.difference)}</strong><span>{row.status.replaceAll('_', ' ')}</span></div>)}
+             </div>
+             <p className="subtle-note">{snapshot.unresolvedEventCount} unresolved ledger event(s). {snapshot.caveat}</p>
+           </div>)}
+           {reconciliationRun.errors.map((error, index) => <p className="quote-error" key={index}>{error}</p>)}
+         </section>}
        </>}
        <p className="subtle-note">Private API token is held only in component memory and is not saved to local storage. Scheduled fill ingestion: JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT. Read-only keys only; withdrawals remain disabled.</p>
        {renderOperations()}
