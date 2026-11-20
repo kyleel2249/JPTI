@@ -241,3 +241,18 @@ Authenticated bridge routes (use `x-jpti-api-token`):
 The embedded browser client publishes paper entries/exits, closed-trade summaries, filters and system decisions. It periodically reads JPTI BTC market context. A fresh `risk_off` score below 35 blocks new T-Bots entries only; the existing exit manager continues to operate. This is a coarse cross-market risk gate, not token-level analysis. Risk context uses a simple heuristic and should be treated as a conservative advisory filter, not a predictive model. Memory is a shared event journal, not an LLM memory or shared mutable strategy state.
 
 Run the T-Bots terminal at `http://localhost:8787/t-bots/` while the JPTI API is running. Paste the local `JPTI_API_TOKEN` into the T-Bots compose screen to connect. Do not expose this token in a public deployment or commit it. The integration remains paper-only; no Solana wallet signing or swap execution is implemented.
+
+
+## T-Bots unified multi-asset integration
+
+T-Bots is embedded at `/t-bots/` and remains a six-agent paper engine. Its live discovery feed now consumes DexScreener latest token profiles across chain IDs, groups candidates by chain, and loads chain-specific pair data. Solana security enrichment uses RugCheck; selected EVM chains use GoPlus token-security data. Unknown chains and incomplete security results fail closed in the Rug Check agent.
+
+Supported GoPlus mappings in this integration: Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Linea and Blast. Solana uses RugCheck. The discovery feed is based on a provider's latest token-profile feed, not every token pair on every chain. Security provider coverage differs by chain, and missing LP-lock duration or holder data cannot be treated as a pass.
+
+Authenticated endpoints:
+- `GET /api/integrations/tbots/universe?q=token-or-project` — search multi-chain DEX pairs with a heuristic evidence score.
+- `GET /api/integrations/tbots/risk` — closed paper-trade memory, recent loss streak and shared new-entry gate.
+- `GET /api/integrations/tbots/memory?limit=50` — recent shared ledger events.
+- `GET /api/integrations/tbots/context?exchange=binance&symbol=BTC%2FUSDT` — selected CEX benchmark context.
+
+The shared risk gate pauses new T-Bots entries after three consecutive losing closed paper trades. If its state cannot be retrieved, new entries are blocked; existing positions continue through their normal exit logic. This is not a fully consolidated JPTI + T-Bots portfolio equity calculation. DEX execution remains simulated; no wallet signing or live swap execution is implemented.

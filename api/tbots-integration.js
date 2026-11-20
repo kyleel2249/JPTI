@@ -2,6 +2,7 @@ import express from 'express';
 import { withExchange } from './exchanges.js';
 import { requirePrivateApiAuth } from './policy.js';
 import { getLedgerTransactions, ingestLedgerEvent } from './operations.js';
+import { normalizeDexPair, scoreAssetEvidence, summarizeBotMemory } from './multi-asset-intelligence.js';
 
 export const tbotsRouter = express.Router();
 const finite = value => Number.isFinite(Number(value)) ? Number(value) : null;
@@ -22,7 +23,7 @@ tbotsRouter.get('/integrations/tbots/status', (_req, res) => res.json({
   executionMode: 'paper-only',
   sharedMemory: 'JPTI append-only transaction/event ledger',
   liveWalletExecution: false,
-  note: 'T-Bots live mode reads DEX market data but its executor remains simulated.'
+  note: 'Live discovery spans DexScreener-supported chains; chain-specific security coverage is provider-dependent and the executor remains simulated.'
 }));
 
 tbotsRouter.get('/integrations/tbots/memory', async (req, res) => {
@@ -86,9 +87,58 @@ tbotsRouter.get('/integrations/tbots/context', async (req, res) => {
         ticker: ticker ? { last: ticker.last, bid: ticker.bid, ask: ticker.ask, timestamp: ticker.timestamp } : null,
         momentum1hWindowPercent: momentumPct, orderBookImbalance: imbalance, fundingRate,
         riskScore, regime, observations: { candles: closes.length, orderBook: Boolean(book), funding: Boolean(funding) },
-        caveat: 'A coarse BTC/selected-market regime proxy, not a Solana token valuation or trade signal. Use as an optional risk gate only.' };
+        caveat: 'A coarse BTC/selected-market regime proxy, not a token-specific valuation or trade signal. Use as an optional risk gate only.' };
     });
     res.set('Cache-Control', 'no-store');
     res.json(context);
   } catch (error) { res.status(error.status || 502).json({ error: error.message }); }
+});
+
+
+const universeCache = new Map();
+tbotsRouter.get('/integrations/tbots/universe', async (req, res) => {
+  try {
+    requirePrivateApiAuth(req);
+    const query = String(req.query.q || '').trim().slice(0, 80);
+    if (query.length < 2) return res.status(400).json({ error: 'Provide a token, pair, or project search term (at least 2 characters).' });
+    const key = query.toLowerCase();
+    const cached = universeCache.get(key);
+    if (cached && Date.now() - cached.at < 30000) return res.json({ ...cached.payload, cache: 'hit' });
+    const response = await fetch('https://api.dexscreener.com/latest/dex/search?q=' + encodeURIComponent(query), { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('DEX Screener returned HTTP ' + response.status);
+    const body = await response.json();
+    const pairs = (Array.isArray(body.pairs) ? body.pairs : []).slice(0, 80).map(normalizeDexPair)
+      .map(asset => ({ ...asset, evidence: scoreAssetEvidence(asset) }))
+      .sort((a, b) => b.evidence.score - a.evidence.score);
+    const chains = [...new Set(pairs.map(pair => pair.chain))];
+    const payload = { query, source: 'DexScreener public search API', fetchedAt: new Date().toISOString(),
+      count: pairs.length, chains, pairs,
+      coverage: 'Search-based multi-chain DEX pairs. Not a complete global token registry or exhaustive chain index.',
+      safety: 'Discovery only: verify token contract, mint/freeze authorities, holder concentration, LP lock, honeypot/sell simulation and executable liquidity independently before any trade.' };
+    universeCache.set(key, { at: Date.now(), payload });
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...payload, cache: 'miss' });
+  } catch (error) { res.status(502).json({ error: error.message || 'Multi-chain universe query failed.' }); }
+});
+
+tbotsRouter.get('/integrations/tbots/risk', async (req, res) => {
+  try {
+    requirePrivateApiAuth(req);
+    const events = (await getLedgerTransactions())
+      .filter(event => event.source === 'tbots' && String(event.eventType).startsWith('bot_'));
+    const memory = summarizeBotMemory(events);
+    const recent = events.slice(-200);
+    const dailyLossLimitPct = Math.max(1, Math.min(30, Number(process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_PCT || 10)));
+    const peakEquity = Math.max(0, ...recent.map(e => finite(e.metadata?.equityPeak)).filter(v => v !== null));
+    const latestEquity = [...recent].reverse().map(e => finite(e.metadata?.equity)).find(v => v !== null);
+    const drawdownPct = peakEquity > 0 && latestEquity !== undefined ? Math.max(0, (peakEquity - latestEquity) / peakEquity * 100) : null;
+    const pauseReasons = [];
+    if (memory.guard === 'pause_new_entries') pauseReasons.push('three or more consecutive losing closed paper trades');
+    if (drawdownPct !== null && drawdownPct >= dailyLossLimitPct) pauseReasons.push('shared equity drawdown limit exceeded');
+    res.set('Cache-Control', 'no-store');
+    res.json({ mode: 'paper-only', newEntriesAllowed: pauseReasons.length === 0, pauseReasons,
+      memory, drawdownPct, dailyLossLimitPct,
+      scope: 'T-Bots published paper events only; JPTI exchange portfolio risk is exposed separately and is not yet a fully consolidated cross-account equity figure.',
+      exitsRemainEnabled: true });
+  } catch (error) { res.status(error.status || 401).json({ error: error.message }); }
 });

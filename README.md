@@ -209,3 +209,20 @@ JPTI embeds the complete source of [T-Bots](https://github.com/kyleel2249/T-Bots
 The optional JPTI bridge shares auditable bot events through the JPTI append-only ledger and supplies a BTC/USDT market-regime context from JPTI's exchange gateway. Enter the local `JPTI_API_TOKEN` in the T-Bots compose screen to enable it. In live-data mode, a fresh JPTI `risk_off` regime blocks new T-Bots paper entries; existing paper positions continue to be managed by the original T-Bots exit rules. A missing or stale context does not invent a risk state and leaves the original T-Bots rules in control.
 
 **Execution remains paper-only.** T-Bots' live mode means live DEX data, not wallet execution. The bridge does not sign Solana transactions, custody keys, submit swaps, or route JPTI exchange orders. JPTI's independent live-order gateway remains disabled by default. Bot memory events are telemetry, not fills or realized account PnL.
+
+
+## T-Bots unified multi-chain upgrade
+
+The embedded T-Bots six-agent paper engine now discovers newly surfaced DEX tokens across DexScreener-supported chain IDs instead of filtering discovery to Solana only. It groups token requests by chain and uses RugCheck for Solana and GoPlus token-security data for selected EVM networks (Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Linea and Blast). Unsupported chains or incomplete security responses fail closed. The six-agent scanner, rug-check, sizer, executor, logger and equity architecture is retained.
+
+T-Bots now consumes a JPTI shared risk state during live-data sessions. Three consecutive losing closed paper trades pause new entries; unavailable risk state also blocks new entries. Existing paper positions continue through their exit logic. JPTI also exposes authenticated multi-chain DEX search with explainable heuristic evidence scoring at `GET /api/integrations/tbots/universe?q=...`.
+
+Important boundaries:
+- Discovery is provider-feed-based and is not literally every token pair on every blockchain.
+- Chain security fields and LP-lock evidence vary by provider; missing data is not a security pass.
+- T-Bots strategies remain new-pair oriented and are not yet independently validated for every token category, CEX instrument, perpetual or derivatives contract.
+- JPTI CEX markets, on-chain indexers and DEX pair data are complementary sources, not one universal executable market.
+- T-Bots DEX execution remains paper/simulated. No wallet signing, live DEX swaps, bridges or withdrawals are enabled.
+- Shared event memory and loss-streak guard are implemented; a fully consolidated JPTI exchange + T-Bots equity/drawdown ledger, production database, chain-by-chain execution adapters and live WebSocket feeds remain future work.
+
+See `integrations/t-bots/JPTI-MULTI-ASSET.md` for endpoint and coverage details.
