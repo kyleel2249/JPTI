@@ -329,3 +329,12 @@ JPTI_DATABASE_POOL_MAX=10
 The database schema is also versioned in `migrations/001_initial_durable_storage.sql`. Ledger ingestion uses a unique database index across source, account, external trade ID and symbol, so duplicate polls across process restarts or multiple API instances are rejected by PostgreSQL rather than an in-memory check. Sync cursors are persisted per exchange/market and updated monotonically. Operational event reads, ledger history, reconciliation snapshots and monitor snapshots use the configured storage adapter.
 
 This stage makes event persistence and sync cursors durable; scheduler leadership/leases, transactional outbox delivery, historical JSONL backfill tooling, multi-region failover, backup/restore automation and complete paginated exchange-history ingestion remain separate production-hardening tasks. Keep API instances restricted to trusted networks and use a dedicated database role with only the required table permissions.
+
+
+## Multi-instance scheduler leadership
+
+When `JPTI_STORAGE_BACKEND=postgres`, JPTI uses a PostgreSQL-backed lease (`jpti_scheduler_leases`) so only one API instance starts the periodic operations workers at a time. The leader renews its lease on a heartbeat; a standby instance takes over after the lease expires or the current owner releases it. If lease verification fails, the scheduler pauses rather than continuing to run uncoordinated jobs. The lease table is created automatically at startup and is also documented in `migrations/002_scheduler_leases.sql`.
+
+Tune the lease with `JPTI_SCHEDULER_LEASE_MS` (15–120 seconds, default 30 seconds) and `JPTI_SCHEDULER_HEARTBEAT_MS` (at least 3 seconds and no more than half the lease, default 10 seconds). Set `JPTI_SCHEDULER_INSTANCE_ID` to a stable deployment instance label if useful; a random owner ID is generated otherwise. Use the same PostgreSQL database and compatible lease settings for every instance. The `/api/operations/overview` response exposes coordination mode, owner, leadership and running state.
+
+File storage remains single-process only: its lease is an in-process guard, not a cross-process distributed lock. Run one API process when using the file backend. The lease prevents duplicate scheduler startup, but it is not a transactional job queue: a worker already in flight when leadership is lost may finish, so durable job-level idempotency and transactional outbox processing remain follow-up hardening. No trading orders are placed by scheduler coordination.
