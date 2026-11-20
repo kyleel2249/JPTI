@@ -59,7 +59,7 @@ export async function ingestLedgerEvent(input) {
 }
 
 export async function getLedgerTransactions() {
-  return (await readEvents()).filter((event) => event.kind === 'ledger-transaction');
+  return (await readEvents(Number.MAX_SAFE_INTEGER)).filter((event) => event.kind === 'ledger-transaction');
 }
 
 async function persistLedgerTransaction(parsed) {
