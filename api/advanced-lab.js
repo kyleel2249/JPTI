@@ -131,7 +131,7 @@ export function calculatePortfolioAccounting(events, marks = {}) {
     const qty = finite(e.quantity), price = finite(e.price), fee = finite(e.fee || 0);
     if (!base || !quote || qty == null || price == null || qty <= 0 || price <= 0) continue;
     const key = e.accountId + ':' + e.source + ':' + e.symbol;
-    const p = positions.get(key) || { accountId: e.accountId, exchange: e.source, symbol: e.symbol, base, quote, quantity: 0, averageCost: 0, realizedPnl: 0, totalBought: 0, totalSold: 0 };
+    const p = positions.get(key) || { accountId: e.accountId, exchange: e.source, symbol: e.symbol, base, quote, quantity: 0, averageCost: 0, realizedPnl: 0, totalBought: 0, totalSold: 0, unmatchedSellQuantity: 0, unmatchedSellCount: 0 };
     const feeCurrency = e.feeCurrency || quote;
     if (fee > 0) feesByCurrency[feeCurrency] = (feesByCurrency[feeCurrency] || 0) + fee;
     if (e.side === 'buy') {
@@ -145,6 +145,7 @@ export function calculatePortfolioAccounting(events, marks = {}) {
       const disposed = qty + (feeCurrency === base ? fee : 0);
       const proceeds = qty * price - (feeCurrency === quote ? fee : 0);
       const matched = Math.min(p.quantity, disposed);
+      if (disposed > matched) { p.unmatchedSellQuantity += disposed - matched; p.unmatchedSellCount++; }
       p.realizedPnl += proceeds * (matched / disposed) - p.averageCost * matched;
       p.quantity -= matched; p.totalSold += matched;
       if (p.quantity <= 1e-12) { p.quantity = 0; p.averageCost = 0; }
@@ -163,6 +164,7 @@ export function calculatePortfolioAccounting(events, marks = {}) {
     accountingMethod: 'weighted-average cost per exchange/account/symbol; FIFO is not implied',
     limitations: ['Asset movements include only explicitly ingested deposits, withdrawals, fees, adjustments and transfers with from/to metadata. Missing opening balances mean these are net ledger movements, not verified exchange balances.',
       'Realized PnL is quote-currency denominated and should not be summed across currencies without FX conversion. Fees paid in a third token are reported separately and are not FX-converted into realized PnL.',
+      'Unmatched sell quantity indicates missing opening inventory or incomplete fill history; its cost basis and realized PnL are not guessed.',
       'Unrealized PnL is reported only where a current mark price is supplied. This is not a tax statement.'] };
 }
 
