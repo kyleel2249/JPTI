@@ -119,6 +119,6 @@ test('exchange sells exceeding recorded inventory are reported instead of fabric
   ];
   const result=calculateExchangeRealized(events,now);
   assert.equal(result.realizedByQuote.USDT,20);
-  assert.equal(result.unmatchedSellQuantity.USDT,0.5);
+  assert.equal(result.unmatchedSellQuantityBySymbol['ETH/USDT'],0.5);
   assert.equal(result.openInventory.length,0);
 });
