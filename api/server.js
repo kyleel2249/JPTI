@@ -15,6 +15,7 @@ import { advancedRouter } from './advanced-intelligence.js';
 import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
 import { universalRouter } from './universal-engine.js';
+import { portfolioRouter } from './portfolio-intelligence.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
@@ -75,6 +76,7 @@ app.use('/api/intelligence', intelligenceRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
+app.use('/api', portfolioRouter);
 app.use('/api', labRouter);
 app.use('/api', tbotsRouter);
 app.use('/api', universalRouter);
