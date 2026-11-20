@@ -25,3 +25,14 @@ test('established token profile does not apply the new-pair age ceiling',()=>{
   token.liquidityUsd=100000;token.volume5mUsd=30000;token.holders=500;
   assert.equal(scanner.universe(token).pass,true);
 });
+
+test('mean-reversion requires JPTI RSI evidence and DeFi rotation fails closed without protocol mapping',()=>{
+  const meanCfg=cloneConfig(DEFAULT_CONFIG);meanCfg.scanner.assetProfile='mean_reversion';
+  const scanner=new ScannerAgent(bus,meanCfg);
+  const token={...cex,jptiEvidence:{score:80,rsi14:25}};
+  assert.equal(scanner.universe(token).pass,true);
+  assert.ok(scanner.signals(token).some(signal=>signal.key==='rsi-oversold'));
+  assert.equal(scanner.universe({...cex,jptiEvidence:{score:80}}).pass,false);
+  const defiCfg=cloneConfig(DEFAULT_CONFIG);defiCfg.scanner.assetProfile='defi_rotation';
+  assert.equal(new ScannerAgent(bus,defiCfg).universe({...cex,jptiEvidence:{score:80}}).pass,false);
+});
