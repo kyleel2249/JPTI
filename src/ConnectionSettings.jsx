@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiFetch, getApiBaseUrl, setApiBaseUrl, validateApiBaseUrl } from './lib/api.js';
+import { getApiBaseUrl, setApiBaseUrl, validateApiBaseUrl } from './lib/api.js';
 
 export default function ConnectionSettings() {
   const [url, setUrl] = useState(getApiBaseUrl());
