@@ -159,7 +159,8 @@ universalRouter.get('/universal/dex/search',async(req,res)=>{
 });
 
 
-universalRouter.post('/universal/asset-evidence',requirePrivateApiAuth,(req,res)=>{
+universalRouter.post('/universal/asset-evidence',(req,res)=>{
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
   const items=req.body?.assets;
   if(!Array.isArray(items)||items.length>80)return res.status(400).json({error:'assets must be an array of at most 80 token observations.'});
   const evidence=items.map(item=>{
