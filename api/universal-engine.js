@@ -127,10 +127,24 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     caveat:'Weighted-average cost on recorded spot fills only. Missing opening inventory, transfers, funding, taxes and fees paid in third tokens prevent a complete account PnL statement.'};
 }
 
+function riskSetting(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER, integer = false } = {}) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { value: fallback, warning: null };
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || (integer && !Number.isInteger(parsed))) {
+    return { value: fallback, warning: `Invalid risk setting; using safe default ${fallback}.` };
+  }
+  return { value: clamp(parsed, min, max), warning: null };
+}
+
 export function calculateUnifiedRisk(events, options = {}) {
-  const now=options.now??Date.now();
-  const maxConsecutiveLosses=clamp(Number(options.maxConsecutiveLosses??3),1,20);
-  const maxDailyLossUsd=Math.max(0,Number(options.maxDailyLossUsd??100));
+  const now=Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+  const lossLimit = riskSetting(options.maxConsecutiveLosses, 3, { min: 1, max: 20, integer: true });
+  const dailyLimit = riskSetting(options.maxDailyLossUsd, 100, { min: 0, max: 10000000 });
+  const maxConsecutiveLosses = lossLimit.value;
+  const maxDailyLossUsd = dailyLimit.value;
+  const configurationWarnings = [lossLimit.warning, dailyLimit.warning].filter(Boolean);
   const botEvents=events.filter(e=>e.source==='tbots'&&e.eventType==='bot_trade'&&e.metadata?.action==='paper_closed')
     .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
   const closed=botEvents.map(e=>({at:e.occurredAt,pnl:finite(e.metadata?.pnl)})).filter(e=>e.pnl!==null);
@@ -156,6 +170,7 @@ export function calculateUnifiedRisk(events, options = {}) {
     sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)},
     exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote,exchangeFeesByCurrency:exchangeRealized.feeTotals,
     globalPaused, exitsRemainEnabled:true,mode:'paper-first',
+    riskConfiguration:{valid:configurationWarnings.length===0,warnings:configurationWarnings},
     caveat:'T-Bots paper PnL is USD-denominated. Exchange realized PnL uses recorded spot fills; USD/USDT/USDC/DAI/FDUSD are approximate USD equivalents for the daily guard. Other quote currencies remain separate until FX marks exist. Unrealized PnL and full cashflow reconciliation are not included.'};
 }
 
