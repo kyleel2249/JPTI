@@ -69,10 +69,11 @@ export function calculateTradePerformance(events = []) {
       bestExit:rows.length?rows.reduce((a,b)=>a.realizedPnl>b.realizedPnl?a:b):null,
       worstExit:rows.length?rows.reduce((a,b)=>a.realizedPnl<b.realizedPnl?a:b):null };
   });
-  const group = key => [...new Set(exits.map(x=>x[key]))].map(value => {
-    const rows=exits.filter(x=>x[key]===value);
+  const group = key => [...new Set(exits.map(x=>String(x[key])+'::'+x.quote))].map(groupKey => {
+    const [value, quoteCurrency] = groupKey.split('::');
+    const rows=exits.filter(x=>String(x[key])===value && x.quote===quoteCurrency);
     const net=rows.reduce((s,x)=>s+x.realizedPnl,0);
-    return { [key]:value, exits:rows.length, wins:rows.filter(x=>x.realizedPnl>0).length,
+    return { [key]:value, quoteCurrency, exits:rows.length, wins:rows.filter(x=>x.realizedPnl>0).length,
       losses:rows.filter(x=>x.realizedPnl<0).length, netRealizedPnl:net,
       averagePnl:rows.length?net/rows.length:null, quoteCurrencies:[...new Set(rows.map(x=>x.quote))] };
   }).sort((a,b)=>b.netRealizedPnl-a.netRealizedPnl);
