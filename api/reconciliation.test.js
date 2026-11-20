@@ -7,7 +7,7 @@ test('reconciles spot fills and base/quote fees against a configured opening bal
     { kind:'ledger-transaction', eventType:'fill', accountId:'main', symbol:'BTC/USDT', side:'buy', quantity:1, price:100, fee:.01, feeCurrency:'BTC' },
     { kind:'ledger-transaction', eventType:'fill', accountId:'main', symbol:'BTC/USDT', side:'sell', quantity:.25, price:120, fee:1, feeCurrency:'USDT' }
   ];
-  const result = calculateBalanceReconciliation({ events, balances:{total:{BTC:.74,USDT:899}}, openingBalances:{BTC:0,USDT:1000} });
+  const result = calculateBalanceReconciliation({ events, balances:{total:{BTC:.74,USDT:929}}, openingBalances:{BTC:0,USDT:1000} });
   assert.equal(result.rows.find(x => x.currency === 'BTC').status, 'matched');
   assert.equal(result.rows.find(x => x.currency === 'USDT').status, 'matched');
   assert.equal(result.status, 'matched');
