@@ -110,12 +110,12 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     const [base,quote]=String(e.symbol).split('/');
     if(!base||!quote)continue;
     const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,accountId:e.accountId,symbol:e.symbol};
-    const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
-    if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
+    const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0,feeCurrency=String(e.feeCurrency||'').toUpperCase();
+    if(feeCurrency)feeTotals[feeCurrency]=(feeTotals[feeCurrency]||0)+fee;
     let realized=0;
     if(e.side==='buy'){
-      const acquired=qty-(e.feeCurrency===base?fee:0);
-      if(acquired>0){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=acquired;}
+      const acquired=qty-(feeCurrency===base?fee:0);
+      if(acquired>0){row.cost+=qty*price+(feeCurrency===quote?fee:0);row.quantity+=acquired;}
       else invalidBaseFeeEvents++;
     } else {
       const baseFee=e.feeCurrency===base?fee:0;
@@ -125,7 +125,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
       const matchedFee=Math.min(baseFee,matched);
       const matchedSale=Math.min(qty,Math.max(0,matched-matchedFee));
       realized=matchedSale*price-averageCost*matched;
-      if(e.feeCurrency===quote)realized-=fee*(qty>0?matchedSale/qty:0);
+      if(feeCurrency===quote)realized-=fee*(qty>0?matchedSale/qty:0);
       if(matched+1e-12<requestedOut)unmatchedSellQuantity[quote]=(unmatchedSellQuantity[quote]||0)+(requestedOut-matched);
       row.quantity-=matched;row.cost=Math.max(0,row.cost-averageCost*matched);
       if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
