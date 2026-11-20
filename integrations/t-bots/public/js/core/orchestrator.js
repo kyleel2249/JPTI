@@ -89,7 +89,7 @@ export class Orchestrator {
     this._mark(getToken);
     this._drawdownPolicy(now);
 
-    for (const token of this.feed.snapshot()) this._review(token, now);
+    for (const token of this.feed.snapshot()) await this._review(token, now);
 
     this._mark(getToken);
     if (now - this.lastSample >= 5) {
@@ -129,7 +129,7 @@ export class Orchestrator {
     }
   }
 
-  _review(token, now) {
+  async _review(token, now) {
     const id = token.id;
     if (this.blacklist.has(id) || this.executor.has(id)) return;
     if ((this.cooldown.get(id) || 0) > now) return;
@@ -182,6 +182,18 @@ export class Orchestrator {
       return;
     }
     if (this.paused) return this.ledger.step(task, 'ORCHESTRATOR', 'waiting', 'entries paused');
+
+    if (this.feed.bridge?.enabled) {
+      const preflight = await this.feed.bridge.preflightEntry({
+        token, profileId: this.cfg.scanner.assetProfile || 'meme_new_pair', securityPassed: rc.pass === true
+      });
+      if (!preflight?.allowed) {
+        const reasons = (preflight?.reasons || ['JPTI entry preflight blocked']).join('; ');
+        this.ledger.done(task, 'skipped', reasons);
+        this._filtered(token, 'JPTI paper-entry preflight blocked: ' + reasons + '. Existing exits remain active.', 'jpti-entry-preflight');
+        return;
+      }
+    }
 
     const r = this.cfg.rules;
     if (token.change1hPct >= r.noChaseGainPct && token.pullbackPct < r.noChasePullbackPct) {
