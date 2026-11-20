@@ -84,7 +84,7 @@ export function runWalkForward(candles, options = {}) {
   const oosMetrics = metrics(allOos);
   return { method: 'rolling anchored-window parameter selection with strictly subsequent out-of-sample test windows',
     strategy: 'EMA crossover long/flat baseline', config: { trainBars, testBars, stepBars, feeBps, parameterCombinations: grid.length },
-    folds, aggregateOutOfSample: { ...oosMetrics, equityCurve: undefined },
+    folds: folds.map(f => ({ ...f, outOfSample: (({ returns, ...stats }) => stats)(f.outOfSample) })), aggregateOutOfSample: { ...oosMetrics, equityCurve: undefined },
     caveats: ['Research baseline, not a profitability claim.', 'Fees are modeled; spread, funding, borrow, market impact, latency, partial fills and taxes are not.', 'Use venue-specific data quality checks and additional untouched holdout data before deployment.'] };
 }
 export function calculatePortfolioAccounting(events, marks = {}) {
