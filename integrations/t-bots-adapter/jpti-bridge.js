@@ -57,7 +57,7 @@ export class JptiBridge {
       id:t.id, chain:t.chain, address:t.tokenAddress, symbol:t.symbol,
       liquidityUsd:t.liquidityUsd, volume24hUsd:t.volume24hUsd, volume1hUsd:t.volume1hUsd,
       change1hPct:t.change1hPct, ageMin:t.ageMin, buys:t.buys1h, sells:t.sells1h,
-      quoteAddress:t.quoteAddress, quoteSymbol:t.quoteSymbol
+      quoteAddress:t.quoteAddress, quoteSymbol:t.quoteSymbol, rsi14:t.rsi14
     }));
     if (!assets.length) return this.assetEvidence;
     this.lastAssetEvidenceAt = Date.now();
