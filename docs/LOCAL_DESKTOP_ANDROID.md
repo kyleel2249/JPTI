@@ -76,6 +76,8 @@ The debug APK is generated at:
 
 `android/app/build/outputs/apk/debug/app-debug.apk`
 
+The repository also runs a GitHub Actions Android build and uploads the APK as the `jpti-android-debug-apk` workflow artifact when that workflow succeeds. Open the relevant Actions run, scroll to **Artifacts**, and download it. The Windows workflow similarly uploads `jpti-windows-desktop` with the installer and portable executable.
+
 Copy that APK to your Android device and install it (allow installation from that trusted source when Android asks). For a distributable release, use Android Studio **Build → Generate Signed Bundle / APK → APK** and protect your signing keystore and passwords. Do not share a debug APK as a production release.
 
 ### Connect Android to JPTI
