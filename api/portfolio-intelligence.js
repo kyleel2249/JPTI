@@ -157,8 +157,11 @@ async function loadLedger() {
 
 async function loadMarksAndHistory(positions, includeHistory = false) {
   const marks = {}, returnSeries = {}, errors = [];
+  const maximumPositions = includeHistory ? 50 : 100;
+  const selectedPositions = positions.slice(0, maximumPositions);
+  if (positions.length > selectedPositions.length) errors.push('Market data sampling capped at '+maximumPositions+' positions; '+(positions.length-selectedPositions.length)+' additional position(s) were not marked or included in historical risk.');
   const byExchange = new Map();
-  for (const position of positions) {
+  for (const position of selectedPositions) {
     const list = byExchange.get(position.exchange) || [];
     list.push(position); byExchange.set(position.exchange, list);
   }
@@ -191,7 +194,7 @@ async function loadMarksAndHistory(positions, includeHistory = false) {
 }
 
 async function loadExchangeBalances() {
-  const configured = listExchangeCatalog().filter(item => item.configured && item.capabilities.balance);
+  const configured = listExchangeCatalog().filter(item => item.configured && item.capabilities.balance).slice(0,10);
   return Promise.all(configured.map(async item => {
     try {
       const balance = await withExchange(item.id, { privateAccess:true }, async ex => ex.fetchBalance());
