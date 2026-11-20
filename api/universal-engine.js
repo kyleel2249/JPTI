@@ -1,7 +1,7 @@
 import express from 'express';
 import { withExchange } from './exchanges.js';
 import { requirePrivateApiAuth } from './policy.js';
-import { getLedgerTransactions } from './operations.js';
+import { getLedgerTransactions, ingestLedgerEvent } from './operations.js';
 import { buildEvidenceCouncil } from './advanced-intelligence.js';
 import { normalizeDexPair, scoreAssetEvidence } from './multi-asset-intelligence.js';
 
@@ -142,7 +142,10 @@ export function calculateUnifiedRisk(events, options = {}) {
   const usdDaily=paperDailyUsd+stableDailyUsd+(exchangeRealized.dailyByQuote.USD||0);
   dailyByQuote.USD=usdDaily;
   const usdLoss=Math.max(0,-usdDaily);
+  const controlEvents=events.filter(e=>e.source==='jpti-control'&&e.eventType==='bot_decision'&&['global_pause','global_resume'].includes(e.metadata?.action)).sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+  const globalPaused=controlEvents.at(-1)?.metadata?.action==='global_pause';
   const reasons=[];
+  if(globalPaused)reasons.push('global_kill_switch');
   if(streak>=maxConsecutiveLosses)reasons.push('consecutive_paper_loss_limit');
   if(maxDailyLossUsd>0&&usdLoss>=maxDailyLossUsd)reasons.push('daily_usd_loss_limit');
   return {generatedAt:new Date(now).toISOString(),newEntriesAllowed:reasons.length===0,pauseReasons:reasons,
@@ -150,7 +153,7 @@ export function calculateUnifiedRisk(events, options = {}) {
     maxDailyLossUsd,rolling24hUsdLoss:usdLoss,
     sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)},
     exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote,exchangeFeesByCurrency:exchangeRealized.feeTotals,
-    exitsRemainEnabled:true,mode:'paper-first',
+    globalPaused, exitsRemainEnabled:true,mode:'paper-first',
     caveat:'T-Bots paper PnL is USD-denominated. Exchange realized PnL uses recorded spot fills; USD/USDT/USDC/DAI/FDUSD are approximate USD equivalents for the daily guard. Other quote currencies remain separate until FX marks exist. Unrealized PnL and full cashflow reconciliation are not included.'};
 }
 
@@ -365,6 +368,20 @@ universalRouter.get('/universal/asset/:chain/:address',async(req,res)=>{
       security,securityError,securityDecision:security?.status==='evidence_available'?'review_required':'fail_closed',
       note:'Provider evidence is not a safety guarantee. Run chain-specific simulations, holder and LP verification, and independent contract review before considering a trade.'});
   }catch(e){res.status(e.status||502).json({error:e.message});}
+});
+
+universalRouter.post('/universal/control',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const action=String(req.body?.action||'');
+    if(!['pause_new_entries','resume_new_entries'].includes(action))return res.status(400).json({error:'action must be pause_new_entries or resume_new_entries.'});
+    const reason=String(req.body?.reason||'Manual operator control').slice(0,200);
+    const event=await ingestLedgerEvent({source:'jpti-control',accountId:'global',eventType:'bot_decision',
+      externalId:'jpti-control-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),symbol:'SYSTEM',
+      occurredAt:new Date().toISOString(),metadata:{action:action==='pause_new_entries'?'global_pause':'global_resume',reason,scope:'T-Bots new entries only'}});
+    res.set('Cache-Control','no-store').json({ok:true,action,reason,occurredAt:event.occurredAt,exitsRemainEnabled:true,
+      note:'T-Bots consumes this persisted control state on its next shared-risk refresh. Existing positions keep their exit logic.'});
+  }catch(e){res.status(e.status||401).json({error:e.message});}
 });
 
 universalRouter.get('/universal/risk',async(req,res)=>{
