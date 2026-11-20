@@ -17,7 +17,7 @@ import { tbotsRouter } from './tbots-integration.js';
 import { universalRouter } from './universal-engine.js';
 
 const app = express();
-const port = Number(process.env.JPTI_API_PORT || 8787);
+const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
 const host = process.env.JPTI_API_HOST || '127.0.0.1';
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
