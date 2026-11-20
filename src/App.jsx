@@ -333,7 +333,7 @@ function App() {
     </section>;
     if (page === 'Walk-Forward Lab') return <section className="glass-panel detail-workspace">
        <span className="eyebrow">OUT-OF-SAMPLE STRATEGY RESEARCH</span><h3>Rolling walk-forward laboratory</h3>
-       <p>Live exchange OHLCV is used to select EMA parameters on prior training windows and evaluate them on subsequent unseen test windows. This is a research baseline, not a profitability guarantee.</p>
+       <p>Live exchange OHLCV is used to optimize EMA crossover, RSI mean-reversion or Donchian breakout parameters on prior training windows, then evaluate them on subsequent unseen test windows. This is a research baseline, not a profitability guarantee.</p>
        <form className="news-search" onSubmit={runWalkForward}>
          <select value={forecastExchange} onChange={e => setForecastExchange(e.target.value)}><option value="binance">Binance</option><option value="bitget">Bitget</option><option value="bybit">Bybit</option><option value="okx">OKX</option></select>
          <select value={forecastTimeframe} onChange={e => setForecastTimeframe(e.target.value)}><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select>
@@ -346,7 +346,7 @@ function App() {
        {labError && <p className="quote-error">{labError}</p>}
        {labData && <>
          <div className="quote-consensus-stats"><div><span>AGGREGATE OOS RETURN</span><b>{Number(labData.aggregateOutOfSample.totalReturnPercent).toFixed(2)}%</b></div><div><span>OOS MAX DRAWDOWN</span><b>{Number(labData.aggregateOutOfSample.maxDrawdownPercent).toFixed(2)}%</b></div><div><span>OOS OBSERVATIONS</span><b>{labData.aggregateOutOfSample.observations}</b></div><div><span>WALK-FORWARD FOLDS</span><b>{labData.folds.length}</b></div></div>
-         <div className="scanner-table"><div><span>FOLD</span><span>SELECTED PARAMETERS</span><span>OOS RETURN</span><span>OOS DRAWDOWN</span><span>OOS BARS</span></div>{labData.folds.map(f => <div key={f.fold}><b>{f.fold}</b><strong className="up">{f.selectedParameters.fast}/{f.selectedParameters.slow}</strong><strong className={f.outOfSample.totalReturnPercent >= 0 ? 'up' : 'down'}>{Number(f.outOfSample.totalReturnPercent).toFixed(2)}%</strong><span>{Number(f.outOfSample.maxDrawdownPercent).toFixed(2)}%</span><span>{f.outOfSample.observations}</span></div>)}</div>
+         <div className="scanner-table"><div><span>FOLD</span><span>SELECTED PARAMETERS</span><span>OOS RETURN</span><span>OOS DRAWDOWN</span><span>OOS BARS</span></div>{labData.folds.map(f => <div key={f.fold}><b>{f.fold}</b><strong className="up">{Object.entries(f.selectedParameters).map(([key, value]) => key + ':' + value).join(' · ')}</strong><strong className={f.outOfSample.totalReturnPercent >= 0 ? 'up' : 'down'}>{Number(f.outOfSample.totalReturnPercent).toFixed(2)}%</strong><span>{Number(f.outOfSample.maxDrawdownPercent).toFixed(2)}%</span><span>{f.outOfSample.observations}</span></div>)}</div>
          <p className="subtle-note">{labData.caveats.join(' ')}</p>
        </>}
      </section>;
