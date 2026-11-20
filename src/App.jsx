@@ -330,6 +330,7 @@ function App() {
   );
 
   const renderWorkspace = () => {
+    if (page === 'Universal Engine') return <UniversalEngine/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
     if (page === 'Forecast & Strategy') return <section className="glass-panel detail-workspace">
