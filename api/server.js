@@ -87,6 +87,7 @@ app.get('/api/health', (_req, res) => res.json({
   mode: process.env.JPTI_TRADING_MODE || 'paper',
   liveTradingEnabled: process.env.JPTI_ENABLE_LIVE_TRADING === 'true',
   localPrivateAccess: process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS === 'true' && ['127.0.0.1', '::1', 'localhost'].includes(host),
+  desktopInstanceId: process.env.JPTI_DESKTOP_INSTANCE_ID || null,
   timestamp: new Date().toISOString()
 }));
 
