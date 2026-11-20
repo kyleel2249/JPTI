@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { apiFetch } from './lib/api.js';
 
 const fmt = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString(undefined,{maximumFractionDigits:4});
 const profilesFallback = [
@@ -7,7 +8,7 @@ const profilesFallback = [
   ['equity_swing','Equity swing'],['macro_rotation','Macro rotation']
 ];
 
-export default function UniversalEngine() {
+export default function UniversalEngine({ localPrivateAccess = false }) {
   const [profiles,setProfiles]=useState([]);
   const [coverage,setCoverage]=useState(null);
   const [exchange,setExchange]=useState('binance');
@@ -27,36 +28,37 @@ export default function UniversalEngine() {
   const [controlBusy,setControlBusy]=useState(false);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
+  const canUsePrivateApi = localPrivateAccess || Boolean(token);
 
-  useEffect(()=>{fetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
-    fetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
+  useEffect(()=>{apiFetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
+    apiFetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
   },[]);
 
   const loadMarket=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const r=await fetch('/api/universal/market/'+encodeURIComponent(exchange)+'/'+encodeURIComponent(symbol)+'?timeframe=1h',{cache:'no-store'});
+      const r=await apiFetch('/api/universal/market/'+encodeURIComponent(exchange)+'/'+encodeURIComponent(symbol)+'?timeframe=1h',{cache:'no-store'});
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Market evidence unavailable');
       setMarket(d);
       const ev=d.evidence||{};
       const payload={profileId,evidence:{...extraEvidence,momentumPct:extraEvidence.momentumPct??ev.momentumPct,relativeVolume:extraEvidence.relativeVolume??ev.relativeVolume,timeframeAlignment:extraEvidence.timeframeAlignment??ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:extraEvidence.fundingRate??ev.fundingRate,rsi14:extraEvidence.rsi14??ev.rsi14,liquidityUsd:extraEvidence.liquidityUsd??ev.visibleDepthUsd}};
-      const evalRes=await fetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+      const evalRes=await apiFetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
       const result=await evalRes.json();if(evalRes.ok)setEvaluation(result);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[exchange,symbol,profileId,extraEvidence]);
 
   const loadMacro=useCallback(async()=>{
-    try{const r=await fetch('/api/universal/macro',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Macro sources unavailable');setMacro(d);}catch(e){setError(e.message);}
+    try{const r=await apiFetch('/api/universal/macro',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Macro sources unavailable');setMacro(d);}catch(e){setError(e.message);}
   },[]);
   const loadDex=useCallback(async(event)=>{
     if(event)event.preventDefault();setLoading(true);setError('');
-    try{const r=await fetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
+    try{const r=await apiFetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
   },[query,token]);
   const loadPrivate=useCallback(async()=>{
     setLoading(true);setError('');
     try{
       const headers={'x-jpti-api-token':token};
-      const [r1,r2,r3]=await Promise.all([fetch('/api/universal/risk',{headers,cache:'no-store'}),fetch('/api/universal/performance',{headers,cache:'no-store'}),fetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
+      const [r1,r2,r3]=await Promise.all([apiFetch('/api/universal/risk',{headers,cache:'no-store'}),apiFetch('/api/universal/performance',{headers,cache:'no-store'}),apiFetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
       const [a,b,c]=await Promise.all([r1.json(),r2.json(),r3.json()]);
       if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');if(!r3.ok)throw new Error(c.error||'Portfolio valuation unavailable');
       setRisk(a);setPerformance(b);setPortfolio(c);
@@ -66,7 +68,7 @@ export default function UniversalEngine() {
   const setGlobalControl=useCallback(async(action)=>{
     setControlBusy(true);setError('');setControlStatus('');
     try{
-      const r=await fetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
+      const r=await apiFetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
         body:JSON.stringify({action,reason:'Universal Engine operator control'})});
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Global control update failed');
       setControlStatus(action==='pause_new_entries'?'Global T-Bots entry pause recorded.':'Global T-Bots entry pause cleared.');
@@ -137,7 +139,7 @@ export default function UniversalEngine() {
     {evaluation&&<div className="quote-consensus-stats"><div><span>PROFILE SCORE</span><b>{evaluation.score}/100</b></div><div><span>BIAS</span><b>{evaluation.bias}</b></div><div><span>STATUS</span><b>{evaluation.status.replaceAll('_',' ')}</b></div><div><span>MISSING EVIDENCE</span><b>{evaluation.missingEvidence.join(', ')||'None'}</b></div></div>}
 
     <div className="section-heading"><div><span className="eyebrow">MULTI-CHAIN TOKEN DISCOVERY</span><h3>DEX asset universe</h3></div></div>
-    <form className="news-search" onSubmit={loadDex}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Token name, symbol or contract"/><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button disabled={loading||!token||query.trim().length<2}>{loading?'Searching…':'Search DEX universe'}</button></form>
+    <form className="news-search" onSubmit={loadDex}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Token name, symbol or contract"/><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button disabled={loading||(!token&&!localPrivateAccess)||query.trim().length<2}>{loading?'Searching…':'Search DEX universe'}</button></form>
     {dex&&<><div className="quote-consensus-stats"><div><span>PAIR RESULTS</span><b>{dex.pairs?.length||0}</b></div><div><span>CHAINS</span><b>{(dex.chains||[]).join(', ')||'—'}</b></div><div><span>DATA SOURCE</span><b>{dex.source}</b></div><div><span>UPDATED</span><b>{new Date(dex.fetchedAt).toLocaleTimeString()}</b></div></div>
     <div className="scanner-table"><div><span>CHAIN / PAIR</span><span>PRICE USD</span><span>LIQUIDITY</span><span>24H VOLUME</span><span>EVIDENCE</span></div>{(dex.pairs||[]).slice(0,30).map((p,i)=><div key={p.chain+':'+p.pairAddress+':'+i}><b>{p.chain} · {p.base?.symbol}/{p.quote?.symbol}</b><span>{fmt(p.priceUsd)}</span><span>{fmt(p.liquidityUsd)}</span><span>{fmt(p.volume24hUsd)}</span><strong>{p.evidence?.score??'—'}/100</strong></div>)}</div>
     <p className="subtle-note">{dex.coverage}</p></>}
@@ -147,8 +149,8 @@ export default function UniversalEngine() {
     <p className="subtle-note">Sources: {Object.entries(macro.sources||{}).map(([k,v])=>k+': '+v.status).join(' · ')}. Missing providers remain unavailable, not zero.</p></>}
 
     <div className="section-heading"><div><span className="eyebrow">PORTFOLIO-WIDE CONTROL</span><h3>Unified risk & performance</h3></div></div>
-    <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!token}>{loading?'Loading…':'Load risk, performance & portfolio'}</button></div>
-    {risk&&<><div className="news-search"><button onClick={()=>setGlobalControl('pause_new_entries')} disabled={controlBusy||!token}>Pause all new T-Bots entries</button><button onClick={()=>setGlobalControl('resume_new_entries')} disabled={controlBusy||!token}>Resume new entries</button></div>{controlStatus&&<p className="subtle-note">{controlStatus}</p>}<div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>GLOBAL PAUSE</span><b>{risk.globalPaused?'ON':'OFF'}</b><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
+    <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!canUsePrivateApi}>{loading?'Loading…':'Load risk, performance & portfolio'}</button></div>
+    {risk&&<><div className="news-search"><button onClick={()=>setGlobalControl('pause_new_entries')} disabled={controlBusy||!canUsePrivateApi}>Pause all new T-Bots entries</button><button onClick={()=>setGlobalControl('resume_new_entries')} disabled={controlBusy||!token}>Resume new entries</button></div>{controlStatus&&<p className="subtle-note">{controlStatus}</p>}<div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>GLOBAL PAUSE</span><b>{risk.globalPaused?'ON':'OFF'}</b><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
     {performance&&<><div className="quote-consensus-stats"><div><span>T-BOTS CLOSED PAPER TRADES</span><b>{performance.paperStrategy.closedTrades}</b></div><div><span>PAPER WIN RATE</span><b>{performance.paperStrategy.winRatePercent==null?'—':fmt(performance.paperStrategy.winRatePercent)+'%'}</b></div><div><span>PAPER REALIZED PNL</span><b>{fmt(performance.paperStrategy.realizedPnlUsd)} USD</b></div><div><span>EXCHANGE FILLS</span><b>{performance.exchangeExecution.fillCount}</b></div></div><p className="subtle-note">{performance.caveat}</p></>}
     {portfolio&&<><div className="section-heading"><div><span className="eyebrow">RECORDED EXCHANGE INVENTORY</span><h3>Spot portfolio mark-to-market</h3></div><span className="subtle-note">{portfolio.positions?.length||0} recorded open positions</span></div>
       {Object.keys(portfolio.byQuote||{}).length>0?<><div className="quote-consensus-stats">{Object.entries(portfolio.byQuote).map(([quote,row])=><div key={quote}><span>{quote} · COST BASIS</span><b>{fmt(row.costBasis)}</b><span>MARKET VALUE</span><b>{fmt(row.marketValue)}</b><span>UNREALIZED PNL</span><b>{fmt(row.unrealizedPnl)}</b></div>)}</div>

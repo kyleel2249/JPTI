@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ExchangeConnectivity from './ExchangeConnectivity.jsx';
 import FinancialIntelligence from './FinancialIntelligence.jsx';
 import UniversalEngine from './UniversalEngine.jsx';
+import ConnectionSettings from './ConnectionSettings.jsx';
+import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
   ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2,
@@ -24,7 +26,8 @@ const navigation = [
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
   { label: 'Forecast & Strategy', icon: Gauge, group: 'RESEARCH' },
   { label: 'Walk-Forward Lab', icon: SlidersHorizontal, group: 'RESEARCH' },
-  { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' }
+  { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' },
+  { label: 'Connection Settings', icon: Settings2, group: 'SYSTEM' }
 ];
 
 const fmt = (value) => value == null ? '—' : Number(value).toLocaleString();
@@ -74,6 +77,9 @@ function App() {
   const [streamData, setStreamData] = useState(null);
   const [portfolioToken, setPortfolioToken] = useState('');
   const [portfolioData, setPortfolioData] = useState(null);
+  const [performanceData, setPerformanceData] = useState(null);
+  const [performanceError, setPerformanceError] = useState('');
+  const [performanceLoading, setPerformanceLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState('');
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [reconciliationRun, setReconciliationRun] = useState(null);
@@ -88,7 +94,7 @@ function App() {
   const refresh = useCallback(async () => {
     try {
       const paths = ['/api/health', '/api/operations/overview', '/api/providers', '/api/operations/ledger/summary', '/api/operations/events?limit=12'];
-      const responses = await Promise.all(paths.map((path) => fetch(path, { cache: 'no-store' })));
+      const responses = await Promise.all(paths.map((path) => apiFetch(path, { cache: 'no-store' })));
       const payloads = await Promise.all(responses.map((response) => response.json()));
       const failed = responses.findIndex((response) => !response.ok);
       if (failed >= 0) throw new Error(payloads[failed]?.error || 'JPTI service endpoint unavailable');
@@ -114,7 +120,7 @@ function App() {
     if (event) event.preventDefault();
     setNewsLoading(true); setNewsError('');
     try {
-      const response = await fetch('/api/providers/news/search?q=' + encodeURIComponent(newsQuery), { cache: 'no-store' });
+      const response = await apiFetch('/api/providers/news/search?q=' + encodeURIComponent(newsQuery), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'News search unavailable');
       setNewsData(data.articles || []);
@@ -131,7 +137,7 @@ function App() {
     setQuoteLoading(true); setQuoteError('');
     try {
       const normalizedSymbol = quoteSymbol.trim().toUpperCase();
-      const response = await fetch('/api/providers/consensus/quote/' + encodeURIComponent(normalizedSymbol), { cache: 'no-store' });
+      const response = await apiFetch('/api/providers/consensus/quote/' + encodeURIComponent(normalizedSymbol), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Cross-provider quote check failed');
       setQuoteConsensus(data);
@@ -144,7 +150,7 @@ function App() {
     setCrossVenueLoading(true); setCrossVenueError('');
     try {
       const params = new URLSearchParams({ symbol: crossVenueSymbol.trim().toUpperCase() });
-      const response = await fetch('/api/exchanges/compare/ticker?' + params.toString(), { cache: 'no-store' });
+      const response = await apiFetch('/api/exchanges/compare/ticker?' + params.toString(), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Cross-exchange comparison failed');
       setCrossVenueData(data);
@@ -157,7 +163,7 @@ function App() {
     setForecastLoading(true); setForecastError('');
     try {
       const url = '/api/advanced/forecast/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?timeframe=' + encodeURIComponent(forecastTimeframe);
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await apiFetch(url, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Forecast unavailable');
       setForecastData(data);
@@ -171,7 +177,7 @@ function App() {
     try {
       const params = new URLSearchParams({ strategy: labStrategy, timeframe: forecastTimeframe, limit: '1000', trainBars: String(labTrainBars), testBars: String(labTestBars), stepBars: String(labTestBars), feeBps: '10' });
       const url = '/api/advanced/lab/walk-forward/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?' + params.toString();
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await apiFetch(url, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Walk-forward research failed');
       setLabData(data);
@@ -183,7 +189,7 @@ function App() {
     if (event) event.preventDefault();
     setRiskLoading(true); setRiskError('');
     try {
-      const response = await fetch('/api/advanced/portfolio/risk', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const response = await apiFetch('/api/advanced/portfolio/risk', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Portfolio risk analytics unavailable');
       setRiskData(data);
@@ -195,7 +201,7 @@ function App() {
     if (!backfillSince) { setPortfolioError('Choose a historical start date first.'); return; }
     setBackfillBusy(true); setBackfillResult(null); setPortfolioError('');
     try {
-      const response = await fetch('/api/operations/fills/backfill', {
+      const response = await apiFetch('/api/operations/fills/backfill', {
         method: 'POST',
         headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ since: new Date(backfillSince + 'T00:00:00.000Z').toISOString() })
@@ -212,7 +218,7 @@ function App() {
     if (event) event.preventDefault();
     setPortfolioLoading(true); setPortfolioError('');
     try {
-      const response = await fetch('/api/advanced/portfolio/accounting', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const response = await apiFetch('/api/advanced/portfolio/accounting', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Portfolio accounting unavailable');
       setPortfolioData(data);
@@ -220,12 +226,25 @@ function App() {
     finally { setPortfolioLoading(false); }
   }, [portfolioToken]);
 
+  const loadTradePerformance = useCallback(async () => {
+    setPerformanceLoading(true); setPerformanceError('');
+    try {
+      const response = await apiFetch('/api/advanced/portfolio/performance', {
+        headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Trade performance analytics unavailable');
+      setPerformanceData(data);
+    } catch (error) { setPerformanceError(error.message); }
+    finally { setPerformanceLoading(false); }
+  }, [portfolioToken]);
+
   const runPortfolioReconciliation = useCallback(async () => {
     setReconciliationBusy(true);
     setReconciliationRun(null);
     setPortfolioError('');
     try {
-      const response = await fetch('/api/operations/reconciliation/run', {
+      const response = await apiFetch('/api/operations/reconciliation/run', {
         method: 'POST',
         headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -239,7 +258,7 @@ function App() {
 
   useEffect(() => {
     if (page !== 'Forecast & Strategy') { setStreamData(null); return undefined; }
-    const source = new EventSource('/api/advanced/stream/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?intervalMs=2000');
+    const source = new EventSource(apiUrl('/api/advanced/stream/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?intervalMs=2000'));
     source.addEventListener('intelligence', event => { try { setStreamData(JSON.parse(event.data)); } catch {} });
     return () => source.close();
   }, [page, forecastExchange, symbol]);
@@ -266,7 +285,8 @@ function App() {
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
-    'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
+    'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.',
+    'Connection Settings': 'Choose local desktop mode or connect this device to your secured cloud JPTI service.'
   };
 
   const renderOperations = () => (
@@ -369,7 +389,8 @@ function App() {
   );
 
   const renderWorkspace = () => {
-    if (page === 'Universal Engine') return <UniversalEngine/>;
+    if (page === 'Connection Settings') return <ConnectionSettings/>;
+    if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
     if (page === 'Forecast & Strategy') return <section className="glass-panel detail-workspace">
@@ -414,19 +435,58 @@ function App() {
        <span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Portfolio accounting & reconciliation</h3>
        <p>{ledger?.eventCount ?? 0} transaction events recorded. Configure read-only trade-history keys and the fill watchlist to keep the ledger current.</p>
        <div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div>
-       <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (kept in this page's memory only)"/><button disabled={portfolioLoading || !portfolioToken}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
-       <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || !portfolioToken}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
+       <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (required for cloud; optional in local desktop)"/><button disabled={portfolioLoading || (!portfolioToken && !health?.localPrivateAccess)}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
+       <div className="news-search"><button type="button" onClick={runPortfolioReconciliation} disabled={reconciliationBusy || (!portfolioToken && !health?.localPrivateAccess)}>{reconciliationBusy ? 'Reconciling exchange balances…' : 'Run balance reconciliation now'}</button></div>
        <div className="glass-panel detail-workspace">
          <span className="eyebrow">HISTORICAL TRADE RECOVERY</span>
          <h4>Backfill exchange trade history</h4>
          <p className="subtle-note">Import earlier fills for the exchanges and markets in JPTI_FILL_SYNC_MARKETS. Existing fills are deduplicated. Backfill uses a separate cursor and does not move the scheduled live-sync cursor.</p>
-         <div className="news-search"><label>Import starting date <input type="date" value={backfillSince} onChange={event => setBackfillSince(event.target.value)} /></label><button type="button" onClick={runHistoricalBackfill} disabled={backfillBusy || !portfolioToken || !backfillSince}>{backfillBusy ? 'Importing historical trades…' : 'Start historical backfill'}</button></div>
+         <div className="news-search"><label>Import starting date <input type="date" value={backfillSince} onChange={event => setBackfillSince(event.target.value)} /></label><button type="button" onClick={runHistoricalBackfill} disabled={backfillBusy || (!portfolioToken && !health?.localPrivateAccess) || !backfillSince}>{backfillBusy ? 'Importing historical trades…' : 'Start historical backfill'}</button></div>
          {backfillResult && <div className="quote-consensus-stats">
            <div><span>FETCHED</span><b>{backfillResult.fetched}</b></div><div><span>NEWLY IMPORTED</span><b>{backfillResult.ingested}</b></div><div><span>DUPLICATES</span><b>{backfillResult.duplicates}</b></div><div><span>PAGE-CAPPED MARKETS</span><b>{backfillResult.cappedMarkets}</b></div>
            {backfillResult.markets.map(market => <p className="subtle-note" key={market.exchange+market.symbol}>{market.exchange} · {market.symbol}: {market.pages} page(s), {market.fetched} fetched, {market.ingested} new, {market.invalidOrUnsupported} unsupported. {market.pageLimitReached ? 'More pages remain; run again to continue.' : 'History window completed.'}</p>)}
            {backfillResult.errors.map((error,index) => <p className="quote-error" key={index}>{error}</p>)}
          </div>}
        </div>
+       <div className="section-heading ops-title"><div><span className="eyebrow">PERFORMANCE & STRATEGY ATTRIBUTION</span><h3>Trade performance intelligence</h3><p>Closed exit executions only; results are separated by quote currency.</p></div><button className="small-refresh" onClick={loadTradePerformance} disabled={performanceLoading || (!portfolioToken && !health?.localPrivateAccess)}>{performanceLoading ? 'Analyzing…' : 'Analyze ledger performance'}</button></div>
+       {performanceError && <p className="quote-error">{performanceError}</p>}
+       {performanceData && <>
+         <div className="quote-consensus-stats">
+           <div><span>RECORDED FILLS</span><b>{performanceData.fillCount}</b></div>
+           <div><span>MATCHED EXIT EXECUTIONS</span><b>{performanceData.matchedExitCount}</b></div>
+           <div><span>UNMATCHED SELL EXECUTIONS</span><b>{performanceData.unmatchedSellExecutions}</b></div>
+           <div><span>STRATEGY LABEL COVERAGE</span><b>{performanceData.matchedExitCount ? Math.round((1-performanceData.dataQuality.unattributedExits/performanceData.matchedExitCount)*100) + '%' : '—'}</b></div>
+         </div>
+         <h4>Realized performance by quote currency</h4>
+         <div className="scanner-table"><div><span>QUOTE</span><span>NET REALIZED PNL</span><span>WIN RATE</span><span>PROFIT FACTOR</span><span>EXPECTANCY / EXIT</span><span>MAX DD (QUOTE)</span></div>
+           {performanceData.byCurrency.map(row => <div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong><span>{row.winRatePercent==null?'—':row.winRatePercent.toFixed(1)+'%'}</span><span>{row.profitFactor==null?'—':row.profitFactor.toFixed(2)}</span><span>{fmt(row.expectancyPerExit)}</span><span>{fmt(row.maxDrawdownCurrency)}</span></div>)}
+           {!performanceData.byCurrency.length && <p className="empty-state">No matched sell executions yet. Import fills and ensure opening inventory is present.</p>}
+         </div>
+         <h4>Strategy attribution · separated by quote currency</h4>
+         <div className="scanner-table"><div><span>STRATEGY</span><span>QUOTE</span><span>EXITS</span><span>WINS / LOSSES</span><span>NET PNL</span></div>
+           {performanceData.byStrategy.map((row,index)=><div key={row.strategy+row.quoteCurrency+index}><b>{row.strategy}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>Market attribution</h4>
+         <div className="scanner-table"><div><span>MARKET</span><span>QUOTE</span><span>EXITS</span><span>AVERAGE PNL</span><span>NET PNL</span></div>
+           {performanceData.byMarket.map((row,index)=><div key={row.symbol+row.quoteCurrency+index}><b>{row.symbol}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{fmt(row.averagePnl)}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>UTC session attribution</h4>
+         <div className="scanner-table"><div><span>SESSION</span><span>QUOTE</span><span>EXITS</span><span>WINS / LOSSES</span><span>NET PNL</span></div>
+           {performanceData.bySession.map((row,index)=><div key={row.session+row.quoteCurrency+index}><b>{row.session}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>Daily realized PnL calendar data</h4>
+         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span></div>
+           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong></div>))}
+         </div>
+         <h4>Performance analyst · rule-based evidence checks</h4>
+         <div className="risk-list">{performanceData.analystInsights.map((insight,index)=><p key={index}><ShieldCheck/><span><b>{insight.title}</b>{insight.quoteCurrency ? ' · '+insight.quoteCurrency : ''}<br/>{insight.evidence}<br/><small>{insight.review}</small></span></p>)}</div>
+         <h4>Trade quality and loss streaks</h4>
+         <div className="scanner-table"><div><span>QUOTE</span><span>CURRENT LOSS STREAK</span><span>LONGEST LOSS STREAK</span><span>LAST 20 EXITS PNL</span></div>
+           {performanceData.byCurrency.map(row=><div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><span>{row.currentLossStreak}</span><span>{row.longestLossStreak}</span><strong className={row.recent20NetPnl>=0?'up':'down'}>{fmt(row.recent20NetPnl)}</strong></div>)}
+         </div>
+         <div className="risk-list">{performanceData.dataQuality.warnings.map((warning,index)=><p key={index}><ShieldCheck/>{warning}</p>)}</div>
+         <p className="subtle-note">{performanceData.methodology} {performanceData.limitations.join(' ')}</p>
+       </>}
        {portfolioError && <p className="quote-error">{portfolioError}</p>}
        {portfolioData && <>
          <div className="quote-consensus-stats"><div><span>OPEN POSITIONS</span><b>{portfolioData.positions.length}</b></div><div><span>ASSET MOVEMENT LINES</span><b>{portfolioData.assetMovements.length}</b></div><div><span>EXCHANGE ACCOUNTS</span><b>{portfolioData.exchangeBalances.length}</b></div><div><span>REALIZED PNL CURRENCIES</span><b>{Object.keys(portfolioData.realizedPnlByQuoteCurrency).length}</b></div></div>
@@ -455,10 +515,13 @@ function App() {
     if (page === 'Risk Management') return <section className="glass-panel detail-workspace">
       <span className="eyebrow">CAPITAL PROTECTION · QUANTITATIVE RISK</span><h3>Portfolio VaR, concentration & stress testing</h3>
       <div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> Server-side per-order notional and market restrictions.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>
-      <form className="news-search" onSubmit={loadPortfolioRisk}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token"/><button disabled={riskLoading || !portfolioToken}>{riskLoading ? 'Calculating risk…' : 'Run portfolio risk analysis'}</button></form>
+      <form className="news-search" onSubmit={loadPortfolioRisk}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token"/><button disabled={riskLoading || (!portfolioToken && !health?.localPrivateAccess)}>{riskLoading ? 'Calculating risk…' : 'Run portfolio risk analysis'}</button></form>
       {riskError && <p className="quote-error">{riskError}</p>}
       {riskData && <>
         <p className="subtle-note">Generated {new Date(riskData.generatedAt).toLocaleString()}. Quote-currency exposures are reported separately; no cross-currency aggregation is performed.</p>
+        {riskData.warnings?.map((warning,index)=><p className={warning.severity==='warning'?'quote-error':'subtle-note'} key={index}>{warning.quoteCurrency ? warning.quoteCurrency+' · ' : ''}{warning.message}</p>)}
+        {riskData.dataQuality?.marketDataErrors?.map((error,index)=><p className="subtle-note" key={'market-'+index}>Market data: {error}</p>)}
+        {riskData.portfolios.length===0 && <p className="empty-state">No marked ledger positions are available. Import fills and wait for supported public market prices before running portfolio risk analysis.</p>}
         {riskData.portfolios.map(p => <div className="glass-panel detail-workspace" key={p.quoteCurrency}>
           <div className="section-heading"><div><span className="eyebrow">RISK BOOK · {p.quoteCurrency}</span><h4>{fmt(p.grossExposure)} {p.quoteCurrency} gross exposure</h4></div></div>
           <div className="quote-consensus-stats"><div><span>1D VaR · 95%</span><b>{p.historical.var95Percent == null ? '—' : p.historical.var95Percent.toFixed(2) + '%'}</b></div><div><span>EXPECTED SHORTFALL · 95%</span><b>{p.historical.expectedShortfall95Percent == null ? '—' : p.historical.expectedShortfall95Percent.toFixed(2) + '%'}</b></div><div><span>1D VaR · 99%</span><b>{p.historical.var99Percent == null ? '—' : p.historical.var99Percent.toFixed(2) + '%'}</b></div><div><span>STRESS LOSS</span><b>{fmt(p.stress.estimatedLoss)} {p.quoteCurrency}</b></div></div>
@@ -481,7 +544,7 @@ function App() {
       <label className="side-label">NAVIGATION</label>
       <div className="side-search"><Search size={14}/><input placeholder="Find a workspace" value={query} onChange={(e) => setQuery(e.target.value)}/><Command size={12}/></div>
       <nav>{groups.map((group) => <div className="nav-group" key={group}><small>{group}</small>{filteredNav.filter((item) => item.group === group).map((item) => { const Icon = item.icon; return <button key={item.label} className={page === item.label ? 'active' : ''} onClick={() => activeNav(item.label)}><Icon size={16}/><span>{item.label}</span>{item.label === 'Financial & On-chain' && <i>DATA</i>}</button>; })}</div>)}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-status"><span className="pulse-dot"/><span><b>{gatewayOnline ? 'SYSTEM OPERATIONAL' : 'CONNECTING TO API'}</b><small>{health?.mode || 'Awaiting gateway'}</small></span></div><div className="sidebar-footer"><span><Settings2 size={14}/> Settings</span><span><CircleHelp size={14}/> Help</span></div><small className="build-label">JPTI · SECURE TRADING INFRASTRUCTURE</small></div>
+      <div className="sidebar-bottom"><div className="sidebar-status"><span className="pulse-dot"/><span><b>{gatewayOnline ? 'SYSTEM OPERATIONAL' : 'CONNECTING TO API'}</b><small>{health?.mode || 'Awaiting gateway'}</small></span></div><div className="sidebar-footer"><button type="button" onClick={() => activeNav('Connection Settings')}><Settings2 size={14}/> Settings</button><span><CircleHelp size={14}/> Help</span></div><small className="build-label">JPTI · SECURE TRADING INFRASTRUCTURE</small></div>
     </aside>
 
     <main className="command-main">

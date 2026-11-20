@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runWalkForward, calculatePortfolioAccounting, calculatePortfolioRisk } from './advanced-lab.js';
+import { runWalkForward, calculatePortfolioAccounting, calculatePortfolioRisk, labRouter } from './advanced-lab.js';
 
 const candles = Array.from({ length: 1000 }, (_, i) => {
   const close = 100 + i * 0.025 + Math.sin(i / 8) * 2;
@@ -99,4 +99,10 @@ test('portfolio risk keeps quote currencies separate and calculates historical V
   assert.ok(Number.isFinite(usdt.historical.diagnostics.maxHistoricalDrawdownPercent));
   assert.ok(usdt.historical.diagnostics.worstDay);
   assert.ok(usdt.historical.diagnostics.worstRolling20DayReturnPercent !== null);
+});
+
+test('authenticated trade performance endpoint is registered', () => {
+  const route = labRouter.stack.find(layer => layer.route?.path === '/advanced/portfolio/performance');
+  assert.ok(route, 'performance analytics route should be registered');
+  assert.equal(route.route.methods.get, true);
 });

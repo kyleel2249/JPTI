@@ -28,7 +28,7 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Product availability and market classification are exchange-specific; an instrument is only shown when its adapter reports it in the public catalog. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.
 - SMC markings are rule-based technical interpretations, not proof of institutional activity. Order blocks are candidate zones, and all signals require trader validation. Multi-timeframe confluence, advanced alerts and SMC-based strategy backtesting are not yet implemented. FVGs are marked filled after a full traversal of the gap, and order-block zones are marked invalidated after a close through the far boundary.
 - Financial and on-chain coverage is provider-dependent: CoinGecko/DeFiLlama endpoints are public and may rate-limit; FRED, Alchemy and Helius require user-created server-side API keys. Wallet history is indexed/provider-limited, not a complete chain archive, and wallet ownership/intent is not inferred. The confluence scoring endpoint is not yet a validated backtested strategy or an order trigger; on-chain wallet histories are currently available through separate read-only address lookups and are not automatically attributed to exchange netflows or fed into pair scores. Equities, bonds, FX and commodity feeds are not yet connected as live tradable market feeds; FRED provides selected macroeconomic time series only.
-- No persistent user accounts, encrypted credential vault, PostgreSQL/Redis storage, authenticated multi-user cloud gateway, production WebSocket streaming, full futures/margin execution, copy-trading engine, strategy execution engine, AI model inference, institutional portfolio ledger or native Android APK yet.
+- No persistent user accounts, encrypted credential vault, Redis cache/queue, authenticated multi-user cloud gateway, production WebSocket streaming, full futures/margin execution, copy-trading engine, fully automated strategy execution engine, AI model inference, institution-grade portfolio accounting or native Android APK yet. PostgreSQL durable event storage and scheduler leases are implemented when configured.
 - A configured exchange key does not mean an exchange account has been authenticated until a private endpoint succeeds.
 - No exchange is connected until you configure your own credentials and verify the connection.
 
@@ -103,15 +103,24 @@ Live order execution is disabled by default. The API requires all of the followi
 5. An active spot market with USDT quote currency and adapter order support.
 6. Estimated order notional within `JPTI_MAX_ORDER_NOTIONAL_USDT` (default 100 USDT).
 
-These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. Do not expose it directly to the public internet or deploy it to Cloudflare as-is. Production cloud operation requires authentication, TLS, encrypted secret management, durable audit logging, user-level authorization, network restrictions, monitoring, rate limiting at the edge, kill switches and independent security review.
+These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. JPTI is designed to run locally with a Node.js API, web interface, Windows desktop application and Android client. Keep the API bound to localhost on the PC; use secured device settings only over a trusted local network.
 
 ## Android
 
-The responsive web interface can be opened on Android while the phone and PC share Wi-Fi. Start JPTI with `npm run dev:all`, run `ipconfig` on Windows, then open `http://PC-IP-ADDRESS:5173` in Android Chrome. Allow Node.js through Windows Firewall on Private networks only. The API remains bound to the PC loopback interface and is accessed through the Vite proxy. This is a web app, not a native APK.
+JPTI supports a native Android client built with Capacitor. The Android app connects to a JPTI API instance running on your Windows PC or another computer on your trusted local network. Build the Android project and debug APK with:
+
+```bat
+npm run mobile:android:add
+npm run mobile:sync
+cd android
+gradlew.bat assembleDebug
+```
+
+For development, start the local API and web interface with `npm run dev:all`. Configure Android Connection Settings with the PC's reachable API address on your trusted local network. Do not expose the API to the public internet. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
 
 ## Architecture direction
 
-Next build stages: authenticated user/workspace model; encrypted credential vault; durable PostgreSQL ledger and audit log; Redis jobs/cache; WebSocket market-data service; per-exchange capability adapters; policy-enforced order service; paper execution engine; portfolio/risk ledger; strategy backtesting and walk-forward validation; Solana DEX intelligence agents; AI research and explainable signal scoring; PWA/Capacitor Android packaging; hardened Cloudflare deployment.
+Next build stages: authenticated user/workspace model; encrypted credential vault; durable PostgreSQL ledger and audit log; Redis jobs/cache; WebSocket market-data service; per-exchange capability adapters; policy-enforced order service; paper execution engine; portfolio/risk ledger; strategy backtesting and walk-forward validation; Solana DEX intelligence agents; AI research and explainable signal scoring; PWA/Capacitor Android packaging; local Windows desktop and Android application hardening.
 
 ## Important risk notice
 
@@ -281,3 +290,10 @@ Authenticated outbox routes (send `x-jpti-api-token`):
 - `POST /api/operations/outbox/:id/retry` — release a failed message for retry with optional `error` and `delayMs` fields. The retry delay is bounded.
 
 Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once. If a consumer completes its side effect and crashes before acknowledgement, the message may be delivered again after its lease expires. Use the stable `event_id` as the consumer's deduplication key. PostgreSQL is required for transactional outbox claiming and acknowledgement. File mode retains replay-safe ledger insertion followed by cursor advancement, but those two writes are not a single crash-atomic transaction and no distributed outbox is available; use PostgreSQL for multi-instance production operation. No live orders or transfers are executed by this feature.
+
+
+## Ledger-backed trade performance intelligence
+
+The Portfolio & Ledger workspace includes an authenticated performance report at `GET /api/advanced/portfolio/performance`. It calculates realized PnL by quote currency, closed sell-execution win rate, profit factor, expectancy, average win/loss, realized-equity drawdown, daily realized PnL, and attribution by strategy, market, exchange and coarse UTC session. Strategy attribution uses `metadata.strategyId`, `metadata.strategy` or `metadata.botId`; otherwise the fill is explicitly unattributed.
+
+The report uses weighted-average cost per exchange/account/market. It does not call a sell a completed round trip: each matched sell execution is one exit observation. Unmatched sells are counted and warned about, third-currency fees are itemized without invented FX conversion, and quote currencies are never combined. This is realized ledger performance, not total account return or tax reporting. Open-position mark-to-market and derivatives funding remain outside this fill-only report.
