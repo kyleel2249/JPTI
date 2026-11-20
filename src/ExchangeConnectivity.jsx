@@ -17,7 +17,7 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
       try {
         const [healthResponse, catalogResponse] = await Promise.all([
           apiFetch('/api/health', { cache: 'no-store' }),
-          fetch('/api/exchanges', { cache: 'no-store' })
+          apiFetch('/api/exchanges', { cache: 'no-store' })
         ]);
         if (!healthResponse.ok || !catalogResponse.ok) throw new Error('Gateway or exchange catalog is unavailable');
         const [status, catalog] = await Promise.all([healthResponse.json(), catalogResponse.json()]);
@@ -36,7 +36,7 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
     let active = true;
     const load = async () => {
       try {
-        const response = await fetch('/api/exchanges/' + exchange + '/ticker/' + symbol.replace('/', '-'));
+        const response = await apiFetch('/api/exchanges/' + exchange + '/ticker/' + symbol.replace('/', '-'));
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Ticker request failed');
         if (active) { setTicker(data); setError(''); }
