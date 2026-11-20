@@ -39,6 +39,8 @@ app.whenReady().then(async () => {
   try {
     const root = app.getAppPath();
     process.env.JPTI_API_HOST = '127.0.0.1';
+    process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS = 'true';
+    process.env.JPTI_REQUIRE_EDGE_SECRET = 'false';
     process.env.JPTI_API_PORT = '8787';
     process.env.JPTI_STORAGE_BACKEND = 'file';
     process.env.JPTI_DATA_DIR = path.join(app.getPath('userData'), 'data');
