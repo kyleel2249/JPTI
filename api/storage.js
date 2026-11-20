@@ -82,7 +82,7 @@ export async function initializeStorage() {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required when JPTI_STORAGE_BACKEND=postgres.');
     const db = await getPool();
     await db.query(migration);
-    await db.query("INSERT INTO jpti_schema_migrations(version) VALUES ('001_initial_durable_storage') ON CONFLICT DO NOTHING");
+    await db.query("INSERT INTO jpti_schema_migrations(version) VALUES ('001_initial_durable_storage'),('003_transactional_ledger_outbox') ON CONFLICT DO NOTHING");
   } else {
     await mkdir(dataDir, { recursive: true });
   }
