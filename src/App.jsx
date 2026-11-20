@@ -473,6 +473,12 @@ function App() {
          <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span></div>
            {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong></div>))}
          </div>
+         <h4>Performance analyst · rule-based evidence checks</h4>
+         <div className="risk-list">{performanceData.analystInsights.map((insight,index)=><p key={index}><ShieldCheck/><span><b>{insight.title}</b>{insight.quoteCurrency ? ' · '+insight.quoteCurrency : ''}<br/>{insight.evidence}<br/><small>{insight.review}</small></span></p>)}</div>
+         <h4>Trade quality and loss streaks</h4>
+         <div className="scanner-table"><div><span>QUOTE</span><span>CURRENT LOSS STREAK</span><span>LONGEST LOSS STREAK</span><span>LAST 20 EXITS PNL</span></div>
+           {performanceData.byCurrency.map(row=><div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><span>{row.currentLossStreak}</span><span>{row.longestLossStreak}</span><strong className={row.recent20NetPnl>=0?'up':'down'}>{fmt(row.recent20NetPnl)}</strong></div>)}
+         </div>
          <div className="risk-list">{performanceData.dataQuality.warnings.map((warning,index)=><p key={index}><ShieldCheck/>{warning}</p>)}</div>
          <p className="subtle-note">{performanceData.methodology} {performanceData.limitations.join(' ')}</p>
        </>}
