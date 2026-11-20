@@ -200,7 +200,18 @@ labRouter.get('/advanced/portfolio/accounting', async (req, res) => {
         if (finite(price) != null) marks[exchange + ':' + symbol] = price;
       } catch {}
     }));
-    res.json(calculatePortfolioAccounting(events, marks));
+    const exchangeIds = [...new Set(events.map(e => e.source))].slice(0, 20);
+    const exchangeBalances = await Promise.all(exchangeIds.map(async exchange => {
+      try {
+        return await withExchange(exchange, { privateAccess: true }, async ex => {
+          if (!ex.has?.fetchBalance) return { exchange, status: 'unsupported' };
+          const balance = await ex.fetchBalance();
+          return { exchange, status: 'ok', fetchedAt: new Date().toISOString(), free: balance.free, used: balance.used, total: balance.total };
+        });
+      } catch (error) { return { exchange, status: 'unavailable', error: error.message }; }
+    }));
+    res.json({ ...calculatePortfolioAccounting(events, marks), exchangeBalances,
+      reconciliationNote: 'Exchange balances are current read-only snapshots. Ledger net movements are not a verified reconciliation unless complete opening balances and all deposits, withdrawals, transfers, fees and fills are present.' });
   } catch (e) { res.status(e.status || 401).json({ error: e.message }); }
 });
 labRouter.post('/advanced/fills/sync/:exchange', async (req, res) => {
