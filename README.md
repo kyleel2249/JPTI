@@ -268,3 +268,16 @@ The Universal Engine also includes a persisted central T-Bots new-entry pause/re
 ### Multi-instance scheduler coordination
 
 PostgreSQL deployments elect one active operations-scheduler leader using a renewable database lease. Standby instances wait and can take over after expiry; a coordination/database error pauses scheduled workers. Configure `JPTI_SCHEDULER_LEASE_MS`, `JPTI_SCHEDULER_HEARTBEAT_MS`, and optionally `JPTI_SCHEDULER_INSTANCE_ID`. File storage remains single-process only and must not be used for horizontally scaled API instances. See `api/README.md` for the deployment and in-flight-worker limitations.
+
+
+## Transactional ledger ingestion and outbox
+
+Automatic exchange fill polling now commits each market's normalized ledger batch and its sync cursor in one PostgreSQL transaction. A crash cannot advance the cursor without committing the corresponding fill rows; duplicate trade identities remain protected by the database unique index. Each newly inserted ledger fill also creates a `ledger.transaction.recorded` outbox message in the same transaction. Replays do not create duplicate ledger rows or duplicate outbox records.
+
+Authenticated outbox routes (send `x-jpti-api-token`):
+- `GET /api/operations/outbox/status` — pending, processing and delivered counts.
+- `POST /api/operations/outbox/claim` — claim up to 100 messages using `{ "workerId": "consumer-name", "limit": 25, "leaseMs": 30000 }`. Claims use PostgreSQL `FOR UPDATE SKIP LOCKED`; expired processing leases can be reclaimed.
+- `POST /api/operations/outbox/:id/ack` — acknowledge a message with `{ "workerId": "consumer-name" }`. Only its current lease owner can acknowledge it.
+- `POST /api/operations/outbox/:id/retry` — release a failed message for retry with optional `error` and `delayMs` fields. The retry delay is bounded.
+
+Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once. If a consumer completes its side effect and crashes before acknowledgement, the message may be delivered again after its lease expires. Use the stable `event_id` as the consumer's deduplication key. PostgreSQL is required for transactional outbox claiming and acknowledgement. File mode retains replay-safe ledger insertion followed by cursor advancement, but those two writes are not a single crash-atomic transaction and no distributed outbox is available; use PostgreSQL for multi-instance production operation. No live orders or transfers are executed by this feature.
