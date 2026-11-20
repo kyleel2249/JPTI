@@ -98,6 +98,54 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
     caveat:'Profile-specific required evidence must be present. Scores are deterministic heuristics, not calibrated probabilities or validated live strategies.' };
 }
 
+
+export function buildStrategyScorecards(events, options = {}) {
+  const days = Math.max(1, Math.min(3650, Number(options.days) || 90));
+  const minTrades = Math.max(3, Math.min(500, Number(options.minTrades) || 20));
+  const cutoff = Date.now() - days * 86400000;
+  const groups = new Map();
+  for (const event of events) {
+    if (event.source !== 'tbots' || event.eventType !== 'bot_trade' || event.metadata?.action !== 'paper_closed') continue;
+    const pnl = finite(event.metadata?.pnl);
+    const at = Date.parse(event.occurredAt || '');
+    if (pnl === null || !Number.isFinite(at) || at < cutoff) continue;
+    const profile = String(event.metadata?.strategyProfile || 'untagged').slice(0, 64);
+    const key = profile;
+    const rows = groups.get(key) || [];
+    rows.push({ pnl, at, symbol: event.symbol || 'unknown', assetClass: event.metadata?.assetClass || 'untagged', venue: event.metadata?.venue || 'untagged' });
+    groups.set(key, rows);
+  }
+  const scorecards = [...groups.entries()].map(([strategyProfile, rows]) => {
+    rows.sort((a,b) => a.at - b.at);
+    const wins = rows.filter(x => x.pnl > 0);
+    const losses = rows.filter(x => x.pnl < 0);
+    const grossProfit = wins.reduce((s,x) => s + x.pnl, 0);
+    const grossLoss = Math.abs(losses.reduce((s,x) => s + x.pnl, 0));
+    const totalPnl = rows.reduce((s,x) => s + x.pnl, 0);
+    let equity = 0, peak = 0, maxDrawdown = 0;
+    for (const row of rows) { equity += row.pnl; peak = Math.max(peak, equity); maxDrawdown = Math.max(maxDrawdown, peak - equity); }
+    const avgWin = wins.length ? grossProfit / wins.length : null;
+    const avgLoss = losses.length ? grossLoss / losses.length : null;
+    const expectancy = totalPnl / rows.length;
+    const sampleQuality = rows.length >= minTrades ? 'usable_for_review' : rows.length >= 10 ? 'early_sample' : 'insufficient_sample';
+    return {
+      strategyProfile, trades: rows.length, wins: wins.length, losses: losses.length,
+      winRatePercent: wins.length / rows.length * 100, totalPnlUsd: totalPnl,
+      expectancyUsdPerTrade: expectancy, averageWinUsd: avgWin, averageLossUsd: avgLoss,
+      profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? null : 0,
+      maxClosedTradeDrawdownUsd: maxDrawdown, sampleQuality,
+      minimumTradesForReview: minTrades,
+      byAssetClass: Object.fromEntries([...new Set(rows.map(x => x.assetClass))].map(k => [k, rows.filter(x => x.assetClass === k).length])),
+      byVenue: Object.fromEntries([...new Set(rows.map(x => x.venue))].map(k => [k, rows.filter(x => x.venue === k).length])),
+      lastTradeAt: new Date(rows.at(-1).at).toISOString(),
+      interpretation: 'Historical paper outcomes only; not a forecast, calibrated probability, or authorization to trade.'
+    };
+  }).sort((a,b) => b.expectancyUsdPerTrade - a.expectancyUsdPerTrade);
+  return { generatedAt: new Date().toISOString(), windowDays: days, minimumTradesForReview: minTrades,
+    count: scorecards.length, scorecards,
+    caveat: 'Only persisted T-Bots paper_closed events are included. Missing or untagged strategy metadata is grouped as untagged. No exchange fills or live trades are mixed into these paper scorecards.' };
+}
+
 function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
 
 export function calculateExchangeRealized(events, now = Date.now()) {
@@ -404,6 +452,57 @@ universalRouter.get('/universal/asset/:chain/:address',async(req,res)=>{
       security,securityError,securityDecision:security?.status==='evidence_available'?'review_required':'fail_closed',
       note:'Provider evidence is not a safety guarantee. Run chain-specific simulations, holder and LP verification, and independent contract review before considering a trade.'});
   }catch(e){res.status(e.status||502).json({error:e.message});}
+});
+
+
+universalRouter.get('/universal/strategy/scorecards',async(req,res)=>{
+  try {
+    requirePrivateApiAuth(req);
+    const days=Math.max(1,Math.min(3650,Number.parseInt(req.query.days||'90',10)||90));
+    const minTrades=Math.max(3,Math.min(500,Number.parseInt(req.query.minTrades||'20',10)||20));
+    const events=await getLedgerTransactions();
+    res.set('Cache-Control','no-store').json(buildStrategyScorecards(events,{days,minTrades}));
+  } catch(error) { res.status(error.status||401).json({error:error.message}); }
+});
+
+universalRouter.post('/universal/entry-preflight',async(req,res)=>{
+  try {
+    requirePrivateApiAuth(req);
+    const body=req.body||{};
+    const profileId=String(body.profileId||'');
+    const assetClass=String(body.assetClass||'unknown').toLowerCase();
+    const evaluation=evaluateStrategyProfile(profileId,body.evidence||{});
+    const events=await getLedgerTransactions();
+    const risk=calculateUnifiedRisk(events,{
+      maxConsecutiveLosses:process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,
+      maxDailyLossUsd:process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD
+    });
+    const observedAt=Date.parse(body.observedAt||'');
+    const requestedAge=Number(body.maxEvidenceAgeSeconds);
+    const maxEvidenceAgeSeconds=Number.isFinite(requestedAge)?clamp(requestedAge,15,300):90;
+    const evidenceAgeSeconds=Number.isFinite(observedAt)?Math.max(0,(Date.now()-observedAt)/1000):null;
+    const stale=evidenceAgeSeconds===null||evidenceAgeSeconds>maxEvidenceAgeSeconds;
+    const securityRequired=['token','dex_token','meme_token','new_pair'].includes(assetClass);
+    const securityStatus=String(body.securityStatus||'').toLowerCase();
+    const securityPassed=!securityRequired||['clear','passed'].includes(securityStatus);
+    const reasons=[];
+    if(!risk.newEntriesAllowed) reasons.push(...(risk.pauseReasons.length?risk.pauseReasons:['shared_risk_gate_blocked']));
+    if(!risk.riskConfiguration.valid) reasons.push('risk_configuration_invalid');
+    if(stale) reasons.push('market_evidence_missing_or_stale');
+    if(evaluation.status!=='research_candidate') reasons.push('strategy_evidence_not_candidate');
+    if(securityRequired&&!securityPassed) reasons.push('independent_token_security_gate_not_passed');
+    const allowed=reasons.length===0;
+    res.set('Cache-Control','no-store').json({
+      generatedAt:new Date().toISOString(),allowed,decision:allowed?'paper_candidate':'blocked',
+      reasons,profileId,assetClass,evaluation,
+      risk:{newEntriesAllowed:risk.newEntriesAllowed,pauseReasons:risk.pauseReasons,exitsRemainEnabled:true},
+      evidenceFreshness:{observedAt:Number.isFinite(observedAt)?new Date(observedAt).toISOString():null,
+        ageSeconds:evidenceAgeSeconds,maxAgeSeconds:maxEvidenceAgeSeconds,stale},
+      security:{required:securityRequired,status:securityStatus||'not-provided',passed:securityPassed},
+      execution:'No order is created, submitted, or authorized by this endpoint. This is a paper-entry preflight only.',
+      caveat:'A passing preflight is a research/paper eligibility result, not a profitability claim or permission for live execution.'
+    });
+  } catch(error) { res.status(error.status||400).json({error:error.message}); }
 });
 
 universalRouter.post('/universal/control',async(req,res)=>{
