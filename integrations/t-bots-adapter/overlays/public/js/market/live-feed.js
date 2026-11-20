@@ -39,7 +39,7 @@ export function mapPair(p, now = Date.now()) {
   };
 }
 
-export function mapRugCheck(report) {
+export function mapRugCheck(report, now = Date.now()) {
   if (!report || typeof report !== 'object') return null;
   const top = Array.isArray(report.topHolders) ? report.topHolders : [];
   const risks = Array.isArray(report.risks) ? report.risks : [];
