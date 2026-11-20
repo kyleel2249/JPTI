@@ -18,7 +18,7 @@ export function mapPair(p, now = Date.now()) {
   const buys = num(p?.txns?.m5?.buys) ?? 0;
   const sells = num(p?.txns?.m5?.sells) ?? 0;
   return {
-    id: `${p?.chainId || 'unknown'}:${p?.baseToken?.address || ''}`,
+    id: p?.baseToken?.address,
     chainId: String(p?.chainId || 'unknown').toLowerCase(),
     tokenAddress: p?.baseToken?.address,
     symbol: String(p?.baseToken?.symbol || '?').slice(0, 12),
