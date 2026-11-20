@@ -105,18 +105,9 @@ Live order execution is disabled by default. The API requires all of the followi
 
 These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. JPTI is designed to run locally with a Node.js API, web interface, Windows desktop application and Android client. Keep the API bound to localhost on the PC; use secured device settings only over a trusted local network.
 
-## Android
+## Android local-network access
 
-JPTI supports a native Android client built with Capacitor. The Android app connects to a JPTI API instance running on your Windows PC or another computer on your trusted local network. Build the Android project and debug APK with:
-
-```bat
-npm run mobile:android:add
-npm run mobile:sync
-cd android
-gradlew.bat assembleDebug
-```
-
-For day-to-day development, start the local API and web interface with `npm run dev:all`. Use the Connection Settings workspace in Android to configure the PC's reachable LAN HTTPS API endpoint when connecting from a phone. Do not expose the API to the public internet; use a trusted private network and a strong API token. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
+Until the native Android package is added in the desktop/mobile phase, the responsive web interface can be opened from Android Chrome while the PC and phone share a trusted Wi-Fi network. Start JPTI on the PC with `npm run dev:all`, find the PC's LAN address with `ipconfig`, then open `http://PC-IP-ADDRESS:5173` on the phone. The Vite development server proxies API calls to the local Node service. This is local development access, not a native APK. Keep the PC and phone on a trusted private network.
 
 ## Architecture direction
 
