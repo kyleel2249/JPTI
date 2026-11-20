@@ -110,7 +110,12 @@ export function calculatePortfolioAccounting(events, marks = {}) {
       }
     } else if (e.eventType === 'deposit' && e.currency) movement(e, e.currency, finite(e.quantity) || 0);
     else if (e.eventType === 'withdrawal' && e.currency) movement(e, e.currency, -(finite(e.quantity) || 0));
-    else if (e.eventType === 'fee' && e.currency) movement(e, e.currency, -(finite(e.quantity) || 0));
+    else if (e.eventType === 'fee' && e.currency) { movement(e, e.currency, -(finite(e.quantity) || 0)); feesByCurrency[e.currency] = (feesByCurrency[e.currency] || 0) + (finite(e.quantity) || 0); }
+    else if (['funding', 'interest', 'borrow', 'rebate'].includes(e.eventType) && e.currency) {
+      const signed = finite(e.metadata?.signedAmount);
+      const amount = signed ?? (e.eventType === 'rebate' ? (finite(e.quantity) || 0) : -(finite(e.quantity) || 0));
+      movement(e, e.currency, amount);
+    }
     else if (e.eventType === 'adjustment' && e.currency) movement(e, e.currency, finite(e.metadata?.signedAmount) ?? (finite(e.quantity) || 0));
     else if (e.eventType === 'transfer') {
       const fromAmount = finite(e.metadata?.fromAmount), toAmount = finite(e.metadata?.toAmount);
