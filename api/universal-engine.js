@@ -3,12 +3,11 @@ import { withExchange } from './exchanges.js';
 import { requirePrivateApiAuth } from './policy.js';
 import { getLedgerTransactions } from './operations.js';
 import { buildEvidenceCouncil } from './advanced-intelligence.js';
-import { normalizeDexPair, scoreAssetEvidence, summarizeBotMemory } from './multi-asset-intelligence.js';
+import { normalizeDexPair, scoreAssetEvidence } from './multi-asset-intelligence.js';
 
 export const universalRouter = express.Router();
 const finite = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const stableQuotes = new Set(['USD','USDT','USDC','DAI','FDUSD','USDP','TUSD']);
 
 export const STRATEGY_PROFILES = Object.freeze({
   spot_trend: { assetClasses:['crypto_spot','token'], timeframes:['15m','1h','4h','1d'], horizon:'intraday-to-swing', leverageAllowed:false, description:'Trend continuation with volume and multi-timeframe confirmation.' },
@@ -78,7 +77,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
     if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
     let realized=0;
-    if(e.side==='buy'){row.cost+=qty*price;row.quantity+=qty;}
+    if(e.side==='buy'){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=qty;}
     else{
       const matched=Math.min(qty,row.quantity),avg=row.quantity>0?row.cost/row.quantity:0;
       realized=(price-avg)*matched;
