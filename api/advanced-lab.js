@@ -139,11 +139,10 @@ labRouter.get('/advanced/portfolio/accounting', async (req, res) => {
     requirePrivateApiAuth(req);
     const events = await getLedgerTransactions();
     const marks = {};
-    const symbols = [...new Set(events.filter(e => e.eventType === 'fill').map(e => e.symbol).filter(Boolean))].slice(0, 30);
-    await Promise.all(symbols.map(async symbol => {
-      const quote = symbol.split('/')[1];
+    const instruments = [...new Map(events.filter(e => e.eventType === 'fill' && e.symbol).map(e => [e.source + ':' + e.symbol, { exchange: e.source, symbol: e.symbol }])).values()].slice(0, 30);
+    await Promise.all(instruments.map(async ({ exchange, symbol }) => {
       try {
-        const price = await withExchange('binance', { privateAccess: false }, async ex => ex.markets[symbol] && ex.has?.fetchTicker ? (await ex.fetchTicker(symbol)).last : null);
+        const price = await withExchange(exchange, { privateAccess: false }, async ex => ex.markets[symbol] && ex.has?.fetchTicker ? (await ex.fetchTicker(symbol)).last : null);
         if (finite(price) != null) marks[symbol] = price;
       } catch {}
     }));
