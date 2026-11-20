@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { apiFetch } from './lib/api.js';
 
 const fmt = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString(undefined,{maximumFractionDigits:4});
 const profilesFallback = [
@@ -28,7 +29,7 @@ export default function UniversalEngine() {
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
 
-  useEffect(()=>{fetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
+  useEffect(()=>{apiFetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
     fetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
   },[]);
 
