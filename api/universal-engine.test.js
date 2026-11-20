@@ -153,3 +153,42 @@ test('strategy scorecards isolate profiles and ignore events outside the request
   assert.equal(report.scorecards.find(x=>x.strategyProfile==='breakout').trades,1);
   assert.equal(report.scorecards.find(x=>x.strategyProfile==='mean_reversion').totalPnlUsd,-1);
 });
+
+
+test('paper preflight passes only with fresh complete strategy, healthy risk and token security evidence', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const input={profileId:'meme_new_pair',assetClass:'meme_token',observedAt:new Date(now).toISOString(),securityStatus:'passed',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}};
+  const result=evaluatePaperEntryPreflight(input,[],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,true);
+  assert.equal(result.decision,'paper_candidate');
+  assert.equal(result.execution,'No order is created, submitted, or authorized by this endpoint. This is a paper-entry preflight only.');
+});
+
+test('paper preflight blocks stale, incomplete and unverified token evidence', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const result=evaluatePaperEntryPreflight({profileId:'meme_new_pair',assetClass:'meme_token',
+    observedAt:new Date(now-180000).toISOString(),securityStatus:'not-verified',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}},[],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,false);
+  assert.ok(result.reasons.includes('market_evidence_missing_or_stale'));
+  assert.ok(result.reasons.includes('independent_token_security_gate_not_passed'));
+  const missing=evaluatePaperEntryPreflight({profileId:'spot_trend',assetClass:'crypto_spot',
+    observedAt:new Date(now).toISOString(),evidence:{momentumPct:4}},[],now,{maxEvidenceAgeSeconds:90});
+  assert.ok(missing.reasons.includes('strategy_evidence_not_candidate'));
+});
+
+test('paper preflight fails closed when global risk is paused or risk config is invalid', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const paused={source:'jpti-control',eventType:'bot_decision',occurredAt:new Date(now).toISOString(),metadata:{action:'global_pause'}};
+  const input={profileId:'meme_new_pair',assetClass:'meme_token',observedAt:new Date(now).toISOString(),securityStatus:'passed',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}};
+  const result=evaluatePaperEntryPreflight(input,[paused],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,false);
+  assert.ok(result.reasons.includes('global_kill_switch'));
+  const invalid=evaluatePaperEntryPreflight(input,[],now,{maxEvidenceAgeSeconds:90,maxConsecutiveLosses:'bad'});
+  assert.ok(invalid.reasons.includes('risk_configuration_invalid'));
+});
