@@ -7,6 +7,7 @@ import { classifyMarket, createExchange, exchangeConnectionStatus, listExchangeC
 import { intelligenceRouter } from './intelligence.js';
 import { providerRouter } from './providers.js';
 import { operationsRouter, startOperationsScheduler } from './operations.js';
+import { initializeStorage, closeStorage } from './storage.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 import { buildCrossVenueComparison } from './market-intelligence.js';
 import { advancedRouter } from './advanced-intelligence.js';
@@ -215,8 +216,18 @@ app.use((error, _req, res, _next) => {
   res.status(status).json({ error: error.message || 'Exchange gateway error', name: error.name || 'Error' });
 });
 
-app.listen(port, host, () => {
+await initializeStorage();
+const server = app.listen(port, host, () => {
   console.log(`JPTI API listening on http://${host}:${port}`);
   console.log(`Trading mode: ${process.env.JPTI_TRADING_MODE || 'paper'} | Live orders enabled: ${process.env.JPTI_ENABLE_LIVE_TRADING === 'true'}`);
   startOperationsScheduler();
 });
+
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => {
+    server.close(async () => {
+      try { await closeStorage(); } finally { process.exit(0); }
+    });
+  });
+}

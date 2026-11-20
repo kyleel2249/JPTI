@@ -307,3 +307,25 @@ JPTI_RECONCILE_OPENING_BALANCES_JSON={"binance":{"BTC":0.25,"USDT":500},"bitget"
 The JSON map is keyed by exchange ID, then uppercase currency. The authenticated GET /api/operations/reconciliation endpoint returns up to 50 recent snapshots. Use the x-jpti-api-token header. Each currency row shows exchange-reported total, supported ledger movement, configured opening balance, expected total and difference. If an opening baseline is absent, the system reports baseline_missing and an implied opening balance; it never assumes the baseline is zero.
 
 Supported movements include recorded spot fills (including base-, quote- and third-currency fees), deposits, withdrawals and explicitly directed cash-flow events. Transfers and other cash-flow events without a recognized metadata.direction are counted as unresolved. A snapshot is not marked complete when unresolved events or missing baselines remain. This is a reconciliation aid, not a complete statement: it does not yet normalize margin liabilities, derivative positions/funding, cross-venue transfers, third-party custody, or unrecorded activity. Use read-only exchange API keys.
+
+
+## Durable storage and recovery
+
+JPTI supports two storage backends:
+
+- `JPTI_STORAGE_BACKEND=file` (default): local append-only `data/jpti-events.jsonl` plus atomic `data/jpti-cursors.json`. This is suitable for local development and single-process use; it is not a multi-instance production database.
+- `JPTI_STORAGE_BACKEND=postgres`: PostgreSQL-backed JSONB event storage with a database-enforced unique ledger identity and durable exchange fill-sync cursors. The API applies the initial schema at startup and fails startup if the database cannot be initialized. Configure `DATABASE_URL`; managed databases should normally use `JPTI_DATABASE_SSL=true` with certificate verification enabled.
+
+Example production environment:
+
+```env
+JPTI_STORAGE_BACKEND=postgres
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+JPTI_DATABASE_SSL=true
+JPTI_DATABASE_SSL_REJECT_UNAUTHORIZED=true
+JPTI_DATABASE_POOL_MAX=10
+```
+
+The database schema is also versioned in `migrations/001_initial_durable_storage.sql`. Ledger ingestion uses a unique database index across source, account, external trade ID and symbol, so duplicate polls across process restarts or multiple API instances are rejected by PostgreSQL rather than an in-memory check. Sync cursors are persisted per exchange/market and updated monotonically. Operational event reads, ledger history, reconciliation snapshots and monitor snapshots use the configured storage adapter.
+
+This stage makes event persistence and sync cursors durable; scheduler leadership/leases, transactional outbox delivery, historical JSONL backfill tooling, multi-region failover, backup/restore automation and complete paginated exchange-history ingestion remain separate production-hardening tasks. Keep API instances restricted to trusted networks and use a dedicated database role with only the required table permissions.
