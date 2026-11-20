@@ -29,8 +29,8 @@ export const eventSchema = z.object({
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional()
 });
 
-async function readEvents(limit = 20000) {
-  return readStoredEvents(limit);
+async function readEvents(limit = 20000, kind = null) {
+  return readStoredEvents(limit, kind);
 }
 
 async function persistEvent(event) {
@@ -44,7 +44,7 @@ export async function ingestLedgerEvent(input) {
 }
 
 export async function getLedgerTransactions() {
-  return (await readEvents(Number.MAX_SAFE_INTEGER)).filter((event) => event.kind === 'ledger-transaction');
+  return readStoredEvents(Number.MAX_SAFE_INTEGER, 'ledger-transaction');
 }
 
 async function persistLedgerTransaction(parsed) {
@@ -255,8 +255,7 @@ operationsRouter.get('/operations/events', async (req, res, next) => {
 });
 operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
   try {
-    const events = await readEvents();
-    const transactions = events.filter((e) => e.kind === 'ledger-transaction');
+    const transactions = await readEvents(Number.MAX_SAFE_INTEGER, 'ledger-transaction');
     const byType = Object.fromEntries(['fill','deposit','withdrawal','fee','transfer','adjustment','funding','interest','borrow','rebate'].map((type) => [type, transactions.filter((e) => e.eventType === type).length]));
     res.json({ eventCount: transactions.length, byType, lastEventAt: transactions.at(-1)?.occurredAt || null, note: 'This is an append-only transaction event count, not a reconciled balance or realized PnL statement.' });
   } catch (error) { next(error); }
@@ -273,7 +272,7 @@ operationsRouter.get('/operations/ledger/events', async (req, res, next) => {
   try {
     requirePrivateApiAuth(req);
     const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
-    const events = (await readEvents()).filter((event) => event.kind === 'ledger-transaction').slice(-limit).reverse();
+    const events = (await readEvents(limit, 'ledger-transaction')).reverse();
     res.json({ count: events.length, events });
   } catch (error) { next(error); }
 });
