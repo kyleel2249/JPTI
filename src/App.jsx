@@ -390,7 +390,7 @@ function App() {
 
   const renderWorkspace = () => {
     if (page === 'Connection Settings') return <ConnectionSettings/>;
-    if (page === 'Universal Engine') return <UniversalEngine/>;
+    if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
     if (page === 'Forecast & Strategy') return <section className="glass-panel detail-workspace">
