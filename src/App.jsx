@@ -3,6 +3,7 @@ import ExchangeConnectivity from './ExchangeConnectivity.jsx';
 import FinancialIntelligence from './FinancialIntelligence.jsx';
 import UniversalEngine from './UniversalEngine.jsx';
 import ConnectionSettings from './ConnectionSettings.jsx';
+import InstitutionalTerminal from './InstitutionalTerminal.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -13,6 +14,7 @@ import {
 
 const navigation = [
   { label: 'Overview', icon: LayoutDashboard, group: 'COMMAND' },
+  { label: 'Institutional Terminal', icon: Command, group: 'COMMAND' },
   { label: 'Spot & Markets', icon: CandlestickChart, group: 'MARKETS' },
   { label: 'Futures', icon: Activity, group: 'MARKETS' },
   { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
@@ -272,6 +274,7 @@ function App() {
 
   const pageDescription = {
     'Overview': 'A live operational view across markets, intelligence sources and risk controls.',
+    'Institutional Terminal': 'A precision command surface for live market intelligence, watchlists and disciplined operator workflows.',
     'Spot & Markets': 'Live multi-exchange market data and technical analysis.',
     'Futures': 'Derivatives market discovery. Contract availability depends on exchange support.',
     'AI Intelligence': 'Signal evidence, market context and explainable analysis.',
@@ -390,6 +393,7 @@ function App() {
 
   const renderWorkspace = () => {
     if (page === 'Connection Settings') return <ConnectionSettings/>;
+    if (page === 'Institutional Terminal') return <InstitutionalTerminal currentSymbol={symbol} onSymbolChange={setSymbol} onNavigate={activeNav}/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
