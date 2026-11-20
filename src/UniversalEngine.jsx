@@ -21,6 +21,8 @@ export default function UniversalEngine() {
   const [macro,setMacro]=useState(null);
   const [risk,setRisk]=useState(null);
   const [performance,setPerformance]=useState(null);
+  const [controlStatus,setControlStatus]=useState('');
+  const [controlBusy,setControlBusy]=useState(false);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
 
@@ -46,6 +48,17 @@ export default function UniversalEngine() {
     if(event)event.preventDefault();setLoading(true);setError('');
     try{const r=await fetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
   },[query,token]);
+  const setGlobalControl=useCallback(async(action)=>{
+    setControlBusy(true);setError('');setControlStatus('');
+    try{
+      const r=await fetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
+        body:JSON.stringify({action,reason:'Universal Engine operator control'})});
+      const d=await r.json();if(!r.ok)throw new Error(d.error||'Global control update failed');
+      setControlStatus(action==='pause_new_entries'?'Global T-Bots entry pause recorded.':'Global T-Bots entry pause cleared.');
+      await loadPrivate();
+    }catch(e){setError(e.message);}finally{setControlBusy(false);}
+  },[token,loadPrivate]);
+
   const loadPrivate=useCallback(async()=>{
     setLoading(true);setError('');
     try{
@@ -127,7 +140,7 @@ export default function UniversalEngine() {
 
     <div className="section-heading"><div><span className="eyebrow">PORTFOLIO-WIDE CONTROL</span><h3>Unified risk & performance</h3></div></div>
     <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!token}>{loading?'Loading…':'Load unified risk & performance'}</button></div>
-    {risk&&<><div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
+    {risk&&<><div className="news-search"><button onClick={()=>setGlobalControl('pause_new_entries')} disabled={controlBusy||!token}>Pause all new T-Bots entries</button><button onClick={()=>setGlobalControl('resume_new_entries')} disabled={controlBusy||!token}>Resume new entries</button></div>{controlStatus&&<p className="subtle-note">{controlStatus}</p>}<div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>GLOBAL PAUSE</span><b>{risk.globalPaused?'ON':'OFF'}</b><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
     {performance&&<><div className="quote-consensus-stats"><div><span>T-BOTS CLOSED PAPER TRADES</span><b>{performance.paperStrategy.closedTrades}</b></div><div><span>PAPER WIN RATE</span><b>{performance.paperStrategy.winRatePercent==null?'—':fmt(performance.paperStrategy.winRatePercent)+'%'}</b></div><div><span>PAPER REALIZED PNL</span><b>{fmt(performance.paperStrategy.realizedPnlUsd)} USD</b></div><div><span>EXCHANGE FILLS</span><b>{performance.exchangeExecution.fillCount}</b></div></div><p className="subtle-note">{performance.caveat}</p></>}
     {error&&<p className="quote-error">{error}</p>}
   </section>;
