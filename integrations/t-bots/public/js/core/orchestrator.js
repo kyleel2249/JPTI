@@ -170,7 +170,7 @@ export class Orchestrator {
       this._filtered(token, 'JPTI global macro gate: broad crypto market drawdown exceeds 8%; new entries paused, existing exits remain active.', 'jpti-global-risk-off');
       return;
     }
-    if (this.sharedContext?.regime === 'risk_off' && Number(this.sharedContext.riskScore) < 35) {
+    if (this.sharedContext?.regime === 'risk_off') {
       this.ledger.done(task, 'skipped', 'JPTI shared market regime is risk-off');
       this._filtered(token, 'JPTI shared risk gate: BTC market regime risk-off; new multi-chain entries blocked. Existing exits remain active.', 'jpti-risk-off');
       return;
