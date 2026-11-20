@@ -158,6 +158,24 @@ universalRouter.get('/universal/dex/search',async(req,res)=>{
   }catch(e){res.status(e.status||502).json({error:e.message});}
 });
 
+
+universalRouter.post('/universal/asset-evidence',requirePrivateApiAuth,(req,res)=>{
+  const items=req.body?.assets;
+  if(!Array.isArray(items)||items.length>80)return res.status(400).json({error:'assets must be an array of at most 80 token observations.'});
+  const evidence=items.map(item=>{
+    const asset={chain:String(item.chain||'unknown').toLowerCase(),base:{address:item.address||null,symbol:item.symbol||null},quote:{address:item.quoteAddress||null,symbol:item.quoteSymbol||null},
+      liquidityUsd:finite(item.liquidityUsd)??0,volume24hUsd:finite(item.volume24hUsd)??0,volume1hUsd:finite(item.volume1hUsd)??0,
+      priceChange1hPercent:finite(item.change1hPct),txns:{h1:{buys:finite(item.buys)??0,sells:finite(item.sells)??0}},ageHours:finite(item.ageMin)===null?null:Number(item.ageMin)/60};
+    const score=scoreAssetEvidence(asset);
+    return {id:String(item.id||item.chain+':'+item.address),chain:asset.chain,address:asset.base.address,symbol:asset.base.symbol,
+      score:score.score,verdict:score.verdict,warnings:score.warnings,components:score.components,
+      sources:{dexMarketObservation:'T-Bots live DEX feed',jptiEvidenceModel:'JPTI explainable heuristic'},
+      observedAt:new Date().toISOString(),decision:'research-only'};
+  });
+  res.set('Cache-Control','no-store').json({generatedAt:new Date().toISOString(),count:evidence.length,evidence,
+    policy:'Evidence score is a discovery/ranking feature, not a token safety pass. Rug Check remains an independent mandatory gate.'});
+});
+
 universalRouter.get('/universal/risk',async(req,res)=>{
   try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses,maxDailyLossUsd:req.query.maxDailyLossUsd};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
   catch(e){res.status(e.status||401).json({error:e.message});}
