@@ -20,7 +20,7 @@ const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
 const host = process.env.JPTI_API_HOST || '127.0.0.1';
 app.disable('x-powered-by');
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(express.json({ limit: '32kb', strict: true }));
 
 // Capacitor Android uses its own WebView origin. Only explicitly configured origins
