@@ -32,7 +32,7 @@ export default function UniversalEngine() {
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Market evidence unavailable');
       setMarket(d);
       const ev=d.evidence||{};
-      const payload={profileId,evidence:{momentumPct:ev.momentumPct,relativeVolume:ev.relativeVolume,timeframeAlignment:ev.momentumPct==null?null:Math.sign(ev.momentumPct),orderBookImbalance:ev.orderBookImbalance,fundingRate:ev.fundingRate,liquidityUsd:null}};
+      const payload={profileId,evidence:{momentumPct:ev.momentumPct,relativeVolume:ev.relativeVolume,timeframeAlignment:ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:ev.fundingRate,rsi14:ev.rsi14,liquidityUsd:ev.visibleDepthUsd}};
       const evalRes=await fetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
       const result=await evalRes.json();if(evalRes.ok)setEvaluation(result);
     }catch(e){setError(e.message);}finally{setLoading(false);}
@@ -83,7 +83,7 @@ export default function UniversalEngine() {
       <div><span>RELATIVE VOLUME</span><b>{fmt(market.evidence?.relativeVolume)}x</b></div>
       <div><span>BOOK IMBALANCE</span><b>{market.evidence?.orderBookImbalance==null?'—':fmt(market.evidence.orderBookImbalance*100)+'%'}</b></div>
     </div>
-    <div className="risk-list">{(market.council?.agents||[]).map(a=><p key={a.id}><b>{a.specialty||a.id}</b> · {a.bias||a.position||'insufficient data'} · {a.reason||a.note||''}</p>)}</div>
+    <div className="risk-list">{(market.council?.agents||[]).map(a=><p key={a.id}><b>{a.specialty||a.id}</b> · {a.bias||'insufficient data'} · {(a.evidence||[]).map(x=>x.metric+': '+x.value).join(', ')}</p>)}</div>
     <p className="subtle-note">{(market.limitations||[]).join(' ')}</p></>}
     {evaluation&&<div className="quote-consensus-stats"><div><span>PROFILE SCORE</span><b>{evaluation.score}/100</b></div><div><span>BIAS</span><b>{evaluation.bias}</b></div><div><span>STATUS</span><b>{evaluation.status.replaceAll('_',' ')}</b></div><div><span>MISSING EVIDENCE</span><b>{evaluation.missingEvidence.join(', ')||'None'}</b></div></div>}
 
