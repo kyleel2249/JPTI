@@ -118,7 +118,7 @@ export function calculatePortfolioAccounting(events, marks = {}) {
     p._reportedRealized = p.realizedPnl;
   }
   const rows = [...positions.values()].map(p => {
-    const mark = finite(marks[p.symbol]);
+    const mark = finite(marks[p.exchange + ':' + p.symbol] ?? marks[p.symbol]);
     return { ...p, marketPrice: mark, unrealizedPnl: mark == null ? null : (mark - p.averageCost) * p.quantity,
       marketValue: mark == null ? null : mark * p.quantity, costBasis: p.averageCost * p.quantity,
       valuationStatus: mark == null ? 'mark-price-unavailable' : 'marked-from-supplied-price' };
@@ -126,7 +126,7 @@ export function calculatePortfolioAccounting(events, marks = {}) {
   return { generatedAt: new Date().toISOString(), positions: rows, realizedPnlByQuoteCurrency: realizedByQuote, feesByCurrency,
     accountingMethod: 'weighted-average cost per exchange/account/symbol; FIFO is not implied',
     limitations: ['Only ingested fills are included. Deposits, withdrawals, transfers, funding, borrow interest, rebates and corporate actions require separate journal treatment.',
-      'Realized PnL is quote-currency denominated and should not be summed across currencies without FX conversion.',
+      'Realized PnL is quote-currency denominated and should not be summed across currencies without FX conversion. Fees paid in a third token are reported separately and are not FX-converted into realized PnL.',
       'Unrealized PnL is reported only where a current mark price is supplied. This is not a tax statement.'] };
 }
 
@@ -143,7 +143,7 @@ labRouter.get('/advanced/portfolio/accounting', async (req, res) => {
     await Promise.all(instruments.map(async ({ exchange, symbol }) => {
       try {
         const price = await withExchange(exchange, { privateAccess: false }, async ex => ex.markets[symbol] && ex.has?.fetchTicker ? (await ex.fetchTicker(symbol)).last : null);
-        if (finite(price) != null) marks[symbol] = price;
+        if (finite(price) != null) marks[exchange + ':' + symbol] = price;
       } catch {}
     }));
     res.json(calculatePortfolioAccounting(events, marks));
