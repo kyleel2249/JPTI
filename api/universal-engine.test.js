@@ -122,3 +122,30 @@ test('exchange sells exceeding recorded inventory are reported instead of fabric
   assert.equal(result.unmatchedSellQuantityBySymbol['ETH/USDT'],0.5);
   assert.equal(result.openInventory.length,0);
 });
+
+
+test('shared T-Bots paper equity drawdown pauses new entries independently of loss streak', () => {
+  const now=Date.now();
+  const events=[
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-2000).toISOString(),metadata:{action:'paper_enter',equity:1000,equityPeak:1000}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-1000).toISOString(),metadata:{action:'paper_closed',pnl:2,equity:880,equityPeak:1000}}
+  ];
+  const risk=calculateUnifiedRisk(events,{now,maxDailyLossUsd:0,maxDrawdownPct:10});
+  assert.equal(risk.paperDrawdownPct,12);
+  assert.equal(risk.newEntriesAllowed,false);
+  assert.ok(risk.pauseReasons.includes('shared_paper_drawdown_limit'));
+  assert.equal(risk.exitsRemainEnabled,true);
+});
+
+test('missing paper equity telemetry does not fabricate a drawdown estimate', () => {
+  const risk=calculateUnifiedRisk([{source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',pnl:1}}]);
+  assert.equal(risk.paperDrawdownPct,null);
+  assert.equal(risk.newEntriesAllowed,true);
+});
+
+test('invalid paper drawdown limit falls back to the safe 10 percent default', () => {
+  const risk=calculateUnifiedRisk([],{maxDrawdownPct:'NaN'});
+  assert.equal(risk.maxDrawdownPct,10);
+  assert.equal(risk.riskConfiguration.valid,false);
+  assert.match(risk.riskConfiguration.warnings.join(' '),/safe default 10/);
+});
