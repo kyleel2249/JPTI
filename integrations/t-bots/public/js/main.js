@@ -122,6 +122,7 @@ async function start() {
     sharedContext = mode === 'live' ? await jptiBridge.refreshContext(true) : null;
     orch.setSharedContext(sharedContext);
     orch.setSharedRisk(await jptiBridge.refreshRisk(true));
+    orch.setSharedMacro(await jptiBridge.refreshMacro(true));
     orch.setSharedAssetEvidence(await jptiBridge.refreshAssetEvidence(feed.snapshot(), true), true);
     $('jptiBridgeStatus').textContent = sharedContext ? 'JPTI linked · ' + sharedContext.regime + ' · unified risk + per-token evidence gates active' : 'JPTI linked · context unavailable';
   } else { sharedContext = null; orch.setSharedContext(null); }
@@ -154,6 +155,7 @@ function schedule() {
           if (jptiBridge.enabled) {
             orch.setSharedContext(await jptiBridge.refreshContext());
             orch.setSharedRisk(await jptiBridge.refreshRisk());
+            orch.setSharedMacro(await jptiBridge.refreshMacro());
             orch.setSharedAssetEvidence(await jptiBridge.refreshAssetEvidence(feed.snapshot()), true);
           }
           await orch.step();
