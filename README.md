@@ -107,7 +107,16 @@ These are initial guardrails, not a complete risk-management or production secur
 
 ## Android local-network access
 
-Until the native Android package is added in the desktop/mobile phase, the responsive web interface can be opened from Android Chrome while the PC and phone share a trusted Wi-Fi network. Start JPTI on the PC with `npm run dev:all`, find the PC's LAN address with `ipconfig`, then open `http://PC-IP-ADDRESS:5173` on the phone. The Vite development server proxies API calls to the local Node service. This is local development access, not a native APK. Keep the PC and phone on a trusted private network.
+JPTI supports a native Android client built with Capacitor. The Android app connects to a JPTI API instance running on your Windows PC or another computer on your trusted local network. Build the Android project and debug APK with:
+
+```bat
+npm run mobile:android:add
+npm run mobile:sync
+cd android
+gradlew.bat assembleDebug
+```
+
+For development, start the local API and web interface with `npm run dev:all`. Configure Android Connection Settings with the PC's reachable API address on your trusted local network. Do not expose the API to the public internet. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
 
 ## Architecture direction
 

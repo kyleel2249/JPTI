@@ -67,3 +67,13 @@ main.command-main{padding:0;max-width:none;width:auto;margin:0 0 0 252px;min-hei
 .quote-error{color:#ffb7a9;font-size:12px;margin:10px 0}
 @media(max-width:800px){.quote-consensus-panel{padding:16px}.quote-consensus-stats,.quote-source-list{grid-template-columns:repeat(2,minmax(0,1fr))}.quote-consensus-search{flex-direction:column}.quote-consensus-search button{min-height:42px}}
 @media(max-width:440px){.quote-consensus-stats,.quote-source-list{grid-template-columns:1fr}}
+
+
+/* Cross-device connection settings */
+.connection-settings .connection-label{display:block;color:#9aa8ba;font-size:11px;font-weight:700;margin:10px 0 7px}
+.connection-settings .connection-url{width:100%;min-height:44px;background:#0b1422;border:1px solid #304159;border-radius:8px;padding:0 13px;color:#e8edf6;outline:none}
+.connection-settings .connection-url:focus{border-color:#d6b46f;box-shadow:0 0 0 3px #d6b46f20}
+.connection-success{color:#6ee7b7;background:#064e3b33;border:1px solid #05966966;border-radius:8px;padding:10px 12px}
+.connection-settings .news-search button{min-height:38px}
+.sidebar-footer button{display:flex;align-items:center;gap:7px;background:transparent;border:0;color:#91a0b5;padding:0;font:inherit}
+.sidebar-footer button:hover{color:#e2c17e}

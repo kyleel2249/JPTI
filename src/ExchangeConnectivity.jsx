@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import LiveCandlestickChart from './LiveCandlestickChart.jsx';
+import { apiFetch } from './lib/api.js';
 
 export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
   const [health, setHealth] = useState(null);
@@ -15,8 +16,8 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
     const refreshGatewayCatalog = async () => {
       try {
         const [healthResponse, catalogResponse] = await Promise.all([
-          fetch('/api/health', { cache: 'no-store' }),
-          fetch('/api/exchanges', { cache: 'no-store' })
+          apiFetch('/api/health', { cache: 'no-store' }),
+          apiFetch('/api/exchanges', { cache: 'no-store' })
         ]);
         if (!healthResponse.ok || !catalogResponse.ok) throw new Error('Gateway or exchange catalog is unavailable');
         const [status, catalog] = await Promise.all([healthResponse.json(), catalogResponse.json()]);
@@ -35,7 +36,7 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
     let active = true;
     const load = async () => {
       try {
-        const response = await fetch('/api/exchanges/' + exchange + '/ticker/' + symbol.replace('/', '-'));
+        const response = await apiFetch('/api/exchanges/' + exchange + '/ticker/' + symbol.replace('/', '-'));
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Ticker request failed');
         if (active) { setTicker(data); setError(''); }

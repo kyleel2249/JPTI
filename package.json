@@ -10,8 +10,15 @@
     "dev:all": "concurrently \"npm:dev\" \"npm:dev:api\"",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check api/server.js && node --check api/exchanges.js && node --check api/intelligence.js && node --check api/providers.js && node --check api/market-intelligence.js && node --check api/advanced-intelligence.js && node --check api/advanced-lab.js && node --check api/operations.js && node --check api/fill-sync.js && node --check api/performance.js && node --check api/storage.js && node --check api/scheduler-lease.js && node --check api/reconciliation.js && node --check api/policy.js && node --check api/tbots-integration.js && node --check api/multi-asset-intelligence.js && node --check api/universal-engine.js && node --check api/universal-coverage.js && node --check scripts/apply-tbots-adapter.mjs && node --check integrations/t-bots/public/js/market/universal-feed.js && node scripts/apply-tbots-adapter.mjs",
-    "test": "node --test"
+    "check": "node --check api/server.js && node --check api/exchanges.js && node --check api/intelligence.js && node --check api/providers.js && node --check api/market-intelligence.js && node --check api/advanced-intelligence.js && node --check api/advanced-lab.js && node --check api/operations.js && node --check api/fill-sync.js && node --check api/performance.js && node --check api/portfolio-intelligence.js && node --check api/storage.js && node --check api/scheduler-lease.js && node --check api/reconciliation.js && node --check api/policy.js && node --check api/tbots-integration.js && node --check api/multi-asset-intelligence.js && node --check api/universal-engine.js && node --check api/universal-coverage.js && node --check scripts/apply-tbots-adapter.mjs && node --check integrations/t-bots/public/js/market/universal-feed.js && node scripts/apply-tbots-adapter.mjs && node --check desktop/main.cjs && node --check src/lib/api.js",
+    "test": "node --test",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:dist": "npm run build && electron-builder",
+    "mobile:android:add": "cap add android",
+    "mobile:sync": "npm run build && cap sync",
+    "mobile:android:open": "cap open android",
+    "mobile:android:run": "npm run build && cap sync android && cap run android"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -24,9 +31,64 @@
     "helmet": "^8.1.0",
     "dotenv": "^16.4.7",
     "zod": "^3.24.2",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/splash-screen": "^7.0.2"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "@capacitor/cli": "^7.4.3",
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.8.3"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "com.jopearl.jpti",
+    "productName": "JPTI",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "api/**/*",
+      "integrations/t-bots/public/**/*",
+      "desktop/main.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   }
 }

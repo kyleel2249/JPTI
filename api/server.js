@@ -15,13 +15,33 @@ import { advancedRouter } from './advanced-intelligence.js';
 import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
 import { universalRouter } from './universal-engine.js';
+import { portfolioRouter } from './portfolio-intelligence.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
 const host = process.env.JPTI_API_HOST || '127.0.0.1';
 app.disable('x-powered-by');
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(express.json({ limit: '32kb', strict: true }));
+
+// Capacitor Android uses its own WebView origin. Only explicitly configured origins
+// receive CORS permission; same-origin local web clients need no CORS.
+const allowedCorsOrigins = new Set(String(process.env.JPTI_CORS_ORIGINS || 'https://localhost,capacitor://localhost').split(',').map(value => value.trim()).filter(Boolean));
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && allowedCorsOrigins.has(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, x-jpti-api-token, Authorization');
+    res.set('Access-Control-Max-Age', '600');
+  }
+  if (req.method === 'OPTIONS') {
+    if (!origin || !allowedCorsOrigins.has(origin)) return res.status(403).json({ error: 'This application origin is not permitted by JPTI CORS policy.' });
+    return res.status(204).end();
+  }
+  next();
+});
 
 // A small per-process throttle protects local development endpoints from accidental request loops.
 const windows = new Map();
@@ -44,17 +64,20 @@ app.use('/api/intelligence', intelligenceRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
+app.use('/api', portfolioRouter);
 app.use('/api', labRouter);
 app.use('/api', tbotsRouter);
 app.use('/api', universalRouter);
 // T-Bots is preserved as an independently versioned paper-trading subsystem.
-app.use('/t-bots', express.static(resolve('integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
+app.use('/t-bots', express.static(resolve(process.env.JPTI_TBOTS_PUBLIC_DIR || 'integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
 
 app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
   service: 'JPTI Exchange Gateway',
   mode: process.env.JPTI_TRADING_MODE || 'paper',
   liveTradingEnabled: process.env.JPTI_ENABLE_LIVE_TRADING === 'true',
+  localPrivateAccess: process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS === 'true' && ['127.0.0.1', '::1', 'localhost'].includes(host),
+  desktopInstanceId: process.env.JPTI_DESKTOP_INSTANCE_ID || null,
   timestamp: new Date().toISOString()
 }));
 
@@ -208,6 +231,15 @@ app.post('/api/exchanges/:id/orders', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+if (process.env.JPTI_SERVE_WEB === 'true') {
+  const webDist = resolve(process.env.JPTI_WEB_DIST || 'dist');
+  app.use(express.static(webDist, { index: 'index.html' }));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/t-bots/')) return res.sendFile(resolve(webDist, 'index.html'));
+    next();
+  });
+}
+
 app.use((error, _req, res, _next) => {
   if (error instanceof z.ZodError) {
     return res.status(400).json({ error: 'Invalid request', details: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })) });
@@ -226,10 +258,19 @@ const server = app.listen(port, host, () => {
 });
 
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => {
-    server.close(async () => {
-      try { await stopOperationsScheduler(); await closeSchedulerLease(); await closeStorage(); } finally { process.exit(0); }
-    });
+let shutdownPromise;
+export function shutdownJptiServer() {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = new Promise((resolveClose, rejectClose) => {
+    server.close(error => error ? rejectClose(error) : resolveClose());
+  }).then(async () => {
+    await stopOperationsScheduler();
+    await closeSchedulerLease();
+    await closeStorage();
   });
+  return shutdownPromise;
+}
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => shutdownJptiServer().finally(() => process.exit(0)));
 }

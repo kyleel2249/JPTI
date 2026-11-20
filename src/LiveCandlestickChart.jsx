@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { apiFetch } from './lib/api.js';
 import { detectSmartMoney } from './smartMoney.js';
 
 const TIMEFRAMES = [
@@ -105,7 +106,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     let active = true;
     const refreshCatalog = async () => {
       try {
-        const response = await fetch('/api/exchanges/' + exchange + '/markets?type=' + marketType + '&search=' + encodeURIComponent(marketSearch));
+        const response = await apiFetch('/api/exchanges/' + exchange + '/markets?type=' + marketType + '&search=' + encodeURIComponent(marketSearch));
         const data = await response.json();
         if (!active || !response.ok) return;
         const symbols = (data.markets || []).map((market) => market.symbol);
@@ -130,9 +131,9 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
     try {
       const encodedSymbol = symbol.replace('/', '-');
       const [candleResponse, tickerResponse, contextResponse] = await Promise.all([
-        fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
-        fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
-        fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
+        apiFetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
+        apiFetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
+        apiFetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
       ]);
       const [candleData, tickerData, contextResponseData] = await Promise.all([candleResponse.json(), tickerResponse.json(), contextResponse.json()]);
       if (!candleResponse.ok) throw new Error(candleData.error || 'Candlestick data unavailable for this market and timeframe.');
@@ -154,9 +155,9 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange 
       try {
         const encodedSymbol = symbol.replace('/', '-');
         const [candleResponse, tickerResponse, contextResponse] = await Promise.all([
-          fetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
-          fetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
-          fetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
+          apiFetch('/api/exchanges/' + exchange + '/ohlcv/' + encodedSymbol + '?timeframe=' + timeframe + '&limit=200'),
+          apiFetch('/api/exchanges/' + exchange + '/ticker/' + encodedSymbol),
+          apiFetch('/api/intelligence/market/' + exchange + '/' + encodedSymbol + '/context?timeframe=' + timeframe)
         ]);
         const [candleData, tickerData, contextResponseData] = await Promise.all([candleResponse.json(), tickerResponse.json(), contextResponse.json()]);
         if (!active) return;
