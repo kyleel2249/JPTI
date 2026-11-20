@@ -40,3 +40,17 @@ test('accounting keeps accounts and exchanges segregated', () => {
   const result = calculatePortfolioAccounting(rows);
   assert.equal(result.positions.length, 2);
 });
+
+test('portfolio journal tracks deposits, withdrawals, funding and transfers as currency movements', () => {
+  const events = [
+    { eventType: 'deposit', source: 'okx', accountId: 'main', currency: 'USDT', quantity: 100, occurredAt: '2026-01-01T00:00:00.000Z' },
+    { eventType: 'funding', source: 'okx', accountId: 'main', currency: 'USDT', quantity: .5, metadata: { signedAmount: -.5 }, occurredAt: '2026-01-02T00:00:00.000Z' },
+    { eventType: 'transfer', source: 'okx', accountId: 'main', metadata: { fromCurrency: 'USDT', fromAmount: 10, toCurrency: 'USDC', toAmount: 9.99 }, occurredAt: '2026-01-03T00:00:00.000Z' },
+    { eventType: 'withdrawal', source: 'okx', accountId: 'main', currency: 'USDT', quantity: 5, occurredAt: '2026-01-04T00:00:00.000Z' }
+  ];
+  const result = calculatePortfolioAccounting(events);
+  const usdt = result.assetMovements.find(x => x.currency === 'USDT');
+  const usdc = result.assetMovements.find(x => x.currency === 'USDC');
+  assert.equal(usdt.netMovement, 84.5);
+  assert.equal(usdc.netMovement, 9.99);
+});
