@@ -45,11 +45,12 @@ test('keeps quote currencies separate in strategy and market attribution', () =>
 
 test('reports third-token fees without silently converting them', () => {
   const report=calculateTradePerformance([
-    fill({quantity:1,price:100}),
+    fill({quantity:1,price:100,fee:0.005,feeCurrency:'BNB'}),
     fill({side:'sell',quantity:1,price:110,fee:0.01,feeCurrency:'BNB'})
   ]);
-  assert.equal(report.thirdCurrencyFees.length,1);
+  assert.equal(report.thirdCurrencyFees.length,2);
   assert.equal(report.thirdCurrencyFees[0].currency,'BNB');
+  assert.equal(report.thirdCurrencyFees[0].side,'buy');
 });
 
 test('adds deterministic analyst insights for losing streaks and small samples', () => {
