@@ -118,6 +118,7 @@ export class JptiBridge {
   }
   attach(orchestrator, runId) {
     if (!this.enabled) return;
+    orchestrator.setEntryPreflight?.((token) => this.preflightEntry({ token, profileId: orchestrator.cfg.scanner.assetProfile || 'meme_new_pair', securityPassed: true }));
     const bus = orchestrator.bus;
     const tags = event => {
       const token = event.tokenId ? orchestrator.feed.get(event.tokenId) : null;
