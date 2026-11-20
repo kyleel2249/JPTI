@@ -145,6 +145,8 @@ export class LiveFeed {
     t.m = m;
     t.view = {
       id: t.id,
+      chain: t.chainId,
+      tokenAddress: t.tokenAddress,
       symbol: m.symbol,
       dex: m.dex,
       ageMin: m.ageMin,
