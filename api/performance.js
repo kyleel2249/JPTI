@@ -58,10 +58,12 @@ export function calculateTradePerformance(events = []) {
     const wins = rows.filter(x => x.realizedPnl > 0), losses = rows.filter(x => x.realizedPnl < 0);
     const grossProfit = wins.reduce((s,x)=>s+x.realizedPnl,0);
     const grossLoss = Math.abs(losses.reduce((s,x)=>s+x.realizedPnl,0));
-    let equity = 0, peak = 0, maxDrawdown = 0;
+    let equity = 0, peak = 0, maxDrawdown = 0, currentLossStreak = 0, longestLossStreak = 0;
     const dailyMap = new Map();
     for (const row of rows) {
       equity += row.realizedPnl; peak = Math.max(peak,equity); maxDrawdown = Math.max(maxDrawdown,peak-equity);
+      currentLossStreak = row.realizedPnl < 0 ? currentLossStreak + 1 : 0;
+      longestLossStreak = Math.max(longestLossStreak,currentLossStreak);
       dailyMap.set(row.date,(dailyMap.get(row.date)||0)+row.realizedPnl);
     }
     return { quoteCurrency:currency, closedExitExecutions:rows.length, wins:wins.length, losses:losses.length,
@@ -70,7 +72,8 @@ export function calculateTradePerformance(events = []) {
       profitFactor:grossLoss>0?grossProfit/grossLoss:null,
       expectancyPerExit:rows.length?rows.reduce((s,x)=>s+x.realizedPnl,0)/rows.length:null,
       averageWin:wins.length?grossProfit/wins.length:null, averageLoss:losses.length?-grossLoss/losses.length:null,
-      maxDrawdownCurrency:maxDrawdown, daily:[...dailyMap].map(([date,pnl])=>({date,pnl})).sort((a,b)=>a.date.localeCompare(b.date)),
+      maxDrawdownCurrency:maxDrawdown, currentLossStreak, longestLossStreak,
+      recent20NetPnl:rows.slice(-20).reduce((s,x)=>s+x.realizedPnl,0), daily:[...dailyMap].map(([date,pnl])=>({date,pnl})).sort((a,b)=>a.date.localeCompare(b.date)),
       bestExit:rows.length?rows.reduce((a,b)=>a.realizedPnl>b.realizedPnl?a:b):null,
       worstExit:rows.length?rows.reduce((a,b)=>a.realizedPnl<b.realizedPnl?a:b):null };
   });
@@ -84,12 +87,22 @@ export function calculateTradePerformance(events = []) {
       averagePnl:rows.length?net/rows.length:null, quoteCurrencies:[...new Set(rows.map(x=>x.quote))] };
   }).sort((a,b)=>b.netRealizedPnl-a.netRealizedPnl);
   const thirdCurrencyFees = exits.filter(x=>x.thirdCurrencyFee>0).map(x=>({exchange:x.exchange,symbol:x.symbol,currency:x.feeCurrency,amount:x.thirdCurrencyFee}));
+  const analystInsights = [];
+  for (const row of byCurrency) {
+    if (row.closedExitExecutions < 20) analystInsights.push({severity:'info',title:'Small performance sample',quoteCurrency:row.quoteCurrency,evidence:row.closedExitExecutions+' matched exit executions; use caution interpreting win rate and expectancy.',review:'Collect a larger sample before treating the observed edge as stable.'});
+    if (row.closedExitExecutions >= 5 && row.profitFactor != null && row.profitFactor < 1) analystInsights.push({severity:'warning',title:'Gross losses exceed gross profits',quoteCurrency:row.quoteCurrency,evidence:'Profit factor '+row.profitFactor.toFixed(2)+' across '+row.closedExitExecutions+' exits.',review:'Review the largest losing markets, strategies, fees and execution conditions.'});
+    if (row.currentLossStreak >= 3) analystInsights.push({severity:'warning',title:'Consecutive realized losses',quoteCurrency:row.quoteCurrency,evidence:row.currentLossStreak+' consecutive losing exit executions.',review:'Review recent entries and enforce the configured risk policy before increasing exposure.'});
+    if (row.recent20NetPnl < 0 && row.closedExitExecutions >= 20) analystInsights.push({severity:'warning',title:'Recent performance is negative',quoteCurrency:row.quoteCurrency,evidence:'The latest 20 matched exits sum to '+row.recent20NetPnl.toFixed(6)+' '+row.quoteCurrency+'.',review:'Compare recent market regime and strategy behavior with the prior sample.'});
+  }
+  if (unmatchedSellExecutions) analystInsights.push({severity:'warning',title:'Ledger inventory is incomplete',evidence:unmatchedSellExecutions+' sell execution(s) include '+unmatchedSellQuantity.toFixed(8)+' unmatched base quantity.',review:'Import older fills and verify opening inventory before relying on realized PnL.'});
+  const unattributed = exits.filter(x=>x.strategy==='unattributed').length;
+  if (unattributed) analystInsights.push({severity:'info',title:'Some exits lack strategy attribution',evidence:unattributed+' of '+exits.length+' matched exits are not tagged to a strategy or bot.',review:'Persist a stable strategyId or botId in fill metadata when recording executions.'});
   return { generatedAt:new Date().toISOString(), methodology:'Weighted-average cost per exchange/account/market. Each sell execution is one closed-exit observation; partial exits are not merged into synthetic round trips. Results are separated by quote currency.',
     fillCount:ordered.length, matchedExitCount:exits.length, unmatchedSellExecutions,
-    byCurrency, byStrategy:group('strategy'), byMarket:group('symbol'), byExchange:group('exchange'), bySession:group('session'),
+    byCurrency, byStrategy:group('strategy'), byMarket:group('symbol'), byExchange:group('exchange'), bySession:group('session'), analystInsights,
     recentExits:exits.slice(-100).reverse(), thirdCurrencyFees,
     dataQuality:{warnings:[...warnings],unmatchedSellQuantity,
-      unattributedExits:exits.filter(x=>x.strategy==='unattributed').length,
+      unattributedExits:unattributed,
       note:'Profit factor, expectancy and drawdown are calculated separately by quote currency. Do not add USD, USDT, BTC or other quote-currency values together without timestamp-aligned FX conversion.'},
     limitations:['This is ledger-derived realized trading performance, not total account return. It excludes open-position mark-to-market PnL.',
       'A sell is counted only for the quantity matched to recorded opening inventory. Unmatched quantities are disclosed, not assigned a guessed cost basis.',
