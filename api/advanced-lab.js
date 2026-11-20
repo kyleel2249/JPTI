@@ -130,6 +130,22 @@ export function calculatePortfolioAccounting(events, marks = {}) {
       'Unrealized PnL is reported only where a current mark price is supplied. This is not a tax statement.'] };
 }
 
+labRouter.get('/advanced/lab/walk-forward/:exchange/:symbol', async (req, res) => {
+  try {
+    const exchangeId = req.params.exchange.toLowerCase();
+    const symbol = req.params.symbol.toUpperCase().replace('-', '/');
+    const timeframe = String(req.query.timeframe || '1h');
+    const limit = clamp(Number.parseInt(req.query.limit || '1000', 10) || 1000, 100, 2000);
+    const candles = await withExchange(exchangeId, { privateAccess: false }, async ex => {
+      if (!ex.markets[symbol] || !ex.has?.fetchOHLCV) throw Object.assign(new Error('Market or OHLCV capability unavailable.'), { status: 404 });
+      if (ex.timeframes && !ex.timeframes[timeframe]) throw Object.assign(new Error('Unsupported timeframe.'), { status: 400 });
+      return ex.fetchOHLCV(symbol, timeframe, undefined, limit);
+    });
+    res.json({ exchange: exchangeId, symbol, timeframe, ...runWalkForward(candles, {
+      trainBars: req.query.trainBars, testBars: req.query.testBars, stepBars: req.query.stepBars, feeBps: req.query.feeBps
+    }) });
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
 labRouter.post('/advanced/lab/walk-forward', (req, res) => {
   try { res.json(runWalkForward(req.body?.candles, req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
