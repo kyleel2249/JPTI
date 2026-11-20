@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
+const dotenv = require('dotenv');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -38,6 +39,7 @@ async function createWindow() {
 app.whenReady().then(async () => {
   try {
     const root = app.getAppPath();
+    dotenv.config({ path: path.join(app.getPath('userData'), '.env'), override: false });
     process.env.JPTI_API_HOST = '127.0.0.1';
     process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS = 'true';
     process.env.JPTI_REQUIRE_EDGE_SECRET = 'false';
@@ -46,7 +48,7 @@ app.whenReady().then(async () => {
     process.env.JPTI_DATA_DIR = path.join(app.getPath('userData'), 'data');
     process.env.JPTI_WEB_DIST = path.join(root, 'dist');
     process.env.JPTI_SERVE_WEB = 'true';
-    process.env.JPTI_TRADING_MODE = process.env.JPTI_TRADING_MODE || 'paper';
+    process.env.JPTI_TRADING_MODE = 'paper';
     process.env.JPTI_ENABLE_LIVE_TRADING = 'false';
     const api = await import(pathToFileURL(path.join(root, 'api/server.js')).href);
     shutdown = api.shutdownJptiServer;
