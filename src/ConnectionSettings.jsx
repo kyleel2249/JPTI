@@ -30,7 +30,7 @@ export default function ConnectionSettings() {
       setStatus({ ok: true, data });
     } catch (e) {
       setStatus({ ok: false });
-      setError(e.message + ' Check that the API is running, the URL is correct, and remote access/CORS are configured.');
+      setError(e.message + ' Check that the PC API is running, the URL is correct, and local-network access/CORS are configured.');
     } finally { setBusy(false); }
   };
 
@@ -40,17 +40,17 @@ export default function ConnectionSettings() {
   return <section className="glass-panel detail-workspace connection-settings">
     <span className="eyebrow">DEVICE & API CONFIGURATION</span>
     <h3>Choose where this JPTI app connects</h3>
-    <p>JPTI can run against its local desktop API or connect to a secured remote API through your Cloudflare Pages address. This setting changes the API destination only; it does not upload your local ledger or exchange credentials.</p>
+    <p>JPTI runs on your own PC. The Windows desktop app uses its local API automatically; the Android app connects to that same API over your trusted local network. This setting changes only the API address and never uploads your ledger or exchange credentials.</p>
     <div className="quote-consensus-stats">
-      <div><span>ACTIVE CONNECTION</span><b>{saved ? 'REMOTE / CLOUD' : 'SAME-ORIGIN DEFAULT'}</b></div>
+      <div><span>ACTIVE CONNECTION</span><b>{saved ? 'LOCAL NETWORK API' : 'SAME-ORIGIN LOCAL API'}</b></div>
       <div><span>API BASE</span><b>{saved || 'Current app origin'}</b></div>
       <div><span>PRIVATE TOKEN</span><b>Not stored here</b></div>
       <div><span>TRADING MODE</span><b>Paper-first</b></div>
     </div>
     <div className="detail-workspace">
-      <label className="connection-label">Cloud or remote JPTI URL</label>
-      <input className="connection-url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-jpti.pages.dev"/>
-      <p className="subtle-note">Leave blank to use the same origin. On Windows desktop this is the local JPTI service. On Android, use your secured Cloudflare Pages URL or another HTTPS endpoint.</p>
+      <label className="connection-label">Local PC JPTI API URL</label>
+      <input className="connection-url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://192.168.1.10:8787"/>
+      <p className="subtle-note">Leave blank to use the local API. On Android, enter the PC's LAN address using a trusted HTTPS certificate or a private VPN endpoint.</p>
       {error && <p className="quote-error">{error}</p>}
       {status?.ok && <p className="connection-success">Connected · {status.data.service} · {status.data.mode} mode · {status.data.liveTradingEnabled ? 'Live execution enabled' : 'Live execution disabled'}</p>}
       <div className="news-search">
@@ -62,9 +62,9 @@ export default function ConnectionSettings() {
     <div className="detail-workspace">
       <h4>How to connect your devices</h4>
       <div className="risk-list">
-        <p>Windows desktop: install and open the JPTI desktop app. It starts the local API and uses local durable storage by default.</p>
-        <p>Android: install the Android app, enter your Cloudflare Pages HTTPS URL here, and test the connection. The Pages Function securely forwards API requests to your hosted Node service.</p>
-        <p>Shared local network: a phone cannot use 127.0.0.1 to reach your PC. Use the PC's LAN address only behind a properly secured HTTPS reverse proxy or VPN.</p>
+        <p>Windows desktop: install and open JPTI. It starts its API on the same PC and stores its ledger locally.</p>
+        <p>Android: install the Android app and enter the PC's local-network HTTPS API address. Both devices must be on the same trusted Wi-Fi network or private VPN.</p>
+        <p>Local network: a phone cannot use 127.0.0.1 to reach your PC. Configure the PC API to listen on its LAN interface and protect it with a trusted HTTPS endpoint or private VPN plus a strong API token.</p>
         <p>Private API tokens are entered only in the protected JPTI workflows. This connection setting stores only the API base URL, never exchange keys or API tokens.</p>
       </div>
     </div>
