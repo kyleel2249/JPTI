@@ -221,7 +221,7 @@ labRouter.post('/advanced/fills/sync/:exchange', async (req, res) => {
       const fee = t.fee || {};
       const saved = await ingestLedgerEvent({ source: exchangeId, eventType: 'fill', externalId: String(t.id), accountId: exchangeId,
         symbol: t.symbol, side: t.side, quantity: Number(t.amount), price: Number(t.price), fee: Number(fee.cost || 0),
-        feeCurrency: fee.currency || quote, occurredAt: t.datetime || new Date(t.timestamp || Date.now()).toISOString(),
+        feeCurrency: fee.currency || quote, occurredAt: new Date(Number(t.timestamp) || Date.parse(t.datetime) || Date.now()).toISOString(),
         metadata: { base, quote, orderId: String(t.order || ''), tradeId: String(t.id), takerOrMaker: String(t.takerOrMaker || '') } });
       results.push({ id: t.id, duplicate: saved.duplicate });
     }
