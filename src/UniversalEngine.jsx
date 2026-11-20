@@ -14,6 +14,7 @@ export default function UniversalEngine() {
   const [profileId,setProfileId]=useState('spot_trend');
   const [market,setMarket]=useState(null);
   const [evaluation,setEvaluation]=useState(null);
+  const [extraEvidence,setExtraEvidence]=useState({});
   const [query,setQuery]=useState('ETH');
   const [token,setToken]=useState('');
   const [dex,setDex]=useState(null);
@@ -32,11 +33,11 @@ export default function UniversalEngine() {
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Market evidence unavailable');
       setMarket(d);
       const ev=d.evidence||{};
-      const payload={profileId,evidence:{momentumPct:ev.momentumPct,relativeVolume:ev.relativeVolume,timeframeAlignment:ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:ev.fundingRate,rsi14:ev.rsi14,liquidityUsd:ev.visibleDepthUsd}};
+      const payload={profileId,evidence:{momentumPct:ev.momentumPct,relativeVolume:ev.relativeVolume,timeframeAlignment:ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:ev.fundingRate,rsi14:ev.rsi14,liquidityUsd:extraEvidence.liquidityUsd??ev.visibleDepthUsd,...extraEvidence}};
       const evalRes=await fetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
       const result=await evalRes.json();if(evalRes.ok)setEvaluation(result);
     }catch(e){setError(e.message);}finally{setLoading(false);}
-  },[exchange,symbol,profileId]);
+  },[exchange,symbol,profileId,extraEvidence]);
 
   const loadMacro=useCallback(async()=>{
     try{const r=await fetch('/api/universal/macro',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Macro sources unavailable');setMacro(d);}catch(e){setError(e.message);}
@@ -77,6 +78,26 @@ export default function UniversalEngine() {
       <button onClick={loadMarket} disabled={loading}>{loading?'Evaluating…':'Load market evidence'}</button>
     </div>
     {selected&&<p className="subtle-note">{selected.description||selected.horizon}. Supported asset classes: {(selected.assetClasses||[]).join(', ')}. Timeframes: {(selected.timeframes||[]).join(', ')}.</p>}
+    {profileId==='defi_rotation'&&<div className="news-search">
+      <input type="number" step="0.1" placeholder="Verified protocol TVL change %" value={extraEvidence.tvlChangePct??''} onChange={e=>setExtraEvidence(v=>({...v,tvlChangePct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" step="0.1" placeholder="Verified protocol fees change %" value={extraEvidence.feesChangePct??''} onChange={e=>setExtraEvidence(v=>({...v,feesChangePct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" min="0" max="100" placeholder="Protocol risk score 0–100" value={extraEvidence.protocolRiskScore??''} onChange={e=>setExtraEvidence(v=>({...v,protocolRiskScore:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" placeholder="Verified pool liquidity USD" value={extraEvidence.liquidityUsd??''} onChange={e=>setExtraEvidence(v=>({...v,liquidityUsd:e.target.value===''?null:Number(e.target.value)}))}/>
+      <p className="subtle-note">Enter values only from a verified protocol/token mapping and current provider evidence. Symbol matching alone is not protocol identity.</p>
+    </div>}
+    {profileId==='equity_swing'&&<div className="news-search">
+      <input type="number" min="0" placeholder="Days to next earnings event" value={extraEvidence.earningsRiskDays??''} onChange={e=>setExtraEvidence(v=>({...v,earningsRiskDays:e.target.value===''?null:Number(e.target.value)}))}/>
+    </div>}
+    {profileId==='macro_rotation'&&<div className="news-search">
+      <select value={extraEvidence.macroBias||'neutral'} onChange={e=>setExtraEvidence(v=>({...v,macroBias:e.target.value}))}><option value="risk-on">Risk-on</option><option value="neutral">Neutral</option><option value="risk-off">Risk-off</option></select>
+      <input type="number" step="0.1" placeholder="Macro momentum %" value={extraEvidence.macroMomentumPct??''} onChange={e=>setExtraEvidence(v=>({...v,macroMomentumPct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" step="0.1" placeholder="Relative strength %" value={extraEvidence.relativeStrengthPct??''} onChange={e=>setExtraEvidence(v=>({...v,relativeStrengthPct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" step="0.1" placeholder="Dollar index change %" value={extraEvidence.dollarIndexChangePct??''} onChange={e=>setExtraEvidence(v=>({...v,dollarIndexChangePct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" step="1" placeholder="Rate differential bps" value={extraEvidence.rateDifferentialBps??''} onChange={e=>setExtraEvidence(v=>({...v,rateDifferentialBps:e.target.value===''?null:Number(e.target.value)}))}/>
+    </div>}
+    {profileId==='mean_reversion'&&<div className="news-search">
+      <input type="number" min="0" max="100" placeholder="RSI 14" value={extraEvidence.rsi14??''} onChange={e=>setExtraEvidence(v=>({...v,rsi14:e.target.value===''?null:Number(e.target.value)}))}/>
+    </div>}
     {market&&<><div className="quote-consensus-stats">
       <div><span>LAST PRICE</span><b>{fmt(market.ticker?.last)}</b></div>
       <div><span>MOMENTUM WINDOW</span><b>{market.evidence?.momentumPct==null?'—':fmt(market.evidence.momentumPct)+'%'}</b></div>
