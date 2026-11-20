@@ -51,6 +51,9 @@ export function assertLiveTradingAllowed(req, exchange, market, order, reference
 }
 
 export function requirePrivateApiAuth(req) {
+  const localAddress = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip) || req.ip === '::ffff:127.0.0.1';
+  const loopbackServer = ['127.0.0.1', '::1', 'localhost'].includes(process.env.JPTI_API_HOST || '127.0.0.1');
+  if (process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS === 'true' && localAddress && loopbackServer) return;
   const expectedToken = process.env.JPTI_API_TOKEN;
   if (!expectedToken || req.get('x-jpti-api-token') !== expectedToken) {
     throw Object.assign(new Error('Missing or invalid JPTI API authorization token.'), { status: 401 });
