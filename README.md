@@ -103,15 +103,24 @@ Live order execution is disabled by default. The API requires all of the followi
 5. An active spot market with USDT quote currency and adapter order support.
 6. Estimated order notional within `JPTI_MAX_ORDER_NOTIONAL_USDT` (default 100 USDT).
 
-These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. Do not expose it directly to the public internet or deploy it to Cloudflare as-is. Production cloud operation requires authentication, TLS, encrypted secret management, durable audit logging, user-level authorization, network restrictions, monitoring, rate limiting at the edge, kill switches and independent security review.
+These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. Do not expose it directly to the public internet or deploy it to Cloudflare as-is. JPTI is designed to run as a locally hosted Node.js API with a local web interface, Windows desktop application, and Android client. Keep the API bound to localhost on the PC; use the secured device connection settings only when connecting Android over your trusted local network.
 
 ## Android
 
-The responsive web interface can be opened on Android while the phone and PC share Wi-Fi. Start JPTI with `npm run dev:all`, run `ipconfig` on Windows, then open `http://PC-IP-ADDRESS:5173` in Android Chrome. Allow Node.js through Windows Firewall on Private networks only. The API remains bound to the PC loopback interface and is accessed through the Vite proxy. This is a web app, not a native APK.
+JPTI supports a native Android client built with Capacitor. The Android app connects to a JPTI API instance running on your Windows PC or another computer on your trusted local network. Build the Android project and debug APK with:
+
+```bat
+npm run mobile:android:add
+npm run mobile:sync
+cd android
+gradlew.bat assembleDebug
+```
+
+For day-to-day development, start the local API and web interface with `npm run dev:all`. Use the Connection Settings workspace in Android to configure the PC's reachable LAN HTTPS API endpoint when connecting from a phone. Do not expose the API to the public internet; use a trusted private network and a strong API token. The Android client does not bundle the Node.js/CCXT backend or automatically synchronize a separate local ledger.
 
 ## Architecture direction
 
-Next build stages: authenticated user/workspace model; encrypted credential vault; durable PostgreSQL ledger and audit log; Redis jobs/cache; WebSocket market-data service; per-exchange capability adapters; policy-enforced order service; paper execution engine; portfolio/risk ledger; strategy backtesting and walk-forward validation; Solana DEX intelligence agents; AI research and explainable signal scoring; PWA/Capacitor Android packaging; hardened Cloudflare deployment.
+Next build stages: authenticated user/workspace model; encrypted credential vault; durable PostgreSQL ledger and audit log; Redis jobs/cache; WebSocket market-data service; per-exchange capability adapters; policy-enforced order service; paper execution engine; portfolio/risk ledger; strategy backtesting and walk-forward validation; Solana DEX intelligence agents; AI research and explainable signal scoring; PWA/Capacitor Android packaging; local Windows desktop and Android application hardening.
 
 ## Important risk notice
 
@@ -288,11 +297,3 @@ Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once
 The Portfolio & Ledger workspace includes an authenticated performance report at `GET /api/advanced/portfolio/performance`. It calculates realized PnL by quote currency, closed sell-execution win rate, profit factor, expectancy, average win/loss, realized-equity drawdown, daily realized PnL, and attribution by strategy, market, exchange and coarse UTC session. Strategy attribution uses `metadata.strategyId`, `metadata.strategy` or `metadata.botId`; otherwise the fill is explicitly unattributed.
 
 The report uses weighted-average cost per exchange/account/market. It does not call a sell a completed round trip: each matched sell execution is one exit observation. Unmatched sells are counted and warned about, third-currency fees are itemized without invented FX conversion, and quote currencies are never combined. This is realized ledger performance, not total account return or tax reporting. Open-position mark-to-market and derivatives funding remain outside this fill-only report.
-
-## Cloudflare hosting
-
-For the current architecture, deploy the Vite frontend to Cloudflare Pages and run the Node/Express/CCXT API on a separate Node.js host with managed PostgreSQL. A Pages Function under `functions/api/[[path]].js` proxies `/api/*` to that API over HTTPS. Set `JPTI_API_ORIGIN` and the secret `JPTI_EDGE_SECRET` in the Pages project; set the same edge secret plus `JPTI_REQUIRE_EDGE_SECRET=true` on the API host to block requests that bypass the Cloudflare proxy.
-
-Exact Pages settings, API host environment variables, secret generation, deployment verification, custom domain setup and the Workers-vs-Pages decision are documented in [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOYMENT.md).
-
-**Cloudflare Pages settings:** Framework preset React (Vite); root directory `/`; build command `npm run build`; output directory `dist`; Node.js version `22`. The existing Express API is not a static Pages asset and is not deployed by the Vite build. A future Workers backend migration must separately validate CCXT, PostgreSQL, filesystem use and scheduler behavior.
