@@ -232,8 +232,8 @@ See `integrations/t-bots/JPTI-MULTI-ASSET.md` for endpoint and coverage details.
 
 The embedded T-Bots six-agent engine has been extended from Solana-only discovery to multi-chain DEX discovery plus an optional configured CEX spot watchlist. It preserves the Scanner, Rug Check, Sizer, Executor, Logger and Equity agents.
 
-- Multi-chain DEX feed: DexScreener-supported chains, RugCheck for Solana and GoPlus for selected EVM chains. Unsupported/incomplete token security data fails closed.
-- CEX spot feed: configure up to 30 exchange:symbol pairs with `JPTI_TBOTS_CEX_MARKETS`. Only active spot instruments meeting quote-volume, visible-depth and spread thresholds are passed to the T-Bots paper engine.
+- Multi-chain DEX feed: DexScreener latest discovery plus an optional 60-address DEX contract watchlist for established tokens; RugCheck for Solana and GoPlus for selected EVM chains. Unsupported/incomplete token security data fails closed.
+- CEX spot feed: configure up to 30 USD/stablecoin-quoted exchange:symbol pairs with `JPTI_TBOTS_CEX_MARKETS`. Only active spot instruments meeting quote-volume, visible-depth and spread thresholds are passed to the T-Bots paper engine.
 - T-Bots profiles: new pair/meme, established token, DeFi rotation, breakout and mean reversion.
 - JPTI Universal Engine workspace: asset-class strategy registry, cross-exchange market context, multi-timeframe trend/RSI/order-book/derivatives evidence, global crypto/DeFi/macro context, DEX security lookup, news discovery and explainable strategy evaluation.
 - Shared intelligence: T-Bots submits per-run events and refreshes per-asset JPTI evidence and the unified risk gate. Stale or missing asset evidence blocks new entries when the bridge is enabled.
@@ -242,6 +242,7 @@ The embedded T-Bots six-agent engine has been extended from Solana-only discover
 
 New environment settings:
 ```env
+JPTI_TBOTS_DEX_WATCHLIST=solana:YourSolanaMint,base:0xYourTokenContract
 JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,binance:ETH/USDT,binance:SOL/USDT,bitget:BTC/USDT
 JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES=3
 JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
