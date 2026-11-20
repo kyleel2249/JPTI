@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG = {
     skipLpUnlocked: true,
   },
   scanner: {
+    assetProfile: 'meme_new_pair',
     volumeSpikeX: 5,
     buyRatioMin: 0.7,
     holderGrowthMinPct: 10,

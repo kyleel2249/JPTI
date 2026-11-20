@@ -4,7 +4,7 @@ import { DEFAULT_PROMPT } from './prompt-template.js';
 import { parsePrompt } from './prompt-parser.js';
 import { PromptManager } from './prompt-manager.js';
 import { SimFeed } from './market/sim-feed.js';
-import { LiveFeed } from './market/live-feed.js';
+import { UniversalFeed } from './market/universal-feed.js';
 import { SimClock, RealClock } from './core/clock.js';
 import { Orchestrator } from './core/orchestrator.js';
 import { Dashboard } from './ui/dashboard.js';
@@ -98,9 +98,11 @@ async function start() {
   store.set('grokbot.seed', String(seed));
   store.set('grokbot.speed', $('selSpeed').value);
   const cfg = res.config;
+  cfg.scanner.assetProfile = $('selAssetProfile')?.value || 'meme_new_pair';
+  store.set('grokbot.assetProfile', cfg.scanner.assetProfile);
   const clock = mode === 'live' ? new RealClock(sessionLen(cfg)) : new SimClock(cfg.session.startTime, cfg.session.endTime);
-  const feed = mode === 'live' ? new LiveFeed() : new SimFeed({ seed });
   jptiBridge.setToken($('jptiApiToken')?.value || '');
+  const feed = mode === 'live' ? new UniversalFeed({ bridge:jptiBridge }) : new SimFeed({ seed });
   orch = new Orchestrator({ config: cfg, feed, clock, seed });
   runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${seed}`;
   paused = false;
@@ -120,7 +122,9 @@ async function start() {
     sharedContext = mode === 'live' ? await jptiBridge.refreshContext(true) : null;
     orch.setSharedContext(sharedContext);
     orch.setSharedRisk(await jptiBridge.refreshRisk(true));
-    $('jptiBridgeStatus').textContent = sharedContext ? 'JPTI linked · ' + sharedContext.regime + ' · paper gate active' : 'JPTI linked · context unavailable';
+    orch.setSharedMacro(await jptiBridge.refreshMacro(true));
+    orch.setSharedAssetEvidence(await jptiBridge.refreshAssetEvidence(feed.snapshot(), true), true);
+    $('jptiBridgeStatus').textContent = sharedContext ? 'JPTI linked · ' + sharedContext.regime + ' · unified risk + per-token evidence gates active' : 'JPTI linked · context unavailable';
   } else { sharedContext = null; orch.setSharedContext(null); }
   orch.bus.on('session:end', onEnd);
   render();
@@ -151,6 +155,8 @@ function schedule() {
           if (jptiBridge.enabled) {
             orch.setSharedContext(await jptiBridge.refreshContext());
             orch.setSharedRisk(await jptiBridge.refreshRisk());
+            orch.setSharedMacro(await jptiBridge.refreshMacro());
+            orch.setSharedAssetEvidence(await jptiBridge.refreshAssetEvidence(feed.snapshot()), true);
           }
           await orch.step();
         } else {
@@ -243,6 +249,7 @@ $('btnBrief').addEventListener('click', async () => {
 // ---------- init ----------
 $('promptInput').value = store.get('grokbot.prompt', DEFAULT_PROMPT);
 $('selMode').value = store.get('grokbot.mode', 'sim');
+$('selAssetProfile').value = store.get('grokbot.assetProfile', 'meme_new_pair');
 $('inSeed').value = store.get('grokbot.seed', '7');
 $('selSpeed').value = store.get('grokbot.speed', '20');
 refreshCompose();

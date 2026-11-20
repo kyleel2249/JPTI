@@ -47,6 +47,9 @@ export class Orchestrator {
     this.banner = 'ready';
     this.sharedContext = null;
     this.sharedRisk = null;
+    this.sharedMacro = null;
+    this.sharedAssetEvidence = new Map();
+    this.sharedEvidenceRequired = false;
     this.lastSample = 0;
     this.ctx = { canSell: (id) => (this.feed.canSell ? this.feed.canSell(id) : true) };
     bus.on('trade:enter', (e) => (this.banner = `ENTERED · LOGGED $${e.symbol}`));
@@ -130,7 +133,17 @@ export class Orchestrator {
     const id = token.id;
     if (this.blacklist.has(id) || this.executor.has(id)) return;
     if ((this.cooldown.get(id) || 0) > now) return;
-    const scan = this.scanner.scan(token);
+    const sharedEvidence = this.sharedAssetEvidence.get(token.id);
+    if (this.sharedEvidenceRequired && (!sharedEvidence || Date.now() - Date.parse(sharedEvidence.observedAt) > 90000)) {
+      this._filtered(token, 'JPTI per-token evidence missing or stale; new entries fail closed while shared intelligence is unavailable.', 'jpti-evidence-missing');
+      return;
+    }
+    if (this.sharedEvidenceRequired && sharedEvidence.score < 45) {
+      this._filtered(token, 'JPTI multi-asset evidence score below the configured research threshold.', 'jpti-evidence-score');
+      return;
+    }
+    const reviewToken = sharedEvidence ? { ...token, jptiEvidence: sharedEvidence } : token;
+    const scan = this.scanner.scan(reviewToken);
     if (scan.universe.pending) return;
     this.checked.add(id);
     if (!scan.universe.pass) {
@@ -142,7 +155,7 @@ export class Orchestrator {
 
     const task = this.ledger.open(id, token.symbol, now);
     this.ledger.step(task, 'SCANNER', 'flagged', scan.signals.map((s) => s.label).join(' · '));
-    const rc = this.rug.check(token);
+    const rc = this.rug.check(reviewToken);
     if (!rc.pass) {
       this.ledger.step(task, 'RUG CHECK', 'filtered', rc.reasons.join(', '));
       this.ledger.done(task, 'filtered', rc.reasons[0]);
@@ -151,7 +164,13 @@ export class Orchestrator {
       return;
     }
     this.ledger.step(task, 'RUG CHECK', 'pass');
-    if (this.sharedContext?.regime === 'risk_off' && Number(this.sharedContext.riskScore) < 35) {
+    const globalMarketMove = Number(this.sharedMacro?.crypto?.marketCapChange24hPercent);
+    if (Number.isFinite(globalMarketMove) && globalMarketMove <= -8) {
+      this.ledger.done(task, 'skipped', 'global crypto market capitalization fell at least 8% over 24h');
+      this._filtered(token, 'JPTI global macro gate: broad crypto market drawdown exceeds 8%; new entries paused, existing exits remain active.', 'jpti-global-risk-off');
+      return;
+    }
+    if (this.sharedContext?.regime === 'risk_off') {
       this.ledger.done(task, 'skipped', 'JPTI shared market regime is risk-off');
       this._filtered(token, 'JPTI shared risk gate: BTC market regime risk-off; new multi-chain entries blocked. Existing exits remain active.', 'jpti-risk-off');
       return;
@@ -201,7 +220,9 @@ export class Orchestrator {
   }
 
   setSharedContext(context) { this.sharedContext = context && Date.now() - Date.parse(context.fetchedAt) <= 120000 ? context : null; }
+  setSharedMacro(macro) { this.sharedMacro = macro && Date.now() - Date.parse(macro.generatedAt) <= 900000 ? macro : null; }
   setSharedRisk(risk) { this.sharedRisk = risk && risk.newEntriesAllowed === true && !risk.error ? risk : risk ? { ...risk, newEntriesAllowed: false } : null; }
+  setSharedAssetEvidence(evidence, required = false) { this.sharedAssetEvidence = evidence instanceof Map ? evidence : new Map(); this.sharedEvidenceRequired = required; }
 
   snapshot() {
     const eq = this.equity;
@@ -216,6 +237,9 @@ export class Orchestrator {
       paused: this.paused,
       pauseReason: this.pauseReason,
       sharedContext: this.sharedContext ? { regime: this.sharedContext.regime, riskScore: this.sharedContext.riskScore, fetchedAt: this.sharedContext.fetchedAt } : null,
+      sharedMacro: this.sharedMacro ? { marketCapChange24hPercent: this.sharedMacro.crypto?.marketCapChange24hPercent ?? null, btcDominancePercent: this.sharedMacro.crypto?.btcDominancePercent ?? null, defiTvlUsd: this.sharedMacro.defi?.totalValueLockedUsd ?? null, generatedAt: this.sharedMacro.generatedAt } : null,
+      sharedAssetEvidenceCount: this.sharedAssetEvidence.size,
+      sharedEvidenceRequired: this.sharedEvidenceRequired,
       sharedRisk: this.sharedRisk ? { newEntriesAllowed: this.sharedRisk.newEntriesAllowed, pauseReasons: this.sharedRisk.pauseReasons || [], drawdownPct: this.sharedRisk.drawdownPct ?? null } : null,
       banner: this.banner,
       balance: eq.balance,

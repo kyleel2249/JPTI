@@ -19,6 +19,12 @@ export function mapPair(p, now = Date.now()) {
   const sells = num(p?.txns?.m5?.sells) ?? 0;
   return {
     id: p?.baseToken?.address,
+    quoteAddress: p?.quoteToken?.address,
+    quoteSymbol: p?.quoteToken?.symbol,
+    volume1hUsd: num(p?.volume?.h1),
+    volume24hUsd: num(p?.volume?.h24),
+    buys1h: num(p?.txns?.h1?.buys) ?? 0,
+    sells1h: num(p?.txns?.h1?.sells) ?? 0,
     chainId: String(p?.chainId || 'unknown').toLowerCase(),
     tokenAddress: p?.baseToken?.address,
     symbol: String(p?.baseToken?.symbol || '?').slice(0, 12),
@@ -33,13 +39,16 @@ export function mapPair(p, now = Date.now()) {
   };
 }
 
-export function mapRugCheck(report) {
+export function mapRugCheck(report, now = Date.now()) {
   if (!report || typeof report !== 'object') return null;
   const top = Array.isArray(report.topHolders) ? report.topHolders : [];
   const risks = Array.isArray(report.risks) ? report.risks : [];
   const creator = report.creator;
   const lpPct = num(report.markets?.[0]?.lp?.lpLockedPct);
   const locked = lpPct !== null && lpPct >= 95;
+  const lockRows = (report.markets || []).flatMap(m => Array.isArray(m.lp?.lockers) ? m.lp.lockers : []);
+  const lockEnds = lockRows.map(row => num(row.lockedUntil ?? row.endTime ?? row.end_time)).filter(v => v !== null).map(v => v < 1e12 ? v * 1000 : v);
+  const lpLockedDays = lockEnds.length ? Math.max(0, (Math.max(...lockEnds) - now) / 86400000) : 0;
   const hasRisk = (re) => risks.some((r) => re.test(`${r?.name || ''} ${r?.description || ''}`));
   return {
     holders: num(report.totalHolders),
@@ -49,7 +58,8 @@ export function mapRugCheck(report) {
     devPct: creator ? num(top.find((h) => h?.address === creator)?.pct) ?? 0 : null,
     top10Pct: top.length ? top.slice(0, 10).reduce((a, h) => a + (num(h?.pct) ?? 0), 0) : null,
     bundledLaunch: hasRisk(/bundl|sniper/i),
-    lpLockedDays: locked ? 3650 : 0, // API exposes locked %, not duration: >=95% is treated as satisfying the lock
+    lpLockedPercent: lpPct,
+    lpLockedDays, // Only explicit lock end timestamps count; a locked percentage alone does not prove duration.
     honeypot: hasRisk(/honeypot|cannot sell|unable to sell/i),
   };
 }
@@ -97,12 +107,13 @@ export class LiveFeed {
       this.tokens.set(id, { id, chainId: String(p.chainId).toLowerCase(), tokenAddress: p.tokenAddress, tracked: true, hist: [], liqMax: 0, security: undefined, holdHist: [], view: null, order: this.ticks });
     }
     const ids = [...this.tokens.values()].sort((a, b) => b.order - a.order);
-    for (const stale of ids.slice(this.maxTracked)) if (!stale.view?.__open) this.tokens.delete(stale.id);
+    for (const stale of ids.slice(this.maxTracked)) if (stale.chainId !== 'cex' && stale.source !== 'jpti-watchlist' && !stale.view?.__open) this.tokens.delete(stale.id);
   }
 
   async _refresh() {
     const byChain = new Map();
     for (const token of this.tokens.values()) {
+      if (token.chainId === 'cex') continue;
       const rows = byChain.get(token.chainId) || [];
       rows.push(token);
       byChain.set(token.chainId, rows);
@@ -155,6 +166,12 @@ export class LiveFeed {
       pullbackPct: (1 - m.price / high) * 100,
       liquidityUsd: liq,
       volume5mUsd: m.volume5mUsd ?? 0,
+      volume1hUsd: m.volume1hUsd ?? 0,
+      volume24hUsd: m.volume24hUsd ?? 0,
+      buys1h: m.buys1h ?? 0,
+      sells1h: m.sells1h ?? 0,
+      quoteAddress: m.quoteAddress || null,
+      quoteSymbol: m.quoteSymbol || null,
       volume5mAvgUsd: m.volume5mAvgUsd,
       buyRatio: m.buyRatio,
       holders: t.security?.holders ?? 0,
@@ -170,6 +187,7 @@ export class LiveFeed {
   async _enrich() {
     let budget = 8;
     for (const token of this.tokens.values()) {
+      if (token.chainId === 'cex') continue;
       if (budget <= 0) break;
       const market = token.m;
       if (token.security !== undefined || !market) continue;

@@ -12,6 +12,7 @@ import { buildCrossVenueComparison } from './market-intelligence.js';
 import { advancedRouter } from './advanced-intelligence.js';
 import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
+import { universalRouter } from './universal-engine.js';
 
 const app = express();
 const port = Number(process.env.JPTI_API_PORT || 8787);
@@ -43,6 +44,7 @@ app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
 app.use('/api', labRouter);
 app.use('/api', tbotsRouter);
+app.use('/api', universalRouter);
 // T-Bots is preserved as an independently versioned paper-trading subsystem.
 app.use('/t-bots', express.static(resolve('integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
 

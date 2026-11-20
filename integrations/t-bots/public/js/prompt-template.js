@@ -17,12 +17,22 @@ function joinOr(items) {
 export function renderPrompt(c) {
   const { session: s, universe: u, scanner: sc, rug, sizer: z, executor: e, rules: r } = c;
   const L = [];
+  const profile = sc.assetProfile || 'meme_new_pair';
+  const universeDescription = {
+    meme_new_pair: `Discover new DEX pairs across supported chains, prioritizing pairs created within ${u.maxAgeHours} hours.`,
+    established_token: 'Scan established, liquid DEX tokens across supported chains; do not apply a new-pair age ceiling.',
+    defi_rotation: 'Scan established DeFi-related DEX tokens; protocol TVL/fees are contextual evidence only when a verified protocol mapping exists.',
+    breakout: 'Scan liquid DEX tokens for confirmed momentum and range-breakout conditions.',
+    mean_reversion: 'Scan liquid DEX tokens for range/mean-reversion conditions; avoid strong directional regimes.'
+  }[profile] || 'Scan the configured multi-chain DEX universe.';
   L.push(
-    `You are Grok Bot, an overnight meme-coin trading terminal on Solana. Run from ${s.startTime} to ${s.endTime} with a starting balance of $${s.startBalance}. I will not be watching. Log every decision so I can read it in the morning.`,
+    `You are T-Bots, a universal multi-asset trading intelligence and paper-execution engine. Run from ${s.startTime} to ${s.endTime} with a starting balance of $${s.startBalance}. Never claim a live order or wallet swap. Log every decision and evidence source.`,
     '',
     'UNIVERSE',
-    `- Only fresh DEX pairs: launched or migrated in the last ${u.maxAgeHours} hours (pump.fun, Raydium, Meteora).`,
-    `- Minimum liquidity $${money(u.minLiquidityUsd)}, minimum 5m volume $${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders.`
+    `- Active strategy profile: ${profile}. ${universeDescription}`,
+    '- Include DexScreener-supported chains plus the JPTI configured CEX spot watchlist when the JPTI bridge is connected.',
+    `- Fresh-pair age reference: the last ${u.maxAgeHours} hours; apply this age ceiling only to the meme_new_pair profile.`,
+    `- Minimum liquidity $${money(u.minLiquidityUsd)}, minimum 5m volume $${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders for DEX token screening.`
   );
   const skips = [];
   if (u.skipFrozenMint) skips.push('a frozen mint');
@@ -44,9 +54,9 @@ export function renderPrompt(c) {
   const [first, ...rest] = e.ladder;
   const ladder = [`sell ${first.sellPct}% at ${first.x}x`, ...rest.map((x) => `${x.sellPct}% at ${x.x}x`)].join(', ');
   L.push(
-    `4. EXECUTOR - max slippage ${e.maxSlippagePct}%, split entries in ${e.splitParts} parts. Take-profit ladder: ${ladder}, let ${e.runnerPct}% run with a ${e.trailingStopPct}% trailing stop. Hard stop -${e.hardStopPct}%, time stop ${e.timeStopMin} min, exit instantly if dev sells or LP is pulled.`
+    `4. EXECUTOR - max slippage ${e.maxSlippagePct}%, split entries in ${e.splitParts} parts. Paper-only simulated fills; never sign a wallet transaction or submit a live exchange order. Take-profit ladder: ${ladder}, let ${e.runnerPct}% run with a ${e.trailingStopPct}% trailing stop. Hard stop -${e.hardStopPct}%, time stop ${e.timeStopMin} min, exit instantly if dev sells or LP is pulled.`
   );
-  L.push('5. LOGGER - write every ENTER / EXIT / FILTERED line with the reason, size, fill price and PnL.');
+  L.push('5. LOGGER - write every ENTER / EXIT / FILTERED line with the reason, asset class, venue, size, fill price and PnL.');
   L.push('6. EQUITY - update balance and the equity curve on every close.', '', 'RULES');
   L.push(`- Enter only when SCANNER flags at least ${word(sc.minSignals)} signals and RUG CHECK passes.`);
   L.push(`- No chasing: skip if the coin is already +${r.noChaseGainPct}% in the last hour without a pullback.`);
@@ -54,8 +64,13 @@ export function renderPrompt(c) {
   if (r.compound) L.push('- Compound profits into the next position size.');
   L.push(
     '',
+    'JPTI SHARED INTELLIGENCE',
+    '- Consume fresh JPTI per-asset evidence, multi-timeframe context, market microstructure, derivatives context where relevant, macro/DeFi regime data and the unified portfolio risk gate.',
+    '- Missing/stale JPTI evidence or a breached shared risk limit blocks new entries; existing exits continue.',
+    '- Never treat a heuristic score as a safety audit, probability or guaranteed signal.',
+    '',
     'OUTPUT',
-    'Live dashboard: balance, trades, wins/losses, current position, agent status and the full night log. At 07:00 print a recap: start vs end balance, best trade, worst trade, total trades, and the three coins that made the most.',
+    'Live dashboard: balance, trades, wins/losses, current positions, agent status and the full log. At session end print start vs end balance, best/worst trade, strategy profile and source attribution.',
     '',
     'Start now.'
   );

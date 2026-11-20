@@ -13,12 +13,12 @@ export const TEMPLATE_VERSION = '1.0.0';
 export const ROLES = ['SCANNER', 'RUG', 'SIZER', 'EXECUTOR', 'LOGGER', 'EQUITY'];
 
 const ROLE_MAP = {
-  SCANNER: { agent: 'SCANNER', sections: ['UNIVERSE'], rules: [/SCANNER flags/i] },
-  RUG: { agent: 'RUG CHECK', sections: [], rules: [/RUG CHECK passes/i] },
-  SIZER: { agent: 'SIZER', sections: [], rules: [/compound/i, /drawdown/i] },
-  EXECUTOR: { agent: 'EXECUTOR', sections: [], rules: [/no chasing/i] },
-  LOGGER: { agent: 'LOGGER', sections: ['OUTPUT'], rules: [] },
-  EQUITY: { agent: 'EQUITY', sections: ['OUTPUT'], rules: [/drawdown/i] },
+  SCANNER: { agent: 'SCANNER', sections: ['UNIVERSE', 'JPTI SHARED INTELLIGENCE'], rules: [/SCANNER flags/i] },
+  RUG: { agent: 'RUG CHECK', sections: ['JPTI SHARED INTELLIGENCE'], rules: [/RUG CHECK passes/i] },
+  SIZER: { agent: 'SIZER', sections: ['JPTI SHARED INTELLIGENCE'], rules: [/compound/i, /drawdown/i] },
+  EXECUTOR: { agent: 'EXECUTOR', sections: ['JPTI SHARED INTELLIGENCE'], rules: [/no chasing/i] },
+  LOGGER: { agent: 'LOGGER', sections: ['OUTPUT', 'JPTI SHARED INTELLIGENCE'], rules: [] },
+  EQUITY: { agent: 'EQUITY', sections: ['OUTPUT', 'JPTI SHARED INTELLIGENCE'], rules: [/drawdown/i] },
   BRIEFING: { agent: null, sections: ['OUTPUT'], rules: [] },
 };
 
@@ -60,11 +60,11 @@ export function compressPrompt(text) {
 }
 
 export function splitPrompt(text) {
-  const out = { header: [], UNIVERSE: [], AGENTS: [], RULES: [], OUTPUT: [] };
+  const out = { header: [], UNIVERSE: [], AGENTS: [], RULES: [], OUTPUT: [], 'JPTI SHARED INTELLIGENCE': [] };
   let cur = 'header';
   for (const l of String(text).replace(/\r\n?/g, '\n').split('\n')) {
     const t = l.trim();
-    if (/^(UNIVERSE|AGENTS|RULES|OUTPUT)$/.test(t)) {
+    if (/^(UNIVERSE|AGENTS|RULES|OUTPUT|JPTI SHARED INTELLIGENCE)$/.test(t)) {
       cur = t;
       continue;
     }
@@ -77,6 +77,7 @@ export function splitPrompt(text) {
     AGENTS: out.AGENTS.filter((l) => l.trim()),
     RULES: out.RULES.filter((l) => l.trim()),
     OUTPUT: clean(out.OUTPUT.filter((l) => !/^start now\.?$/i.test(l.trim()))),
+    'JPTI SHARED INTELLIGENCE': clean(out['JPTI SHARED INTELLIGENCE']),
   };
 }
 
@@ -155,7 +156,7 @@ export class PromptManager {
     const lines = this.text
       .split('\n')
       .map((l) => l.trim())
-      .filter((l) => l && !/^(UNIVERSE|AGENTS|RULES|OUTPUT)$/.test(l) && !/^start now\.?$/i.test(l));
+      .filter((l) => l && !/^(UNIVERSE|AGENTS|RULES|OUTPUT|JPTI SHARED INTELLIGENCE)$/.test(l) && !/^start now\.?$/i.test(l));
     const missing = lines.filter((l) => !joined.includes(l));
     return { total: lines.length, missing, ok: missing.length === 0 };
   }

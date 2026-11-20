@@ -226,3 +226,36 @@ Important boundaries:
 - Shared event memory and loss-streak guard are implemented; a fully consolidated JPTI exchange + T-Bots equity/drawdown ledger, production database, chain-by-chain execution adapters and live WebSocket feeds remain future work.
 
 See `integrations/t-bots/JPTI-MULTI-ASSET.md` for endpoint and coverage details.
+
+
+## Universal T-Bots + JPTI intelligence layer
+
+The embedded T-Bots six-agent engine has been extended from Solana-only discovery to multi-chain DEX discovery plus an optional configured CEX spot watchlist. It preserves the Scanner, Rug Check, Sizer, Executor, Logger and Equity agents.
+
+- Multi-chain DEX feed: DexScreener latest discovery plus an optional 60-address DEX contract watchlist for established tokens; RugCheck for Solana and GoPlus for selected EVM chains. Unsupported/incomplete token security data fails closed.
+- CEX spot feed: configure up to 30 USD/stablecoin-quoted exchange:symbol pairs with `JPTI_TBOTS_CEX_MARKETS`. Only active spot instruments meeting quote-volume, visible-depth and spread thresholds are passed to the T-Bots paper engine.
+- T-Bots profiles: new pair/meme, established token, DeFi rotation, breakout and mean reversion.
+- JPTI Universal Engine workspace: asset-class strategy registry, cross-exchange market context, multi-timeframe trend/RSI/order-book/derivatives evidence, global crypto/DeFi/macro context, DEX security lookup, news discovery and explainable strategy evaluation.
+- Shared intelligence: T-Bots submits per-run events and refreshes per-asset JPTI evidence and the unified risk gate. Stale or missing asset evidence blocks new entries when the bridge is enabled.
+- Unified performance: closed T-Bots paper trades and exchange fill history are attributed separately; weighted-average exchange realized PnL is kept by quote currency.
+- Unified loss controls: consecutive T-Bots paper loss pause and configurable daily realized USD-equivalent loss guard. USD/USDT/USDC/DAI/FDUSD are treated as approximate USD equivalents; other quote currencies remain separate.
+
+New environment settings:
+```env
+JPTI_TBOTS_DEX_WATCHLIST=solana:YourSolanaMint,base:0xYourTokenContract
+JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,binance:ETH/USDT,binance:SOL/USDT,bitget:BTC/USDT
+JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES=3
+JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
+```
+
+Universal Engine endpoints are documented in `integrations/t-bots/JPTI-MULTI-ASSET.md` and exposed under `/api/universal/*`.
+
+**Scope boundaries:** This is not literally every token pair on every chain or every instrument on every exchange. DexScreener's discovery feed is provider-limited; CEX markets are explicitly watchlisted. The T-Bots executor is still paper-only and supports DEX paper positions and selected CEX spot paper instruments. It does not place live CEX orders, sign Solana/EVM transactions, bridge assets or withdraw funds. Strategy registry coverage for equities, FX, commodities, indices and bonds is a research framework; dedicated live feeds, exchange adapters and validated asset-class strategies remain separate work. Unified risk is based on recorded closed paper trades and recorded exchange fills, not a fully reconciled cross-account equity ledger with unrealized PnL and FX.
+
+
+### T-Bots upstream adapter safety
+
+The hourly upstream sync continues to bring in T-Bots changes and open a review PR. JPTI-owned integration-critical files now have pinned upstream baselines and separate overlays. If upstream modifies one of those files, the sync script deliberately stops rather than overwriting either side; the change must be reconciled and the baseline/overlay refreshed before the sync PR can proceed. Other upstream files continue to sync normally. This is a guarded review process, not automatic live synchronization or automatic merging.
+
+
+The Universal Engine also includes a persisted central T-Bots new-entry pause/resume control. It blocks new paper entries across connected T-Bots sessions while allowing existing positions to continue their configured exits. It does not force-close positions or cancel live exchange orders.

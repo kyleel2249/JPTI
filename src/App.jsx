@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ExchangeConnectivity from './ExchangeConnectivity.jsx';
 import FinancialIntelligence from './FinancialIntelligence.jsx';
+import UniversalEngine from './UniversalEngine.jsx';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
   ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2,
@@ -19,6 +20,7 @@ const navigation = [
   { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
+  { label: 'Universal Engine', icon: Network, group: 'RESEARCH' },
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
   { label: 'Forecast & Strategy', icon: Gauge, group: 'RESEARCH' },
   { label: 'Walk-Forward Lab', icon: SlidersHorizontal, group: 'RESEARCH' },
@@ -221,6 +223,7 @@ function App() {
     'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
+    'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
@@ -327,6 +330,7 @@ function App() {
   );
 
   const renderWorkspace = () => {
+    if (page === 'Universal Engine') return <UniversalEngine/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
     if (page === 'Forecast & Strategy') return <section className="glass-panel detail-workspace">

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Grok Bot Terminal</title>
-  <meta name="description" content="Overnight meme-coin trading terminal run by six cooperating AI agents. Paper trading only.">
+  <meta name="description" content="Universal multi-asset trading intelligence terminal with six cooperating agents. Paper trading only.">
   <meta name="color-scheme" content="light dark">
   <meta name="robots" content="noindex">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -17,7 +17,7 @@
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#111827"/><path d="M12 17c0-3 2-5 5-5h14c3 0 5 2 5 5v10c0 5-4 9-9 9h-6c-5 0-9-4-9-9V17z" fill="#fff"/><path d="M17 27l12-9" stroke="#111827" stroke-width="3.5" stroke-linecap="round"/></svg>
       <div>
         <h1>Grok Bot</h1>
-        <p id="subtitle">new session · overnight trading prompt</p>
+        <p id="subtitle">new session · universal multi-asset trading prompt</p>
       </div>
     </div>
     <span class="chip" id="chipMode">paper · simulated market</span>
@@ -50,7 +50,15 @@
             <label for="selMode">Market data</label>
             <select id="selMode">
               <option value="sim">Simulated market (seeded, replayable)</option>
-              <option value="live">Live DEX data (DexScreener + RugCheck)</option>
+              <option value="live">Live multi-chain DEX + JPTI CEX spot data</option>
+            </select>
+            <label for="selAssetProfile">Universal asset strategy</label>
+            <select id="selAssetProfile">
+              <option value="meme_new_pair">New listings / meme tokens</option>
+              <option value="established_token">Established tokens</option>
+              <option value="defi_rotation">DeFi rotation (monitor until verified mapping)</option>
+              <option value="breakout">Momentum breakout scan</option>
+              <option value="mean_reversion">Mean-reversion (CEX RSI required)</option>
             </select>
             <label for="inSeed">Seed</label>
             <input id="inSeed" type="number" min="1" max="999999" value="7">

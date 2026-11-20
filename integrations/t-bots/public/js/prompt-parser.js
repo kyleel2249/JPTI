@@ -23,6 +23,7 @@ function setPath(obj, path, val) {
 const VALUE_RULES = [
   { re: /run from (\d{1,2}:\d{2}) to (\d{1,2}:\d{2})/i, set: (m) => [['session.startTime', hhmm(m[1])], ['session.endTime', hhmm(m[2])]] },
   { re: /starting balance of \$([\d,.]+)/i, set: (m) => [['session.startBalance', num(m[1])]] },
+  { re: /active strategy profile: (meme_new_pair|established_token|defi_rotation|breakout|mean_reversion)/i, set: (m) => [['scanner.assetProfile', m[1].toLowerCase()]] },
   { re: /last (\d+(?:\.\d+)?) hours/i, set: (m) => [['universe.maxAgeHours', num(m[1])]] },
   { re: /minimum liquidity \$([\d.]+)(k|m)?/i, set: (m) => [['universe.minLiquidityUsd', amount(m[1], m[2])]] },
   { re: /minimum 5m volume \$([\d.]+)(k|m)?/i, set: (m) => [['universe.minVolume5mUsd', amount(m[1], m[2])]] },
