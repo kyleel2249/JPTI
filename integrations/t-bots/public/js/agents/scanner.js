@@ -36,6 +36,7 @@ export class ScannerAgent extends BaseAgent {
     if (t.holderGrowth10mPct !== null && t.holderGrowth10mPct >= c.holderGrowthMinPct) out.push({ key: 'holders', label: `holders +${t.holderGrowth10mPct.toFixed(0)}% / 10m` });
     if (t.smartWallets10m !== null && t.smartWallets10m >= c.smartWallets.min) out.push({ key: 'smart', label: `${t.smartWallets10m} smart wallets in` });
     if (t.kolBought === true) out.push({ key: 'kol', label: 'KOL bought' });
+    if (t.jptiEvidence && t.jptiEvidence.score >= 45) out.push({ key: 'jpti-evidence', label: `JPTI evidence ${t.jptiEvidence.score}/100` });
     return out;
   }
 
