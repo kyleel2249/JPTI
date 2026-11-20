@@ -138,6 +138,54 @@ export function runWalkForward(candles, options = {}) {
     folds: folds.map(f => ({ ...f, outOfSample: (({ returns, ...stats }) => stats)(f.outOfSample) })), aggregateOutOfSample: { ...oosMetrics, equityCurve: undefined },
     caveats: ['Research baselines only; parameter selection can overfit the training windows.', 'Fees are modeled; spread, funding, borrow, market impact, latency, partial fills and taxes are not.', 'Use venue-specific data quality checks and additional untouched holdout data before deployment.'] };
 }
+export function calculatePortfolioRisk(positions, history = {}, scenarios = {}) {
+  const open = positions.filter(p => finite(p.quantity) > 0 && finite(p.marketPrice) > 0);
+  const groups = new Map();
+  for (const p of open) {
+    const value = p.quantity * p.marketPrice;
+    const key = p.quote || 'UNKNOWN';
+    const g = groups.get(key) || [];
+    g.push({ exchange: p.exchange, symbol: p.symbol, value, quantity: p.quantity, mark: p.marketPrice });
+    groups.set(key, g);
+  }
+  const portfolios = [];
+  for (const [currency, rows] of groups) {
+    const gross = rows.reduce((s, p) => s + p.value, 0);
+    const weights = rows.map(p => ({ ...p, weight: p.value / gross }));
+    const hhi = weights.reduce((s, p) => s + p.weight ** 2, 0);
+    const returnsByDate = new Map();
+    for (const p of weights) {
+      const candles = history[p.exchange + ':' + p.symbol] || [];
+      for (let i = 1; i < candles.length; i++) {
+        const prev = Number(candles[i - 1][4]), close = Number(candles[i][4]);
+        if (prev > 0 && close > 0) {
+          const date = candles[i][0];
+          const row = returnsByDate.get(date) || { pnlReturn: 0, coveredWeight: 0 };
+          row.pnlReturn += p.weight * (close / prev - 1);
+          row.coveredWeight += p.weight;
+          returnsByDate.set(date, row);
+        }
+      }
+    }
+    const returns = [...returnsByDate.values()].filter(r => r.coveredWeight >= 0.8).map(r => r.pnlReturn / r.coveredWeight).sort((a,b) => a-b);
+    const quantile = q => returns.length ? returns[Math.max(0, Math.ceil(q * returns.length) - 1)] : null;
+    const var95 = quantile(0.05), var99 = quantile(0.01);
+    const tail95 = returns.filter(r => r <= (var95 ?? -Infinity));
+    const tail99 = returns.filter(r => r <= (var99 ?? -Infinity));
+    const defaultShock = currency === 'USDT' || currency === 'USDC' || currency === 'DAI' ? -0.01 : -0.15;
+    const stressShock = finite(scenarios[currency]) ?? defaultShock;
+    portfolios.push({
+      quoteCurrency: currency, grossExposure: gross,
+      concentration: { hhi, effectivePositions: hhi > 0 ? 1 / hhi : 0, largestPositionWeightPercent: Math.max(...weights.map(p => p.weight)) * 100 },
+      historical: { observations: returns.length, var95Percent: var95 == null ? null : -var95 * 100, expectedShortfall95Percent: tail95.length ? -tail95.reduce((s,r)=>s+r,0)/tail95.length*100 : null, var99Percent: var99 == null ? null : -var99 * 100, expectedShortfall99Percent: tail99.length ? -tail99.reduce((s,r)=>s+r,0)/tail99.length*100 : null, method: 'Historical one-day close-to-close returns, current-notional weights; requires at least 20 aligned observations.' },
+      stress: { shockPercent: stressShock * 100, estimatedLoss: gross * Math.max(0, -stressShock), stressedExposure: gross * (1 + stressShock) },
+      positions: weights.map(({exchange,symbol,value,weight})=>({exchange,symbol,marketValue:value,weightPercent:weight*100}))
+    });
+  }
+  return { generatedAt: new Date().toISOString(), methodology: 'Quote-currency portfolios are kept separate; historical VaR is not aggregated across currencies. Current holdings are weighted by current marked notional. Historical estimates do not predict maximum loss.', portfolios,
+    limitations: ['No FX conversion across quote currencies.', 'Historical VaR uses available daily OHLCV and excludes gaps, intraday liquidation, leverage, derivatives Greeks, funding, borrow, fees and market impact.', 'Missing histories and holdings below 80% coverage are excluded from each historical observation.', 'Stress scenario is a simple parallel price shock, not a full correlation or liquidity shock.'] };
+}
+
 export function calculatePortfolioAccounting(events, marks = {}) {
   const ordered = [...events].sort((a,b) => new Date(a.occurredAt) - new Date(b.occurredAt));
   const positions = new Map(), realizedByQuote = {}, feesByCurrency = {}, movementMap = new Map();
@@ -237,6 +285,32 @@ labRouter.get('/advanced/lab/walk-forward/:exchange/:symbol', async (req, res) =
 labRouter.post('/advanced/lab/walk-forward', (req, res) => {
   try { res.json(runWalkForward(req.body?.candles, req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
+});
+labRouter.get('/advanced/portfolio/risk', async (req, res) => {
+  try {
+    requirePrivateApiAuth(req);
+    const events = await getLedgerTransactions();
+    const instruments = [...new Map(events.filter(e => e.eventType === 'fill' && e.symbol).map(e => [e.source + ':' + e.symbol, { exchange: e.source, symbol: e.symbol }])).values()].slice(0, 30);
+    const marks = {}, history = {};
+    await Promise.all(instruments.map(async ({ exchange, symbol }) => {
+      try {
+        const data = await withExchange(exchange, { privateAccess: false }, async ex => {
+          if (!ex.markets[symbol]) return null;
+          const jobs = [];
+          if (ex.has?.fetchTicker) jobs.push(ex.fetchTicker(symbol).then(t => ({ type: 'mark', value: t.last })).catch(()=>null));
+          if (ex.has?.fetchOHLCV) jobs.push(ex.fetchOHLCV(symbol, '1d', undefined, 120).then(value => ({ type: 'history', value })).catch(()=>null));
+          return Promise.all(jobs);
+        });
+        for (const item of data || []) if (item) {
+          if (item.type === 'mark' && finite(item.value) > 0) marks[exchange + ':' + symbol] = item.value;
+          if (item.type === 'history') history[exchange + ':' + symbol] = item.value;
+        }
+      } catch {}
+    }));
+    const accounting = calculatePortfolioAccounting(events, marks);
+    const scenarios = req.query.shocks ? JSON.parse(String(req.query.shocks)) : {};
+    res.json(calculatePortfolioRisk(accounting.positions, history, scenarios));
+  } catch (error) { res.status(error.status || 400).json({ error: error.message }); }
 });
 labRouter.get('/advanced/portfolio/accounting', async (req, res) => {
   try {
