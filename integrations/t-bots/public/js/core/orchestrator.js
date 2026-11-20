@@ -153,7 +153,7 @@ export class Orchestrator {
     this.ledger.step(task, 'RUG CHECK', 'pass');
     if (this.sharedContext?.regime === 'risk_off' && Number(this.sharedContext.riskScore) < 35) {
       this.ledger.done(task, 'skipped', 'JPTI shared market regime is risk-off');
-      this._filtered(token, 'JPTI shared risk gate: BTC market regime risk-off; new Solana entries blocked. Existing exits remain active.', 'jpti-risk-off');
+      this._filtered(token, 'JPTI shared risk gate: BTC market regime risk-off; new multi-chain entries blocked. Existing exits remain active.', 'jpti-risk-off');
       return;
     }
     if (this.sharedRisk?.newEntriesAllowed === false) {
