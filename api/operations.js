@@ -1,5 +1,6 @@
 import express from 'express';
 import { appendStoredEvent, appendUniqueLedgerEvent, getSyncCursor, getStorageStatus, readStoredEvents, setSyncCursor } from './storage.js';
+import { acquireSchedulerLease, getSchedulerLeaseStatus, releaseSchedulerLease, schedulerLeaseConfig } from './scheduler-lease.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { withExchange, listExchangeCatalog } from './exchanges.js';
@@ -10,6 +11,9 @@ import { requirePrivateApiAuth } from './policy.js';
 export const operationsRouter = express.Router();
 const jobState = new Map();
 let schedulerStarted = false;
+let schedulerLeader = false;
+let schedulerHeartbeat = null;
+const schedulerTimers = new Map();
 let lastMonitorPersistAt = 0;
 const startedAt = new Date().toISOString();
 
@@ -201,7 +205,14 @@ function runSafely(id, task) {
   }).finally(() => setJob(id, { running: false }));
 }
 
-export function startOperationsScheduler() {
+function stopScheduledJobs() {
+  for (const timer of schedulerTimers.values()) clearInterval(timer);
+  schedulerTimers.clear();
+  schedulerStarted = false;
+  schedulerLeader = false;
+}
+
+function startScheduledJobs() {
   if (schedulerStarted || process.env.JPTI_SCHEDULER_ENABLED === 'false') return;
   schedulerStarted = true;
   const intervals = getOperationalIntervals();
@@ -216,13 +227,46 @@ export function startOperationsScheduler() {
     ['onchain-monitor', intervals.onchainRefreshSeconds, () => blockedTask('onchain-monitor', 'On-chain polling requires configured wallet watchlists and indexed event subscriptions. Address lookups remain on-demand.')]
   ];
   for (const [id, seconds, task] of jobs) {
-    setJob(id, { intervalSeconds: seconds, status: 'starting', detail: 'Scheduler registered.' });
+    setJob(id, { intervalSeconds: seconds, status: 'starting', detail: 'Scheduler leader registered this worker.' });
     runSafely(id, task);
     const timer = setInterval(() => runSafely(id, task), seconds * 1000);
     timer.unref?.();
+    schedulerTimers.set(id, timer);
   }
 }
 
+async function refreshSchedulerLeadership() {
+  try {
+    const acquired = await acquireSchedulerLease();
+    if (acquired && !schedulerLeader) { schedulerLeader = true; startScheduledJobs(); }
+    else if (!acquired && schedulerLeader) stopScheduledJobs();
+    if (!acquired) {
+      for (const id of ['market-monitor','fill-ingestion','provider-health','reconciliation','investor-monitor','market-maker','news-monitor','onchain-monitor']) {
+        if (!jobState.get(id)?.running) setJob(id, { status: 'standby', detail: 'Another JPTI instance currently owns the scheduler lease.' });
+      }
+    }
+  } catch (error) {
+    stopScheduledJobs();
+    for (const id of ['market-monitor','fill-ingestion','provider-health','reconciliation','investor-monitor','market-maker','news-monitor','onchain-monitor']) {
+      setJob(id, { status: 'coordination-error', lastError: error.message, detail: 'Scheduler paused because its leadership lease could not be verified.' });
+    }
+  }
+}
+
+export async function startOperationsScheduler() {
+  if (schedulerHeartbeat || process.env.JPTI_SCHEDULER_ENABLED === 'false') return;
+  const { heartbeatMs } = schedulerLeaseConfig();
+  await refreshSchedulerLeadership();
+  schedulerHeartbeat = setInterval(refreshSchedulerLeadership, heartbeatMs);
+  schedulerHeartbeat.unref?.();
+}
+
+export async function stopOperationsScheduler() {
+  if (schedulerHeartbeat) clearInterval(schedulerHeartbeat);
+  schedulerHeartbeat = null;
+  stopScheduledJobs();
+  try { await releaseSchedulerLease(); } catch (error) { console.error('JPTI scheduler lease release failed:', error.message); }
+}
 export function getOperationsSnapshot() {
   const intervals = getOperationalIntervals();
   const definitions = [
@@ -238,6 +282,7 @@ export function getOperationsSnapshot() {
   return {
     generatedAt: new Date().toISOString(),
     storage: getStorageStatus(),
+    scheduler: { ...getSchedulerLeaseStatus(), leader: schedulerLeader, running: schedulerStarted },
     startedAt,
     uptimeSeconds: Math.floor(process.uptime()),
     schedulerEnabled: intervals.schedulerEnabled,
