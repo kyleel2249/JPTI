@@ -27,3 +27,47 @@ T-Bots refreshes selected-market context and shared risk state during live-data 
 ## Run
 
 Start JPTI API and UI with npm run dev:all, open http://localhost:8787/t-bots/, and enter the local JPTI_API_TOKEN in the T-Bots connection field. Keep API credentials server-side. Use paper mode.
+
+## Universal engine extension
+
+T-Bots now has selectable DEX scan profiles in the session composer:
+- `meme_new_pair` — strict recent-pair screen.
+- `established_token` — removes the new-pair age ceiling while retaining liquidity, holder and independent security checks.
+- `defi_rotation` — DeFi-oriented discovery profile; protocol TVL/fees are contextual only when a verified protocol mapping exists.
+- `breakout` — liquid token momentum/breakout discovery.
+- `mean_reversion` — liquid token range/reversion discovery.
+
+When the JPTI bridge is connected, the live feed also merges a server-configured CEX spot watchlist with multi-chain DEX pairs. Configure in the JPTI server-side `.env`:
+
+```env
+JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,binance:ETH/USDT,binance:SOL/USDT,bitget:BTC/USDT,bitget:ETH/USDT
+JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES=3
+JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
+```
+
+Only active CEX spot markets are admitted to the T-Bots CEX paper feed. The exchange-market gate requires at least $100,000 24h quote volume, $10,000 visible top-book depth and spread no wider than 0.5%. CEX pairs are not passed through DEX mint/holder checks; they use an exchange-listing, liquidity and spread gate instead. CEX perpetuals, options and leveraged execution are not routed through the T-Bots executor.
+
+T-Bots requests fresh per-asset evidence from JPTI before new entries. If the evidence is missing, stale or below the minimum research score, new entries are blocked. The JPTI shared risk endpoint incorporates T-Bots closed paper PnL and quote-aware realized PnL from recorded exchange fills. USD, USDT, USDC, DAI and FDUSD are treated as approximate USD equivalents for the daily loss guard; other quote currencies remain separate until FX conversion is available. The risk guard does not claim to consolidate unrealized PnL, deposits, withdrawals, funding or unrecorded fills.
+
+## Universal JPTI endpoints
+
+- `GET /api/universal/profiles` — strategy profile registry and asset-class mapping.
+- `POST /api/universal/strategy/evaluate` — deterministic evidence evaluation for a selected profile; research-only.
+- `GET /api/universal/market/:exchange/:symbol?timeframe=1h` — ticker, OHLCV, multi-timeframe trend, RSI, order-book depth, funding/open interest where supported, and evidence council.
+- `GET /api/universal/cex-watchlist` — authenticated configured CEX spot market feed for T-Bots.
+- `POST /api/universal/asset-evidence` — authenticated batch evidence scoring for DEX and CEX instruments.
+- `GET /api/universal/asset/:chain/:address` — authenticated DEX pair and provider-specific token security observations (RugCheck for Solana, GoPlus for selected EVM chains).
+- `GET /api/universal/dex/search?q=...` — authenticated multi-chain DEX search.
+- `GET /api/universal/macro` — CoinGecko global crypto, DeFiLlama chain TVL and optional FRED FEDFUNDS observation.
+- `GET /api/universal/news?q=...` — GDELT news discovery.
+- `GET /api/universal/risk` — authenticated unified new-entry gate, daily realized loss and consecutive paper loss state.
+- `GET /api/universal/performance` — authenticated T-Bots paper performance and exchange fill attribution.
+
+## Boundaries still in force
+
+- The JPTI strategy registry spans crypto, DEX tokens, equities, FX, commodities, indices and bonds, but a profile existing does not mean the corresponding live feed, trading venue, or strategy has passed validation. The T-Bots executor supports DEX paper positions and selected CEX spot paper instruments only.
+- CEX spot pairs are explicitly configured in `JPTI_TBOTS_CEX_MARKETS`; it does not subscribe to every market from every exchange automatically.
+- DeFi rotation has no universal token-to-protocol entity resolver yet. A token symbol is not sufficient proof of protocol identity.
+- Macro and news sources provide context, not automated sentiment labels or guaranteed predictive value. FRED observations can be delayed and require `JPTI_FRED_API_KEY`.
+- Unified realized-risk accounting uses recorded fills and T-Bots paper closes. It does not yet combine open CEX/DEX positions, cash balances, unrealized PnL, cross-currency FX, deposits/withdrawals, funding, borrow or transfers into one verified account equity curve.
+- No production database/event bus, exchange WebSocket client, DEX swap router, wallet signing or live T-Bots execution is enabled.
