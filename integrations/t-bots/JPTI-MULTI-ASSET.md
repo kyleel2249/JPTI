@@ -78,3 +78,8 @@ T-Bots requests fresh per-asset evidence from JPTI before new entries. If the ev
 ### Shared global regime and derivatives
 
 The JPTI bridge now prefers a Binance BTC/USDT perpetual benchmark through the Universal Engine, collecting OHLCV, multi-timeframe trend, order-book depth, funding and open-interest where the adapter supports them. It falls back to the earlier BTC spot context if the perpetual market is unavailable. T-Bots also refreshes CoinGecko global crypto market metrics, DeFiLlama chain TVL and optional FRED FEDFUNDS context. A broad crypto market-cap fall of 8% or more over 24 hours pauses new entries; BTC benchmark risk-off state and the shared realized-loss guard can also pause new entries. Existing exits remain enabled.
+
+
+### Central operator kill switch
+
+The Universal Engine workspace exposes pause/resume controls for T-Bots new entries. The API persists `global_pause` / `global_resume` events in the JPTI ledger. Connected T-Bots instances consume the latest state through the shared-risk refresh (nominally every 30 seconds). A pause blocks new entries across the connected T-Bots paper engine; existing positions retain exit management. This is a new-entry kill switch, not a forced liquidation command or a live exchange cancellation endpoint.
