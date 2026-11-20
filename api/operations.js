@@ -53,6 +53,15 @@ async function persistEvent(event) {
 }
 
 
+export async function ingestLedgerEvent(input) {
+  const parsed = eventSchema.parse(input);
+  return persistLedgerTransaction(parsed);
+}
+
+export async function getLedgerTransactions() {
+  return (await readEvents()).filter((event) => event.kind === 'ledger-transaction');
+}
+
 async function persistLedgerTransaction(parsed) {
   let result;
   writeQueue = writeQueue.catch(() => {}).then(async () => {
