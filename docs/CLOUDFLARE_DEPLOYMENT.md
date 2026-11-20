@@ -120,3 +120,13 @@ In the Pages project, open **Custom domains** → **Set up a custom domain**, en
 - [ ] Preview deployments do not receive production exchange credentials or production secrets unless intentionally secured.
 
 The edge secret blocks direct API access that lacks the Cloudflare proxy header; it is not a substitute for user accounts, per-user authorization, CSRF controls, exchange-key vaulting, audit review or independent security testing. JPTI's current operator-token model is suitable for controlled single-operator testing, not an open public multi-user trading service.
+
+
+## Desktop and Android clients
+
+The cloud Pages deployment is one access mode, not a replacement for local apps. The same repository also contains the Electron Windows desktop shell and Capacitor Android client. See [Local desktop and Android guide](LOCAL_DESKTOP_ANDROID.md) for build steps and connection settings.
+
+- Windows desktop app starts a loopback-only Node API and uses a private local JSONL event ledger.
+- Android app is a locally installed native UI client and connects to the secured Pages HTTPS origin. It does not embed the Node/CCXT server.
+- The Pages Function supports Android Capacitor CORS origin `https://localhost` when the API host's `JPTI_CORS_ORIGINS` includes it.
+- API URL selection is device-local. It does not synchronize or migrate the desktop ledger to PostgreSQL.
