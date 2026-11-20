@@ -139,7 +139,7 @@ function riskSetting(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER, 
 }
 
 export function calculateUnifiedRisk(events, options = {}) {
-  const now=Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+  const now=options.now !== undefined && options.now !== null && String(options.now).trim() !== '' && Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
   const lossLimit = riskSetting(options.maxConsecutiveLosses, 3, { min: 1, max: 20, integer: true });
   const dailyLimit = riskSetting(options.maxDailyLossUsd, 100, { min: 0, max: 10000000 });
   const maxConsecutiveLosses = lossLimit.value;
