@@ -10,7 +10,7 @@
     "dev:all": "concurrently \"npm:dev\" \"npm:dev:api\"",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check api/server.js && node --check api/exchanges.js && node --check api/intelligence.js && node --check api/providers.js && node --check api/market-intelligence.js && node --check api/advanced-intelligence.js && node --check api/advanced-lab.js && node --check api/operations.js && node --check api/policy.js && node --check api/tbots-integration.js && node --check api/multi-asset-intelligence.js && node --check api/universal-engine.js",
+    "check": "node --check api/server.js && node --check api/exchanges.js && node --check api/intelligence.js && node --check api/providers.js && node --check api/market-intelligence.js && node --check api/advanced-intelligence.js && node --check api/advanced-lab.js && node --check api/operations.js && node --check api/policy.js && node --check api/tbots-integration.js && node --check api/multi-asset-intelligence.js && node --check api/universal-engine.js && node --check scripts/apply-tbots-adapter.mjs && node --check integrations/t-bots/public/js/market/universal-feed.js",
     "test": "node --test"
   },
   "dependencies": {
