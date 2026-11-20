@@ -94,3 +94,31 @@ test('valid zero daily-loss limit remains an explicit opt-out', () => {
   assert.equal(risk.maxDailyLossUsd,0);
   assert.equal(risk.riskConfiguration.valid,true);
 });
+
+test('exchange inventory accounts for base-denominated buy and sell fees', async () => {
+  const { calculateExchangeRealized } = await import('./universal-engine.js');
+  const now=Date.now();
+  const events=[
+    {source:'binance',accountId:'a',eventType:'fill',symbol:'BTC/USDT',side:'buy',quantity:1,price:100,fee:0.01,feeCurrency:'BTC',occurredAt:new Date(now-2000).toISOString()},
+    {source:'binance',accountId:'a',eventType:'fill',symbol:'BTC/USDT',side:'sell',quantity:0.5,price:120,fee:0.005,feeCurrency:'BTC',occurredAt:new Date(now-1000).toISOString()}
+  ];
+  const result=calculateExchangeRealized(events,now);
+  assert.ok(Math.abs(result.openInventory[0].quantity-0.485)<1e-10);
+  assert.ok(Math.abs(result.openInventory[0].cost-48.98989898989899)<1e-8);
+  assert.ok(Math.abs(result.realizedByQuote.USDT-8.98989898989899)<1e-8);
+  assert.equal(result.unmatchedSellQuantity.USDT,undefined);
+  assert.equal(result.feeTotals.BTC,0.015);
+});
+
+test('exchange sells exceeding recorded inventory are reported instead of fabricating full proceeds', async () => {
+  const { calculateExchangeRealized } = await import('./universal-engine.js');
+  const now=Date.now();
+  const events=[
+    {source:'bitget',accountId:'a',eventType:'fill',symbol:'ETH/USDT',side:'buy',quantity:1,price:100,occurredAt:new Date(now-2000).toISOString()},
+    {source:'bitget',accountId:'a',eventType:'fill',symbol:'ETH/USDT',side:'sell',quantity:1.5,price:120,occurredAt:new Date(now-1000).toISOString()}
+  ];
+  const result=calculateExchangeRealized(events,now);
+  assert.equal(result.realizedByQuote.USDT,20);
+  assert.equal(result.unmatchedSellQuantity.USDT,0.5);
+  assert.equal(result.openInventory.length,0);
+});
