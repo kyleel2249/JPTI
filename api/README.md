@@ -338,3 +338,16 @@ When `JPTI_STORAGE_BACKEND=postgres`, JPTI uses a PostgreSQL-backed lease (`jpti
 Tune the lease with `JPTI_SCHEDULER_LEASE_MS` (15–120 seconds, default 30 seconds) and `JPTI_SCHEDULER_HEARTBEAT_MS` (at least 3 seconds and no more than half the lease, default 10 seconds). Set `JPTI_SCHEDULER_INSTANCE_ID` to a stable deployment instance label if useful; a random owner ID is generated otherwise. Use the same PostgreSQL database and compatible lease settings for every instance. The `/api/operations/overview` response exposes coordination mode, owner, leadership and running state.
 
 File storage remains single-process only: its lease is an in-process guard, not a cross-process distributed lock. Run one API process when using the file backend. The lease prevents duplicate scheduler startup, but it is not a transactional job queue: a worker already in flight when leadership is lost may finish, so durable job-level idempotency and transactional outbox processing remain follow-up hardening. No trading orders are placed by scheduler coordination.
+
+
+## Transactional ledger ingestion and outbox
+
+Automatic exchange fill polling now commits each market's normalized ledger batch and its sync cursor in one PostgreSQL transaction. A crash cannot advance the cursor without committing the corresponding fill rows; duplicate trade identities remain protected by the database unique index. Each newly inserted ledger fill also creates a `ledger.transaction.recorded` outbox message in the same transaction. Replays do not create duplicate ledger rows or duplicate outbox records.
+
+Authenticated outbox routes (send `x-jpti-api-token`):
+- `GET /api/operations/outbox/status` — pending, processing and delivered counts.
+- `POST /api/operations/outbox/claim` — claim up to 100 messages using `{ "workerId": "consumer-name", "limit": 25, "leaseMs": 30000 }`. Claims use PostgreSQL `FOR UPDATE SKIP LOCKED`; expired processing leases can be reclaimed.
+- `POST /api/operations/outbox/:id/ack` — acknowledge a message with `{ "workerId": "consumer-name" }`. Only its current lease owner can acknowledge it.
+- `POST /api/operations/outbox/:id/retry` — release a failed message for retry with optional `error` and `delayMs` fields. The retry delay is bounded.
+
+Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once. If a consumer completes its side effect and crashes before acknowledgement, the message may be delivered again after its lease expires. Use the stable `event_id` as the consumer's deduplication key. PostgreSQL is required for transactional outbox claiming and acknowledgement. File mode retains replay-safe ledger insertion followed by cursor advancement, but those two writes are not a single crash-atomic transaction and no distributed outbox is available; use PostgreSQL for multi-instance production operation. No live orders or transfers are executed by this feature.
