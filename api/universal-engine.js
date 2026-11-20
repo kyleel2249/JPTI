@@ -140,6 +140,42 @@ export function buildUnifiedPerformance(events) {
     caveat:'No untagged trade is assigned to a strategy. Exchange fills are activity records, not automatically equivalent to closed trades.'};
 }
 
+
+universalRouter.get('/universal/macro',async(_req,res)=>{
+  const sources={};
+  const jobs=[
+    ['coingeckoGlobal',()=>fetch('https://api.coingecko.com/api/v3/global',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})],
+    ['defillamaChains',()=>fetch('https://api.llama.fi/v2/chains',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})]
+  ];
+  if(process.env.JPTI_FRED_API_KEY)jobs.push(['fred',()=>fetch('https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key='+encodeURIComponent(process.env.JPTI_FRED_API_KEY)+'&file_type=json&sort_order=desc&limit=3',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})]);
+  const results=await Promise.allSettled(jobs.map(async([name,task])=>[name,await task()]));
+  for(let i=0;i<results.length;i++){
+    const name=jobs[i][0],result=results[i];
+    if(result.status==='fulfilled')sources[name]={status:'live',data:result.value[1]};
+    else sources[name]={status:'unavailable',error:result.reason?.message||'Provider unavailable'};
+  }
+  const global=sources.coingeckoGlobal?.data?.data;
+  const chains=sources.defillamaChains?.data;
+  const fed=sources.fred?.data?.observations||[];
+  res.set('Cache-Control','no-store').json({generatedAt:new Date().toISOString(),
+    crypto:{marketCapUsd:finite(global?.total_market_cap?.usd),marketCapChange24hPercent:finite(global?.market_cap_change_percentage_24h_usd),btcDominancePercent:finite(global?.market_cap_percentage?.btc),ethDominancePercent:finite(global?.market_cap_percentage?.eth),activeCryptocurrencies:finite(global?.active_cryptocurrencies)},
+    defi:{chainCount:Array.isArray(chains)?chains.length:0,totalValueLockedUsd:Array.isArray(chains)?chains.reduce((s,x)=>s+(finite(x.tvl)||0),0):null},
+    macro:{fedFundsLatest:fed[0]?.value&&fed[0].value!=='.'?finite(fed[0].value):null,observations:fed},
+    sources:Object.fromEntries(Object.entries(sources).map(([k,v])=>[k,{status:v.status,error:v.error||null}])),
+    note:'Global risk context only; not token-specific. FRED is available only when configured. Provider timestamps, quotas and geographic/asset coverage vary.'});
+});
+
+universalRouter.get('/universal/news',async(req,res)=>{
+  const q=String(req.query.q||'crypto markets OR central bank OR digital assets').slice(0,180);
+  try{
+    const url='https://api.gdeltproject.org/api/v2/doc/doc?query='+encodeURIComponent(q)+'&mode=ArtList&format=json&sort=HybridRel&maxrecords=30';
+    const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw new Error('GDELT HTTP '+response.status);
+    const body=await response.json();
+    res.set('Cache-Control','no-store').json({query:q,fetchedAt:new Date().toISOString(),source:'GDELT',articles:(body.articles||[]).map(a=>({title:a.title,url:a.url,domain:a.domain,seendate:a.seendate,sourcecountry:a.sourcecountry})),note:'News discovery is not sentiment validation. Verify original reporting and publication time.'});
+  }catch(e){res.status(502).json({error:e.message});}
+});
+
 universalRouter.get('/universal/profiles',(req,res)=>res.json({profiles:STRATEGY_PROFILES,assetClasses:[...new Set(Object.values(STRATEGY_PROFILES).flatMap(p=>p.assetClasses))]}));
 
 universalRouter.post('/universal/strategy/evaluate',(req,res)=>{
