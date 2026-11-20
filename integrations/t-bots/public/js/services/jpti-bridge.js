@@ -29,7 +29,6 @@ export class JptiBridge {
   }
   async refreshAssetEvidence(tokens = [], force = false) {
     if (!this.enabled || Date.now() - this.lastAssetEvidenceAt < 30000 && !force) return this.assetEvidence;
-    this.lastAssetEvidenceAt = Date.now();
     const assets = tokens.filter(t => t?.tokenAddress && t?.chain).slice(0, 80).map(t => ({
       id:t.id, chain:t.chain, address:t.tokenAddress, symbol:t.symbol,
       liquidityUsd:t.liquidityUsd, volume24hUsd:t.volume24hUsd, volume1hUsd:t.volume1hUsd,
@@ -37,6 +36,7 @@ export class JptiBridge {
       quoteAddress:t.quoteAddress, quoteSymbol:t.quoteSymbol
     }));
     if (!assets.length) return this.assetEvidence;
+    this.lastAssetEvidenceAt = Date.now();
     try {
       const result = await this._request('/universal/asset-evidence', { method:'POST', body:JSON.stringify({assets}) });
       this.assetEvidence = new Map((result.evidence || []).map(item => [item.id, item]));
