@@ -302,6 +302,26 @@ universalRouter.post('/universal/asset-evidence',(req,res)=>{
 
 
 const GOPLUS_IDS={ethereum:'1',bsc:'56',polygon:'137',arbitrum:'42161',optimism:'10',base:'8453',avalanche:'43114',linea:'59144',blast:'81457'};
+universalRouter.get('/universal/dex-watchlist',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const entries=String(process.env.JPTI_TBOTS_DEX_WATCHLIST||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,60);
+    if(!entries.length)return res.json({fetchedAt:new Date().toISOString(),pairs:[],status:'waiting-for-watchlist',note:'Configure JPTI_TBOTS_DEX_WATCHLIST=solana:tokenAddress,base:0xToken. DEX paper watchlist only.'});
+    const grouped=new Map();
+    for(const entry of entries){const i=entry.indexOf(':');if(i<1)continue;const chain=entry.slice(0,i).toLowerCase(),address=entry.slice(i+1);if(!/^[a-z0-9-]{2,32}$/.test(chain)||address.length<20||address.length>64)continue;const list=grouped.get(chain)||[];list.push(address);grouped.set(chain,list);}
+    const results=await Promise.allSettled([...grouped.entries()].map(async([chain,addresses])=>{
+      const batches=[];for(let i=0;i<addresses.length;i+=30)batches.push(addresses.slice(i,i+30));
+      const rows=await Promise.all(batches.map(async batch=>{const r=await fetch('https://api.dexscreener.com/tokens/v1/'+encodeURIComponent(chain)+'/'+batch.map(encodeURIComponent).join(','),{signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error('DexScreener HTTP '+r.status);return r.json();}));
+      return rows.flat();
+    }));
+    const raw=results.filter(x=>x.status==='fulfilled').flatMap(x=>x.value);
+    const best=new Map();
+    for(const pair of raw){const item=normalizeDexPair(pair);const key=item.chain+':'+item.base.address;if(!item.base.address)continue;if(!best.has(key)||item.liquidityUsd>(best.get(key).liquidityUsd||0))best.set(key,item);}
+    const pairs=[...best.values()].map(item=>({...item,evidence:scoreAssetEvidence(item)}));
+    res.set('Cache-Control','no-store').json({fetchedAt:new Date().toISOString(),pairs,status:results.some(x=>x.status==='rejected')?'partial':'live',coverage:'Configured token-address watchlist only; provider pair discovery is not exhaustive.'});
+  }catch(e){res.status(e.status||401).json({error:e.message});}
+});
+
 universalRouter.get('/universal/asset/:chain/:address',async(req,res)=>{
   try{
     requirePrivateApiAuth(req);
