@@ -75,7 +75,8 @@ export function calculateTradePerformance(events = []) {
       worstExit:rows.length?rows.reduce((a,b)=>a.realizedPnl<b.realizedPnl?a:b):null };
   });
   const group = key => [...new Set(exits.map(x=>String(x[key])+'::'+x.quote))].map(groupKey => {
-    const [value, quoteCurrency] = groupKey.split('::');
+    const splitAt = groupKey.lastIndexOf('::');
+    const value = groupKey.slice(0, splitAt), quoteCurrency = groupKey.slice(splitAt + 2);
     const rows=exits.filter(x=>String(x[key])===value && x.quote===quoteCurrency);
     const net=rows.reduce((s,x)=>s+x.realizedPnl,0);
     return { [key]:value, quoteCurrency, exits:rows.length, wins:rows.filter(x=>x.realizedPnl>0).length,
