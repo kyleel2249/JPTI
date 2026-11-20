@@ -100,53 +100,24 @@ export function buildUnifiedPerformance(events) {
   const trades = events.filter(e=>e.source==='tbots' && e.eventType==='bot_trade' && e.metadata?.action==='paper_closed');
   const pnl = trades.map(e=>finite(e.metadata?.pnl)).filter(v=>v!==null);
   const wins=pnl.filter(v=>v>0).length;
-  const bySymbol={};
-  for(const e of trades){const key=e.symbol||'unknown';const v=finite(e.metadata?.pnl);if(v===null)continue;const row=bySymbol[key]||(bySymbol[key]={trades:0,pnl:0,wins:0});row.trades++;row.pnl+=v;if(v>0)row.wins++;}
-  const fills=events.filter(e=>e.eventType==='fill');
-  const realized=calculateExchangeRealized(events);
-  const byVenue={};
-  for(const e of fills){const row=byVenue[e.source]||(byVenue[e.source]={fills:0,buyQty:0,sellQty:0,feesByCurrency:{}});row.fills++;if(e.side==='buy')row.buyQty+=e.quantity||0;if(e.side==='sell')row.sellQty+=e.quantity||0;if(e.feeCurrency)row.feesByCurrency[e.feeCurrency]=(row.feesByCurrency[e.feeCurrency]||0)+(e.fee||0);}
-  return {generatedAt:new Date().toISOString(),paperStrategy:{closedTrades:pnl.length,wins,losses:pnl.length-wins,winRatePercent:pnl.length?wins/pnl.length*100:null,realizedPnlUsd:pnl.reduce((a,b)=>a+b,0),bySymbol},
-    exchangeExecution:{fillCount:fills.length,byVenue,realizedPnlByQuote:realized.realizedByQuote,feesByCurrency:realized.feeTotals,openInventory:realized.openInventory,realizedPnl:'weighted-average on recorded fills only; quote currencies remain separate'},
-    attributionDimensions:['asset/pair','venue','paper-vs-exchange','strategy profile when tagged','session'],
-    caveat:'No untagged trade is assigned to a strategy. Exchange fills are activity records, not automatically equivalent to closed trades.'};
-}
-
-
-universalRouter.get('/universal/macro',async(_req,res)=>{
-  const sources={};
-  const jobs=[
-    ['coingeckoGlobal',()=>fetch('https://api.coingecko.com/api/v3/global',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})],
-    ['defillamaChains',()=>fetch('https://api.llama.fi/v2/chains',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})]
-  ];
-  if(process.env.JPTI_FRED_API_KEY)jobs.push(['fred',()=>fetch('https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key='+encodeURIComponent(process.env.JPTI_FRED_API_KEY)+'&file_type=json&sort_order=desc&limit=3',{signal:AbortSignal.timeout(9000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})]);
-  const results=await Promise.allSettled(jobs.map(async([name,task])=>[name,await task()]));
-  for(let i=0;i<results.length;i++){
-    const name=jobs[i][0],result=results[i];
-    if(result.status==='fulfilled')sources[name]={status:'live',data:result.value[1]};
-    else sources[name]={status:'unavailable',error:result.reason?.message||'Provider unavailable'};
+  const bySymbol={},byStrategy={},byAssetClass={},byVenue={};
+  const add=(map,key,value)=>{const row=map[key]||(map[key]={trades:0,pnl:0,wins:0,losses:0});row.trades++;row.pnl+=value;if(value>0)row.wins++;if(value<0)row.losses++;};
+  for(const e of trades){
+    const value=finite(e.metadata?.pnl);if(value===null)continue;
+    add(bySymbol,e.symbol||'unknown',value);
+    add(byStrategy,e.metadata?.strategyProfile||'untagged',value);
+    add(byAssetClass,e.metadata?.assetClass||'untagged',value);
+    add(byVenue,e.metadata?.venue||'untagged',value);
   }
-  const global=sources.coingeckoGlobal?.data?.data;
-  const chains=sources.defillamaChains?.data;
-  const fed=sources.fred?.data?.observations||[];
-  res.set('Cache-Control','no-store').json({generatedAt:new Date().toISOString(),
-    crypto:{marketCapUsd:finite(global?.total_market_cap?.usd),marketCapChange24hPercent:finite(global?.market_cap_change_percentage_24h_usd),btcDominancePercent:finite(global?.market_cap_percentage?.btc),ethDominancePercent:finite(global?.market_cap_percentage?.eth),activeCryptocurrencies:finite(global?.active_cryptocurrencies)},
-    defi:{chainCount:Array.isArray(chains)?chains.length:0,totalValueLockedUsd:Array.isArray(chains)?chains.reduce((s,x)=>s+(finite(x.tvl)||0),0):null},
-    macro:{fedFundsLatest:fed[0]?.value&&fed[0].value!=='.'?finite(fed[0].value):null,observations:fed},
-    sources:Object.fromEntries(Object.entries(sources).map(([k,v])=>[k,{status:v.status,error:v.error||null}])),
-    note:'Global risk context only; not token-specific. FRED is available only when configured. Provider timestamps, quotas and geographic/asset coverage vary.'});
-});
-
-universalRouter.get('/universal/news',async(req,res)=>{
-  const q=String(req.query.q||'crypto markets OR central bank OR digital assets').slice(0,180);
-  try{
-    const url='https://api.gdeltproject.org/api/v2/doc/doc?query='+encodeURIComponent(q)+'&mode=ArtList&format=json&sort=HybridRel&maxrecords=30';
-    const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
-    if(!response.ok)throw new Error('GDELT HTTP '+response.status);
-    const body=await response.json();
-    res.set('Cache-Control','no-store').json({query:q,fetchedAt:new Date().toISOString(),source:'GDELT',articles:(body.articles||[]).map(a=>({title:a.title,url:a.url,domain:a.domain,seendate:a.seendate,sourcecountry:a.sourcecountry})),note:'News discovery is not sentiment validation. Verify original reporting and publication time.'});
-  }catch(e){res.status(502).json({error:e.message});}
-});
+  const fills=events.filter(e=>e.eventType==='fill');
+  const venueFills={};
+  for(const e of fills){const row=venueFills[e.source]||(venueFills[e.source]={fills:0,buyQty:0,sellQty:0,feesByCurrency:{}});row.fills++;if(e.side==='buy')row.buyQty+=e.quantity||0;if(e.side==='sell')row.sellQty+=e.quantity||0;if(e.feeCurrency)row.feesByCurrency[e.feeCurrency]=(row.feesByCurrency[e.feeCurrency]||0)+(e.fee||0);}
+  const realized=calculateExchangeRealized(events);
+  return {generatedAt:new Date().toISOString(),paperStrategy:{closedTrades:pnl.length,wins,losses:pnl.length-wins,winRatePercent:pnl.length?wins/pnl.length*100:null,realizedPnlUsd:pnl.reduce((a,b)=>a+b,0),bySymbol,byStrategy,byAssetClass,byVenue},
+    exchangeExecution:{fillCount:fills.length,byVenue:venueFills,realizedPnlByQuote:realized.realizedByQuote,feesByCurrency:realized.feeTotals,openInventory:realized.openInventory,realizedPnl:'weighted-average on recorded spot fills only; quote currencies remain separate'},
+    attributionDimensions:['asset/pair','venue','paper-vs-exchange','strategy profile','asset class','chain','session'],
+    caveat:'Paper trade attribution uses metadata recorded by connected T-Bots runs. Exchange fills are activity records; weighted-average realized PnL covers recorded spot fills only and does not equal a complete reconciled account statement.'};
+}
 
 universalRouter.get('/universal/profiles',(req,res)=>res.json({profiles:STRATEGY_PROFILES,assetClasses:[...new Set(Object.values(STRATEGY_PROFILES).flatMap(p=>p.assetClasses))]}));
 
