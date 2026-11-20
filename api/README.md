@@ -214,3 +214,15 @@ Private exchange keys must be configured server-side with trade-history read per
 
 
 The ledger schema also accepts `funding`, `interest`, `borrow` and `rebate` event types. For signed cash flows, provide `currency`, `quantity` and `metadata.signedAmount` (positive for a credit, negative for a debit). A `transfer` event should include `metadata.fromCurrency`, `metadata.fromAmount`, `metadata.toCurrency` and `metadata.toAmount`. The accounting response exposes net movements by exchange/account/currency; these are not absolute balances unless a verified opening balance and complete history are supplied. Sells exceeding the known inventory are flagged as unmatched rather than assigned an invented cost basis.
+
+
+### Portfolio risk diagnostics extension
+
+The authenticated `GET /api/advanced/portfolio/risk` response now includes additional historical diagnostics for each quote-currency portfolio:
+- Annualized realized historical volatility, using daily observations and 365 crypto-market days.
+- Annualized Sharpe ratio with an explicitly assumed zero risk-free rate, and annualized Sortino ratio using downside deviation.
+- Maximum drawdown of the reconstructed historical weighted portfolio equity curve.
+- Best and worst observed portfolio days, plus the worst rolling 20-observation compounded return.
+- A coverage warning when fewer than 20 aligned observations are available.
+
+These statistics use current-notional weights and aligned daily close-to-close returns from the available exchange candles. They are backward-looking estimates; the zero-rate Sharpe, 365-day annualization, survivorship/coverage limitations, missing histories, and lack of FX conversion can materially affect interpretation. They do not model leverage, derivatives liquidation, intraday gaps, funding, fees or liquidity shocks. They are not forecasts or a guarantee of maximum loss.
