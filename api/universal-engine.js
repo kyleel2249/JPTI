@@ -99,6 +99,41 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
 }
 
 
+export function evaluatePaperEntryPreflight(input = {}, events = [], now = Date.now(), settings = {}) {
+  const profileId = String(input.profileId || '');
+  const assetClass = String(input.assetClass || 'unknown').toLowerCase();
+  const evaluation = evaluateStrategyProfile(profileId, input.evidence || {});
+  const risk = calculateUnifiedRisk(events, {
+    maxConsecutiveLosses: settings.maxConsecutiveLosses,
+    maxDailyLossUsd: settings.maxDailyLossUsd,
+    now
+  });
+  const configuredAge = Number(settings.maxEvidenceAgeSeconds);
+  const maxEvidenceAgeSeconds = Number.isFinite(configuredAge) ? clamp(configuredAge, 15, 300) : 90;
+  const observedAt = Date.parse(input.observedAt || '');
+  const evidenceAgeSeconds = Number.isFinite(observedAt) ? Math.max(0, (now - observedAt) / 1000) : null;
+  const stale = evidenceAgeSeconds === null || evidenceAgeSeconds > maxEvidenceAgeSeconds;
+  const securityRequired = ['token', 'dex_token', 'meme_token', 'new_pair'].includes(assetClass);
+  const securityStatus = String(input.securityStatus || '').toLowerCase();
+  const securityPassed = !securityRequired || ['clear', 'passed'].includes(securityStatus);
+  const reasons = [];
+  if (!risk.newEntriesAllowed) reasons.push(...(risk.pauseReasons.length ? risk.pauseReasons : ['shared_risk_gate_blocked']));
+  if (!risk.riskConfiguration.valid) reasons.push('risk_configuration_invalid');
+  if (stale) reasons.push('market_evidence_missing_or_stale');
+  if (evaluation.status !== 'research_candidate') reasons.push('strategy_evidence_not_candidate');
+  if (securityRequired && !securityPassed) reasons.push('independent_token_security_gate_not_passed');
+  const allowed = reasons.length === 0;
+  return {
+    generatedAt: new Date(now).toISOString(), allowed, decision: allowed ? 'paper_candidate' : 'blocked',
+    reasons, profileId, assetClass, evaluation,
+    risk: { newEntriesAllowed: risk.newEntriesAllowed, pauseReasons: risk.pauseReasons, exitsRemainEnabled: true },
+    evidenceFreshness: { observedAt: Number.isFinite(observedAt) ? new Date(observedAt).toISOString() : null, ageSeconds: evidenceAgeSeconds, maxAgeSeconds: maxEvidenceAgeSeconds, stale },
+    security: { required: securityRequired, status: securityStatus || 'not-provided', passed: securityPassed },
+    execution: 'No order is created, submitted, or authorized by this endpoint. This is a paper-entry preflight only.',
+    caveat: 'A passing preflight is a research/paper eligibility result, not a profitability claim or permission for live execution.'
+  };
+}
+
 export function buildStrategyScorecards(events, options = {}) {
   const days = Math.max(1, Math.min(3650, Number(options.days) || 90));
   const minTrades = Math.max(3, Math.min(500, Number(options.minTrades) || 20));
@@ -468,40 +503,13 @@ universalRouter.get('/universal/strategy/scorecards',async(req,res)=>{
 universalRouter.post('/universal/entry-preflight',async(req,res)=>{
   try {
     requirePrivateApiAuth(req);
-    const body=req.body||{};
-    const profileId=String(body.profileId||'');
-    const assetClass=String(body.assetClass||'unknown').toLowerCase();
-    const evaluation=evaluateStrategyProfile(profileId,body.evidence||{});
     const events=await getLedgerTransactions();
-    const risk=calculateUnifiedRisk(events,{
+    const result=evaluatePaperEntryPreflight(req.body||{},events,Date.now(),{
       maxConsecutiveLosses:process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,
-      maxDailyLossUsd:process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD
+      maxDailyLossUsd:process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD,
+      maxEvidenceAgeSeconds:process.env.JPTI_TBOTS_PREFLIGHT_MAX_EVIDENCE_AGE_SECONDS
     });
-    const observedAt=Date.parse(body.observedAt||'');
-    const requestedAge=Number(body.maxEvidenceAgeSeconds);
-    const maxEvidenceAgeSeconds=Number.isFinite(requestedAge)?clamp(requestedAge,15,300):90;
-    const evidenceAgeSeconds=Number.isFinite(observedAt)?Math.max(0,(Date.now()-observedAt)/1000):null;
-    const stale=evidenceAgeSeconds===null||evidenceAgeSeconds>maxEvidenceAgeSeconds;
-    const securityRequired=['token','dex_token','meme_token','new_pair'].includes(assetClass);
-    const securityStatus=String(body.securityStatus||'').toLowerCase();
-    const securityPassed=!securityRequired||['clear','passed'].includes(securityStatus);
-    const reasons=[];
-    if(!risk.newEntriesAllowed) reasons.push(...(risk.pauseReasons.length?risk.pauseReasons:['shared_risk_gate_blocked']));
-    if(!risk.riskConfiguration.valid) reasons.push('risk_configuration_invalid');
-    if(stale) reasons.push('market_evidence_missing_or_stale');
-    if(evaluation.status!=='research_candidate') reasons.push('strategy_evidence_not_candidate');
-    if(securityRequired&&!securityPassed) reasons.push('independent_token_security_gate_not_passed');
-    const allowed=reasons.length===0;
-    res.set('Cache-Control','no-store').json({
-      generatedAt:new Date().toISOString(),allowed,decision:allowed?'paper_candidate':'blocked',
-      reasons,profileId,assetClass,evaluation,
-      risk:{newEntriesAllowed:risk.newEntriesAllowed,pauseReasons:risk.pauseReasons,exitsRemainEnabled:true},
-      evidenceFreshness:{observedAt:Number.isFinite(observedAt)?new Date(observedAt).toISOString():null,
-        ageSeconds:evidenceAgeSeconds,maxAgeSeconds:maxEvidenceAgeSeconds,stale},
-      security:{required:securityRequired,status:securityStatus||'not-provided',passed:securityPassed},
-      execution:'No order is created, submitted, or authorized by this endpoint. This is a paper-entry preflight only.',
-      caveat:'A passing preflight is a research/paper eligibility result, not a profitability claim or permission for live execution.'
-    });
+    res.set('Cache-Control','no-store').json(result);
   } catch(error) { res.status(error.status||400).json({error:error.message}); }
 });
 
