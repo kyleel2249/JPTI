@@ -9,6 +9,7 @@ const profilesFallback = [
 
 export default function UniversalEngine() {
   const [profiles,setProfiles]=useState([]);
+  const [coverage,setCoverage]=useState(null);
   const [exchange,setExchange]=useState('binance');
   const [symbol,setSymbol]=useState('BTC/USDT');
   const [profileId,setProfileId]=useState('spot_trend');
@@ -26,7 +27,9 @@ export default function UniversalEngine() {
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
 
-  useEffect(()=>{fetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));},[]);
+  useEffect(()=>{fetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
+    fetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
+  },[]);
 
   const loadMarket=useCallback(async()=>{
     setLoading(true);setError('');
@@ -83,7 +86,11 @@ export default function UniversalEngine() {
       <p>• Strategy scores are research evidence, not calibrated probabilities or guaranteed signals.</p>
     </div>
 
-    <div className="section-heading"><div><span className="eyebrow">STRATEGY PROFILE REGISTRY</span><h3>Asset-class strategy selection</h3></div></div>
+    <div className="section-heading"><div><span className="eyebrow">DATA COVERAGE & PROVIDER READINESS</span><h3>Universal market coverage</h3></div><span className="subtle-note">{coverage?.exchangeCatalog?.supportedVenueCount??'—'} CCXT venues indexed</span></div>
+    {coverage&&<><div className="scanner-table"><div><span>ASSET CLASS</span><span>READINESS</span><span>AVAILABLE SOURCES</span><span>EXECUTION SCOPE</span></div>{coverage.assetClasses.map(item=><div key={item.id}><b>{item.label}</b><span>{item.status.replaceAll('_',' ')}</span><span>{item.availableSources.join(', ')||'None'}</span><span>{item.execution}</span></div>)}</div>
+    <p className="subtle-note">Configured watchlists: {coverage.watchlists?.cexEntriesConfigured??0} CEX · {coverage.watchlists?.dexEntriesConfigured??0} DEX. Assessment: {coverage.assessment}. This is configuration/catalog visibility, not a live provider health check or confirmation of symbol entitlement.</p>
+    <p className="subtle-note">{coverage.caveats?.join(' ')}</p></>}
+        <div className="section-heading"><div><span className="eyebrow">STRATEGY PROFILE REGISTRY</span><h3>Asset-class strategy selection</h3></div></div>
     <div className="news-search">
       <select value={profileId} onChange={e=>setProfileId(e.target.value)}>{(profiles.length?profiles:profilesFallback.map(([id,label])=>({id,label}))).map(p=><option key={p.id} value={p.id}>{p.label||p.id.replaceAll('_',' ')}</option>)}</select>
       <select value={exchange} onChange={e=>setExchange(e.target.value)}><option value="binance">Binance</option><option value="bitget">Bitget</option><option value="bybit">Bybit</option><option value="okx">OKX</option><option value="kraken">Kraken</option><option value="coinbase">Coinbase</option></select>
