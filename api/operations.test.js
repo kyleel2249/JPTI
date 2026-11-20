@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { eventSchema, getOperationsSnapshot } from './operations.js';
+import { eventSchema, getOperationsSnapshot, operationsRouter } from './operations.js';
 
 test('operations snapshot exposes monitored services and honest waiting states', () => {
   const snapshot = getOperationsSnapshot();
@@ -33,4 +33,10 @@ test('transaction event schema accepts derivative cash-flow events', () => {
     const result = eventSchema.safeParse({ source: 'bitget', eventType, externalId: 'cashflow-123', accountId: 'main-account', currency: 'USDT', quantity: 0.25 });
     assert.equal(result.success, true, eventType);
   }
+});
+
+test('manual portfolio reconciliation endpoint is registered as a POST route', () => {
+  const route = operationsRouter.stack.find(layer => layer.route?.path === '/operations/reconciliation/run');
+  assert.ok(route, 'manual reconciliation route should be registered');
+  assert.equal(route.route.methods.post, true);
 });

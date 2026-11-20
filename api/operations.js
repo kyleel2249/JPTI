@@ -159,14 +159,14 @@ function configuredOpeningBalances(exchangeId) {
   } catch { return {}; }
 }
 
-async function balanceReconciliationMonitor() {
+async function performBalanceReconciliation() {
   const requested = String(process.env.JPTI_RECONCILE_EXCHANGES || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
   const configured = listExchangeCatalog().filter(item => item.configured).map(item => item.id);
   const exchangeIds = (requested.length ? requested : configured).filter((id, index, all) => all.indexOf(id) === index).slice(0, 10);
   if (!exchangeIds.length) {
     setJob('reconciliation', { lastRunAt:new Date().toISOString(), runCount:(jobState.get('reconciliation')?.runCount || 0) + 1,
       status:'waiting-for-credentials', detail:'Configure read-only exchange credentials and JPTI_RECONCILE_OPENING_BALANCES_JSON to run account balance reconciliation.' });
-    return;
+    return { generatedAt:new Date().toISOString(), accountsChecked:0, status:'waiting-for-credentials', snapshots:[], errors:['No configured exchange credentials or reconciliation exchanges.'] };
   }
   const events = await getLedgerTransactions();
   const outcomes = await Promise.allSettled(exchangeIds.map(async exchangeId => {
@@ -183,11 +183,22 @@ async function balanceReconciliationMonitor() {
   const errors = outcomes.filter(x => x.status === 'rejected').map(x => x.reason?.message || 'Balance reconciliation failed');
   const mismatch = success.filter(x => x.status === 'mismatch').length;
   const baseline = success.filter(x => x.status === 'baseline_required').length;
+  const status = errors.length ? (success.length ? 'partial' : 'degraded') : mismatch ? 'mismatch' : baseline ? 'baseline-required' : 'matched';
   setJob('reconciliation', { lastRunAt:new Date().toISOString(), lastSuccessAt:success.length ? new Date().toISOString() : (jobState.get('reconciliation')?.lastSuccessAt || null),
-    runCount:(jobState.get('reconciliation')?.runCount || 0) + 1, status:errors.length ? (success.length ? 'partial' : 'degraded') : mismatch ? 'mismatch' : baseline ? 'baseline-required' : 'matched',
+    runCount:(jobState.get('reconciliation')?.runCount || 0) + 1, status,
     detail:success.length + ' account(s) checked; ' + mismatch + ' mismatch(es); ' + baseline + ' require opening baselines; ' + errors.length + ' failed.',
     lastError:errors.length ? errors.join('; ').slice(0,500) : null, lastSnapshot:success });
+  return { generatedAt:new Date().toISOString(), accountsChecked:success.length, status, snapshots:success, errors };
 }
+
+let reconciliationInFlight = null;
+async function balanceReconciliationMonitor() {
+  if (reconciliationInFlight) return reconciliationInFlight;
+  reconciliationInFlight = performBalanceReconciliation();
+  try { return await reconciliationInFlight; }
+  finally { reconciliationInFlight = null; }
+}
+
 async function providerMonitor() {
   const providers = providerDirectory();
   const configured = providers.filter((p) => p.configured).length;
@@ -337,6 +348,15 @@ operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
     const byType = Object.fromEntries(['fill','deposit','withdrawal','fee','transfer','adjustment','funding','interest','borrow','rebate'].map((type) => [type, transactions.filter((e) => e.eventType === type).length]));
     res.json({ eventCount: transactions.length, byType, lastEventAt: transactions.at(-1)?.occurredAt || null, note: 'This is an append-only transaction event count, not a reconciled balance or realized PnL statement.' });
   } catch (error) { next(error); }
+});
+
+
+operationsRouter.post('/operations/reconciliation/run', async (req, res) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
+  try {
+    const result = await balanceReconciliationMonitor();
+    res.status(result.accountsChecked ? 200 : 409).set('Cache-Control', 'no-store').json(result);
+  } catch (error) { res.status(502).json({ error: error.message || 'Portfolio reconciliation failed.' }); }
 });
 
 operationsRouter.get('/operations/reconciliation', async (req, res, next) => {
