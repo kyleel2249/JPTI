@@ -70,3 +70,27 @@ test('persisted global pause and resume controls the shared entry gate', () => {
   assert.equal(calculateUnifiedRisk([paused]).globalPaused,true);
   assert.equal(calculateUnifiedRisk([paused,resumed]).newEntriesAllowed,true);
 });
+
+test('invalid consecutive-loss configuration falls back to the safe default', () => {
+  const events=[-1,-2,-3].map((pnl,i)=>({source:'tbots',eventType:'bot_trade',occurredAt:new Date(Date.now()-i*1000).toISOString(),metadata:{action:'paper_closed',pnl}}));
+  const risk=calculateUnifiedRisk(events,{maxConsecutiveLosses:'not-a-number'});
+  assert.equal(risk.maxConsecutiveLosses,3);
+  assert.equal(risk.newEntriesAllowed,false);
+  assert.equal(risk.riskConfiguration.valid,false);
+  assert.match(risk.riskConfiguration.warnings[0],/safe default 3/);
+});
+
+test('invalid daily-loss configuration cannot silently disable the loss guard', () => {
+  const event={source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',pnl:-125}};
+  const risk=calculateUnifiedRisk([event],{maxDailyLossUsd:'NaN'});
+  assert.equal(risk.maxDailyLossUsd,100);
+  assert.equal(risk.rolling24hUsdLoss,125);
+  assert.equal(risk.newEntriesAllowed,false);
+  assert.equal(risk.riskConfiguration.valid,false);
+});
+
+test('valid zero daily-loss limit remains an explicit opt-out', () => {
+  const risk=calculateUnifiedRisk([],{maxDailyLossUsd:0});
+  assert.equal(risk.maxDailyLossUsd,0);
+  assert.equal(risk.riskConfiguration.valid,true);
+});
