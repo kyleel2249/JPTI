@@ -183,6 +183,42 @@ universalRouter.post('/universal/strategy/evaluate',(req,res)=>{
   catch(e){res.status(400).json({error:e.message});}
 });
 
+
+universalRouter.get('/universal/cex-watchlist',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const watchlist=String(process.env.JPTI_TBOTS_CEX_MARKETS||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,30);
+    if(!watchlist.length)return res.json({fetchedAt:new Date().toISOString(),markets:[],status:'waiting-for-watchlist',note:'Configure JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,bitget:ETH/USDT. Only active spot markets are included.'});
+    const outcomes=await Promise.allSettled(watchlist.map(async entry=>{
+      const split=entry.indexOf(':');if(split<1)throw new Error('Invalid CEX watchlist entry '+entry);
+      const exchange=entry.slice(0,split).toLowerCase(),symbol=entry.slice(split+1).toUpperCase();
+      return withExchange(exchange,{privateAccess:false},async ex=>{
+        const market=ex.markets[symbol];
+        if(!market||market.active===false||!market.spot)throw new Error('Active spot market unavailable: '+exchange+' '+symbol);
+        const [ticker,candles,book]=await Promise.all([
+          ex.has?.fetchTicker?ex.fetchTicker(symbol):Promise.resolve(null),
+          ex.has?.fetchOHLCV?ex.fetchOHLCV(symbol,'5m',undefined,24):Promise.resolve(null),
+          ex.has?.fetchOrderBook?ex.fetchOrderBook(symbol,20):Promise.resolve(null)
+        ]);
+        const rows=candles||[],last=rows.at(-1),prev=rows.length>=13?rows.at(-13):rows[0];
+        const volumeUsd=rows.map(row=>(finite(row[5])||0)*(finite(row[4])||0));
+        const avg=volumeUsd.length>1?volumeUsd.slice(0,-1).reduce((a,b)=>a+b,0)/(volumeUsd.length-1):null;
+        const bidDepth=(book?.bids||[]).slice(0,10).reduce((s,x)=>s+x[0]*x[1],0);
+        const askDepth=(book?.asks||[]).slice(0,10).reduce((s,x)=>s+x[0]*x[1],0);
+        const spread=ticker?.bid>0&&ticker?.ask>0?(ticker.ask-ticker.bid)/((ticker.ask+ticker.bid)/2)*100:null;
+        return {id:'cex:'+exchange+':'+symbol,chain:'cex',marketType:'cex',exchange,symbol,base:market.base,quote:market.quote,
+          price:finite(ticker?.last),quoteVolume24h:finite(ticker?.quoteVolume),liquidityUsd:bidDepth+askDepth,
+          volume5mUsd:volumeUsd.at(-1)??0,volume5mAvgUsd:avg,change1hPct:last&&prev&&prev[4]>0?(last[4]/prev[4]-1)*100:null,
+          spreadPct:spread,exchangeMarketActive:true,security:{exchangeListed:true},fetchedAt:new Date().toISOString()};
+      });
+    }));
+    const markets=outcomes.filter(x=>x.status==='fulfilled').map(x=>x.value);
+    const errors=outcomes.filter(x=>x.status==='rejected').map(x=>x.reason?.message||'Market unavailable');
+    res.set('Cache-Control','no-store').json({fetchedAt:new Date().toISOString(),markets,errors,status:errors.length?'partial':'live',
+      note:'Read-only CEX spot market feed. This is the explicitly configured watchlist, not every market on every exchange. T-Bots paper execution only.'});
+  }catch(e){res.status(e.status||401).json({error:e.message});}
+});
+
 universalRouter.get('/universal/market/:exchange/:symbol',async(req,res)=>{
   try{
     const exchangeId=String(req.params.exchange).toLowerCase(),symbol=String(req.params.symbol).toUpperCase().replace('-','/');
