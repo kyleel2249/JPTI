@@ -247,7 +247,7 @@ labRouter.get('/advanced/stream/:exchange/:symbol', async (req, res) => {
         if (market.contract && ex.has?.fetchOpenInterest) jobs.openInterest = ex.fetchOpenInterest(symbol).catch(error => ({ unavailable: error.message }));
         if (market.contract && ex.has?.fetchLiquidations) jobs.liquidations = ex.fetchLiquidations(symbol, undefined, 50).catch(error => ({ unavailable: error.message }));
         if (market.contract && ex.has?.fetchFundingRateHistory) jobs.fundingHistory = ex.fetchFundingRateHistory(symbol, undefined, 20).catch(error => ({ unavailable: error.message }));
-        if (market.contract && ex.has?.fetchOpenInterestHistory) jobs.openInterestHistory = ex.fetchOpenInterestHistory(symbol, undefined, '1h', 20).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchOpenInterestHistory) jobs.openInterestHistory = ex.fetchOpenInterestHistory(symbol, '1h', undefined, 20).catch(error => ({ unavailable: error.message }));
         if (ex.has?.fetchTicker) jobs.ticker = ex.fetchTicker(symbol).catch(error => ({ unavailable: error.message }));
         const pairs = await Promise.all(Object.entries(jobs).map(async ([k,p]) => [k, await p]));
         return Object.fromEntries(pairs);
