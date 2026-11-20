@@ -118,7 +118,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
       if(acquired>0){row.cost+=qty*price+(feeCurrency===quote?fee:0);row.quantity+=acquired;}
       else invalidBaseFeeEvents++;
     } else {
-      const baseFee=e.feeCurrency===base?fee:0;
+      const baseFee=feeCurrency===base?fee:0;
       const requestedOut=qty+baseFee;
       const averageCost=row.quantity>0?row.cost/row.quantity:0;
       const matched=Math.min(requestedOut,row.quantity);
