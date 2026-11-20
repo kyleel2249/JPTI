@@ -62,3 +62,11 @@ test('DeFi strategy requires protocol TVL, fees and risk evidence', () => {
   assert.equal(complete.missingEvidence.length,0);
   assert.equal(complete.decision,'research-only; not an order instruction');
 });
+
+test('persisted global pause and resume controls the shared entry gate', () => {
+  const paused={source:'jpti-control',eventType:'bot_decision',occurredAt:new Date().toISOString(),metadata:{action:'global_pause'}};
+  const resumed={...paused,occurredAt:new Date(Date.now()+1000).toISOString(),metadata:{action:'global_resume'}};
+  assert.equal(calculateUnifiedRisk([paused]).newEntriesAllowed,false);
+  assert.equal(calculateUnifiedRisk([paused]).globalPaused,true);
+  assert.equal(calculateUnifiedRisk([paused,resumed]).newEntriesAllowed,true);
+});
