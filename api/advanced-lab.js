@@ -167,7 +167,29 @@ export function calculatePortfolioRisk(positions, history = {}, scenarios = {}) 
         }
       }
     }
-    const returns = [...returnsByDate.values()].filter(r => r.coveredWeight >= 0.8).map(r => r.pnlReturn / r.coveredWeight).sort((a,b) => a-b);
+    const chronologicalReturns = [...returnsByDate.entries()].sort((a,b) => Number(a[0]) - Number(b[0]))
+      .filter(([,r]) => r.coveredWeight >= 0.8)
+      .map(([date,r]) => ({ date, value: r.pnlReturn / r.coveredWeight }));
+    const daily = chronologicalReturns.map(r => r.value);
+    const returns = [...daily].sort((a,b) => a-b);
+    const meanDaily = daily.length ? daily.reduce((s,r)=>s+r,0)/daily.length : 0;
+    const dailyVariance = daily.length > 1 ? daily.reduce((s,r)=>s+(r-meanDaily)**2,0)/(daily.length-1) : 0;
+    const dailyVolatility = Math.sqrt(dailyVariance);
+    let equity = 1, peak = 1, maxDrawdown = 0, worstDay = null, bestDay = null;
+    for (const point of chronologicalReturns) {
+      equity *= Math.max(1e-9, 1 + point.value);
+      peak = Math.max(peak, equity);
+      maxDrawdown = Math.max(maxDrawdown, (peak-equity)/peak);
+      if (!worstDay || point.value < worstDay.return) worstDay = { date: point.date, return: point.value };
+      if (!bestDay || point.value > bestDay.return) bestDay = { date: point.date, return: point.value };
+    }
+    const downside = daily.filter(r=>r<0);
+    const downsideDeviation = daily.length ? Math.sqrt(downside.reduce((s,r)=>s+r*r,0)/daily.length) : 0;
+    let worstRolling20DayReturn = null;
+    for (let i=19;i<daily.length;i++) {
+      const value = daily.slice(i-19,i+1).reduce((e,r)=>e*Math.max(1e-9,1+r),1)-1;
+      if (worstRolling20DayReturn === null || value < worstRolling20DayReturn) worstRolling20DayReturn = value;
+    }
     const quantile = q => returns.length ? returns[Math.max(0, Math.ceil(q * returns.length) - 1)] : null;
     const var95 = quantile(0.05), var99 = quantile(0.01);
     const tail95 = returns.filter(r => r <= (var95 ?? -Infinity));
@@ -177,13 +199,19 @@ export function calculatePortfolioRisk(positions, history = {}, scenarios = {}) 
     portfolios.push({
       quoteCurrency: currency, grossExposure: gross,
       concentration: { hhi, effectivePositions: hhi > 0 ? 1 / hhi : 0, largestPositionWeightPercent: Math.max(...weights.map(p => p.weight)) * 100 },
-      historical: { observations: returns.length, var95Percent: var95 == null ? null : -var95 * 100, expectedShortfall95Percent: tail95.length ? -tail95.reduce((s,r)=>s+r,0)/tail95.length*100 : null, var99Percent: var99 == null ? null : -var99 * 100, expectedShortfall99Percent: tail99.length ? -tail99.reduce((s,r)=>s+r,0)/tail99.length*100 : null, method: 'Historical one-day close-to-close returns, current-notional weights; requires at least 20 aligned observations.' },
+      historical: { observations: returns.length, var95Percent: var95 == null ? null : -var95 * 100, expectedShortfall95Percent: tail95.length ? -tail95.reduce((s,r)=>s+r,0)/tail95.length*100 : null, var99Percent: var99 == null ? null : -var99 * 100, expectedShortfall99Percent: tail99.length ? -tail99.reduce((s,r)=>s+r,0)/tail99.length*100 : null, method: 'Historical one-day close-to-close returns, current-notional weights; requires at least 20 aligned observations.',
+        diagnostics: { annualizedVolatilityPercent: dailyVolatility * Math.sqrt(365) * 100, sharpeRatioAnnualized: dailyVolatility > 0 ? meanDaily / dailyVolatility * Math.sqrt(365) : null,
+          sortinoRatioAnnualized: downsideDeviation > 0 ? meanDaily / downsideDeviation * Math.sqrt(365) : null,
+          maxHistoricalDrawdownPercent: maxDrawdown * 100, worstDay: worstDay ? { ...worstDay, returnPercent: worstDay.return * 100 } : null,
+          bestDay: bestDay ? { ...bestDay, returnPercent: bestDay.return * 100 } : null,
+          worstRolling20DayReturnPercent: worstRolling20DayReturn == null ? null : worstRolling20DayReturn * 100,
+          coverageWarning: returns.length < 20 ? 'Insufficient observations for a stable risk estimate.' : null } },
       stress: { shockPercent: stressShock * 100, estimatedLoss: gross * Math.max(0, -stressShock), stressedExposure: gross * (1 + stressShock) },
       positions: weights.map(({exchange,symbol,value,weight})=>({exchange,symbol,marketValue:value,weightPercent:weight*100}))
     });
   }
   return { generatedAt: new Date().toISOString(), methodology: 'Quote-currency portfolios are kept separate; historical VaR is not aggregated across currencies. Current holdings are weighted by current marked notional. Historical estimates do not predict maximum loss.', portfolios,
-    limitations: ['No FX conversion across quote currencies.', 'Historical VaR uses available daily OHLCV and excludes gaps, intraday liquidation, leverage, derivatives Greeks, funding, borrow, fees and market impact.', 'Missing histories and holdings below 80% coverage are excluded from each historical observation.', 'Stress scenario is a simple parallel price shock, not a full correlation or liquidity shock.'] };
+    limitations: ['No FX conversion across quote currencies.', 'Historical VaR uses available daily OHLCV and excludes gaps, intraday liquidation, leverage, derivatives Greeks, funding, borrow, fees and market impact.', 'Missing histories and holdings below 80% coverage are excluded from each historical observation.', 'Stress scenario is a simple parallel price shock, not a full correlation or liquidity shock.', 'Sharpe and Sortino are annualized from daily historical returns using a zero risk-free rate and 365 crypto-market days; they are descriptive, not forecasts.'] };
 }
 
 export function calculatePortfolioAccounting(events, marks = {}) {
