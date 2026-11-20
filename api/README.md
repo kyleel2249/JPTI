@@ -286,3 +286,6 @@ JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
 The CEX watchlist is limited to active USD/stablecoin-quoted spot markets and checks 24h quote volume, visible order-book depth and spread before T-Bots can consider a paper entry. The optional DEX watchlist accepts up to 60 chain:contract entries and resolves the most liquid provider pair for each address. No private exchange credentials are required for this read-only feed.
 
 Unified realized PnL is computed from recorded exchange fills with weighted-average cost and reported per quote currency. USD, USDT, USDC, DAI and FDUSD are treated as approximate USD equivalents for the daily loss guard; other currencies are not FX-converted. T-Bots paper PnL is separately denominated in USD. This is not full account equity reconciliation: unrealized positions, complete cashflows, transfers, funding, borrow, third-token fees and missing opening inventory remain limitations.
+
+
+- `POST /universal/control` — private-token authenticated persisted pause/resume of T-Bots new entries. JSON body: `{"action":"pause_new_entries","reason":"operator request"}` or `{"action":"resume_new_entries"}`. Existing positions keep their normal exit handling; this is not a force-close or exchange cancellation command.
