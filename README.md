@@ -263,3 +263,8 @@ The hourly upstream sync continues to bring in T-Bots changes and open a review 
 The Universal Engine also exposes `GET /api/universal/coverage`, a configuration/catalog matrix showing which provider families are configured for each asset class. It intentionally does not claim live provider health or symbol-level entitlement.
 
 The Universal Engine also includes a persisted central T-Bots new-entry pause/resume control. It blocks new paper entries across connected T-Bots sessions while allowing existing positions to continue their configured exits. It does not force-close positions or cancel live exchange orders.
+
+
+### Multi-instance scheduler coordination
+
+PostgreSQL deployments elect one active operations-scheduler leader using a renewable database lease. Standby instances wait and can take over after expiry; a coordination/database error pauses scheduled workers. Configure `JPTI_SCHEDULER_LEASE_MS`, `JPTI_SCHEDULER_HEARTBEAT_MS`, and optionally `JPTI_SCHEDULER_INSTANCE_ID`. File storage remains single-process only and must not be used for horizontally scaled API instances. See `api/README.md` for the deployment and in-flight-worker limitations.
