@@ -36,7 +36,8 @@ test('unified performance attributes paper results and exchange fills separately
   assert.equal(report.paperStrategy.closedTrades,1);
   assert.equal(report.paperStrategy.realizedPnlUsd,5);
   assert.equal(report.exchangeExecution.fillCount,1);
-  assert.equal(report.exchangeExecution.realizedPnl,'weighted-average on recorded fills only; quote currencies remain separate');
+  assert.equal(report.exchangeExecution.realizedPnl,'weighted-average on recorded spot fills only; quote currencies remain separate');
+  assert.equal(report.paperStrategy.byStrategy.untagged.trades,1);
 });
 
 test('exchange fill realized PnL uses weighted average and preserves quote currencies', async () => {
@@ -51,4 +52,13 @@ test('exchange fill realized PnL uses weighted average and preserves quote curre
   assert.equal(result.realizedByQuote.USDT,19);
   assert.equal(result.openInventory[0].quantity,1);
   assert.equal(result.openInventory[0].averageCost,110);
+});
+
+test('DeFi strategy requires protocol TVL, fees and risk evidence', () => {
+  const missing=evaluateStrategyProfile('defi_rotation',{liquidityUsd:50000});
+  assert.equal(missing.status,'insufficient_or_conflicting_evidence');
+  assert.ok(missing.missingEvidence.includes('tvlChangePct'));
+  const complete=evaluateStrategyProfile('defi_rotation',{liquidityUsd:50000,tvlChangePct:8,feesChangePct:12,protocolRiskScore:10});
+  assert.equal(complete.missingEvidence.length,0);
+  assert.equal(complete.decision,'research-only; not an order instruction');
 });
