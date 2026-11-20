@@ -13,6 +13,9 @@ const guardedFiles = [
   'public/js/agents/rug-check.js',
   'public/js/config.js',
   'public/js/prompt-template.js',
+  'public/js/prompt-parser.js',
+  'public/js/prompt-manager.js',
+  'tests/engine.test.mjs',
   'public/js/market/live-feed.js'
 ];
 
