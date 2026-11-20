@@ -162,7 +162,7 @@ function App() {
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
-    'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.'
+    'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
   };
 
