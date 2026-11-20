@@ -28,6 +28,7 @@ JPTI_TRADING_MODE=paper
 JPTI_ENABLE_LIVE_TRADING=false
 JPTI_API_TOKEN=<long-random-private-token>
 JPTI_REQUIRE_EDGE_SECRET=true
+JPTI_CORS_ORIGINS=https://localhost,capacitor://localhost
 JPTI_EDGE_SECRET=<independent-random-secret-at-least-32-characters>
 JPTI_STORAGE_BACKEND=postgres
 DATABASE_URL=<managed-postgresql-connection-string>
@@ -81,7 +82,7 @@ In Cloudflare:
 | `JPTI_API_ORIGIN` | Variable | API origin only, e.g. `https://your-jpti-api-host.example` |
 | `JPTI_EDGE_SECRET` | Secret | The exact same independent secret as the API host's `JPTI_EDGE_SECRET` |
 
-For `JPTI_API_ORIGIN`, enter only the HTTPS origin: no trailing API path, no `/api`, no credentials, and no query string. The Pages Function forwards the incoming path and query to that origin and injects the edge secret server-side. The secret is not sent to browser JavaScript.
+For `JPTI_API_ORIGIN`, enter only the HTTPS origin: no trailing API path, no `/api`, no credentials, and no query string. The Pages Function forwards the incoming path and query to that origin and injects the edge secret server-side. The secret is not sent to browser JavaScript. Keep `JPTI_CORS_ORIGINS=https://localhost,capacitor://localhost` on the API host so the installed Capacitor mobile client can call the Pages origin from its WebView origin.
 
 4. Trigger a new deployment after saving the variables.
 
