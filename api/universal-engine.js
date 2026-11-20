@@ -6,6 +6,7 @@ import { buildEvidenceCouncil } from './advanced-intelligence.js';
 import { normalizeDexPair, scoreAssetEvidence } from './multi-asset-intelligence.js';
 import { listExchangeCatalog } from './exchanges.js';
 import { buildUniversalCoverage } from './universal-coverage.js';
+import { buildInstitutionalScorecards, evaluateInstitutionalPaperGovernance, buildSafetySnapshot } from './institutional-governance.js';
 
 export const universalRouter = express.Router();
 const finite = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
@@ -507,7 +508,10 @@ universalRouter.get('/universal/strategy/scorecards',async(req,res)=>{
     const days=Math.max(1,Math.min(3650,Number.parseInt(req.query.days||'90',10)||90));
     const minTrades=Math.max(3,Math.min(500,Number.parseInt(req.query.minTrades||'20',10)||20));
     const events=await getLedgerTransactions();
-    res.set('Cache-Control','no-store').json(buildStrategyScorecards(events,{days,minTrades}));
+    const baseline=buildStrategyScorecards(events,{days,minTrades});
+    const institutional=buildInstitutionalScorecards(events,{days,minTrades,
+      minProfitFactor:process.env.JPTI_GOVERNANCE_MIN_PROFIT_FACTOR});
+    res.set('Cache-Control','no-store').json({...baseline,institutional});
   } catch(error) { res.status(error.status||401).json({error:error.message}); }
 });
 
@@ -515,13 +519,62 @@ universalRouter.post('/universal/entry-preflight',async(req,res)=>{
   try {
     requirePrivateApiAuth(req);
     const events=await getLedgerTransactions();
-    const result=evaluatePaperEntryPreflight(req.body||{},events,Date.now(),{
+    const now=Date.now();
+    const input=req.body||{};
+    const result=evaluatePaperEntryPreflight(input,events,now,{
       maxConsecutiveLosses:process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,
       maxDailyLossUsd:process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD,
       maxEvidenceAgeSeconds:process.env.JPTI_TBOTS_PREFLIGHT_MAX_EVIDENCE_AGE_SECONDS
     });
-    res.set('Cache-Control','no-store').json(result);
+    const governance=evaluateInstitutionalPaperGovernance(input,result,events,now,{
+      minClosedTrades:process.env.JPTI_GOVERNANCE_MIN_CLOSED_TRADES,
+      minProfitFactor:process.env.JPTI_GOVERNANCE_MIN_PROFIT_FACTOR,
+      maxTrialSizePct:process.env.JPTI_GOVERNANCE_MAX_TRIAL_SIZE_PCT,
+      validatedSizePct:process.env.JPTI_GOVERNANCE_VALIDATED_SIZE_PCT
+    });
+    const allowed=result.allowed&&governance.allowed;
+    res.set('Cache-Control','no-store').json({...result,...governance,allowed,
+      decision:allowed?'paper_candidate':'blocked',
+      reasons:[...new Set([...(result.reasons||[]),...(governance.reasons||[])])],
+      execution:'Paper-entry governance only. The endpoint never creates an order or grants live execution permission.'});
   } catch(error) { res.status(error.status||400).json({error:error.message}); }
+});
+
+universalRouter.get('/universal/institutional/scorecards',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const days=Math.max(1,Math.min(3650,Number.parseInt(req.query.days||'90',10)||90));
+    const minTrades=Math.max(3,Math.min(500,Number.parseInt(req.query.minTrades||process.env.JPTI_GOVERNANCE_MIN_CLOSED_TRADES||'20',10)||20));
+    const events=await getLedgerTransactions();
+    res.set('Cache-Control','no-store').json(buildInstitutionalScorecards(events,{days,minTrades,
+      minProfitFactor:process.env.JPTI_GOVERNANCE_MIN_PROFIT_FACTOR}));
+  }catch(error){res.status(error.status||401).json({error:error.message});}
+});
+
+universalRouter.get('/universal/safety/status',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const events=await getLedgerTransactions();
+    res.set('Cache-Control','no-store').json(buildSafetySnapshot(events));
+  }catch(error){res.status(error.status||401).json({error:error.message});}
+});
+
+universalRouter.post('/universal/safety/kill-switch',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const action=String(req.body?.action||'');
+    if(!['engage','release'].includes(action))return res.status(400).json({error:'action must be engage or release.'});
+    if(action==='release'&&req.body?.confirmation!=='I_CONFIRM_RESUME_PAPER_ENTRIES')
+      return res.status(403).json({error:'Explicit operator confirmation is required to release the paper-entry kill switch.'});
+    const reason=String(req.body?.reason|| (action==='engage'?'Operator engaged institutional kill switch':'Operator released institutional kill switch')).trim().slice(0,200);
+    const event=await ingestLedgerEvent({source:'jpti-control',accountId:'global',eventType:'bot_decision',
+      externalId:'jpti-safety-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),symbol:'SYSTEM',
+      occurredAt:new Date().toISOString(),metadata:{action:action==='engage'?'global_kill_switch':'global_resume',
+        reason,scope:'all JPTI-governed T-Bots paper entries',operatorConfirmed:action==='release'}});
+    const events=await getLedgerTransactions();
+    res.set('Cache-Control','no-store').json({ok:true,action,reason,eventId:event.event?.externalId||event.externalId||null,
+      safety:buildSafetySnapshot(events),exitsRemainEnabled:true,liveExecutionAuthorized:false});
+  }catch(error){res.status(error.status||401).json({error:error.message});}
 });
 
 universalRouter.post('/universal/control',async(req,res)=>{

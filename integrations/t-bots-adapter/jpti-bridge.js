@@ -111,10 +111,8 @@ export class JptiBridge {
   }
   async preflightEntry({ token, profileId = 'meme_new_pair', securityPassed = false } = {}) {
     if (!this.enabled) return { allowed:false, reasons:['JPTI bridge is not configured'] };
-    const id=String(token?.id||token?.symbol||'unknown');
-    const key=id+':'+profileId;
-    const cached=this.entryPreflightCache?.get(key);
-    if(cached&&Date.now()-cached.at<10000)return cached.result;
+    // Always consult the authoritative JPTI gate for every new entry.
+    // Cached approvals could outlive a newly engaged kill switch or risk pause.
     const relativeVolume=Number(token?.volume5mAvgUsd)>0?Number(token.volume5mUsd)/Number(token.volume5mAvgUsd):null;
     const assetClass=String(token?.assetClass||token?.marketType||'unknown').toLowerCase();
     const payload={
@@ -133,9 +131,6 @@ export class JptiBridge {
     };
     try {
       const result=await this._request('/universal/entry-preflight',{method:'POST',body:JSON.stringify(payload)});
-      this.entryPreflightCache=this.entryPreflightCache||new Map();
-      this.entryPreflightCache.set(key,{at:Date.now(),result});
-      if(this.entryPreflightCache.size>500)this.entryPreflightCache.delete(this.entryPreflightCache.keys().next().value);
       return result;
     } catch(error) {
       this.lastError=error.message;
@@ -213,7 +208,10 @@ export class JptiBridge {
     };
     bus.on('trade:enter', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action:'paper_enter', reason:event.reason, sizePct:event.sizePct, price:event.price }));
     bus.on('trade:exit', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action:'paper_exit', reason:event.reason, pnl:event.pnl, price:event.price, partial:event.partial }));
-    bus.on('trade:closed', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action:'paper_closed', pnl:event.pnl, cost:event.cost, proceeds:event.proceeds, reason:event.reason }));
+    bus.on('trade:closed', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action:'paper_closed',
+      pnl:event.pnl, cost:event.cost, proceeds:event.proceeds, reason:event.reason,
+      slippagePct:event.slippagePct, entryPrice:event.entryPrice, exitPrice:event.exitPrice,
+      holdDurationMin:event.holdDurationMin }));
     bus.on('trade:filtered', event => this.publish('bot_filter', runId, event.symbol, { ...tags(event), reason:event.reason }));
     bus.on('sys', event => this.publish('bot_decision', runId, 'SYSTEM', { ...tags(event), reason:event.reason }));
     bus.on('session:end', recap => this.publish('bot_session', runId, 'SESSION', { action:'paper_session_closed',

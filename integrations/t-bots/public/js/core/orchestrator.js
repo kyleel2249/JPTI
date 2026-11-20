@@ -183,16 +183,18 @@ export class Orchestrator {
     }
     if (this.paused) return this.ledger.step(task, 'ORCHESTRATOR', 'waiting', 'entries paused');
 
+    let governanceMaxEntrySizePct = null;
     if (this.feed.bridge?.enabled) {
       const preflight = await this.feed.bridge.preflightEntry({
         token, profileId: this.cfg.scanner.assetProfile || 'meme_new_pair', securityPassed: rc.pass === true
       });
-      if (!preflight?.allowed) {
-        const reasons = (preflight?.reasons || ['JPTI entry preflight blocked']).join('; ');
+      if (!preflight?.allowed || !Number.isFinite(Number(preflight?.maxEntrySizePct)) || Number(preflight.maxEntrySizePct) <= 0) {
+        const reasons = (preflight?.reasons || ['JPTI governance unavailable or returned no valid allocation cap']).join('; ');
         this.ledger.done(task, 'skipped', reasons);
-        this._filtered(token, 'JPTI paper-entry preflight blocked: ' + reasons + '. Existing exits remain active.', 'jpti-entry-preflight');
+        this._filtered(token, 'JPTI paper-entry governance blocked: ' + reasons + '. Existing exits remain enabled.', 'jpti-entry-preflight');
         return;
       }
+      governanceMaxEntrySizePct = Number(preflight.maxEntrySizePct);
     }
 
     const r = this.cfg.rules;
@@ -204,7 +206,15 @@ export class Orchestrator {
     const available = this.equity.cash - this.executor.pendingSpend();
     const size = this.sizer.size({ equity: this.equity.balance, available, signals: scan.signals.length, lossStreak: this.equity.lossStreak, openCount: this.executor.count() });
     if (!size.ok) return this.ledger.step(task, 'SIZER', 'blocked', size.reason);
-    this.ledger.step(task, 'SIZER', 'sized', `${Math.round(size.pct * 100)}%`);
+    if (governanceMaxEntrySizePct !== null) {
+      const capFraction = governanceMaxEntrySizePct / 100;
+      const cappedUsd = Math.min(size.usd, this.equity.balance * capFraction);
+      if (!(cappedUsd >= 1)) return this.ledger.step(task, 'SIZER', 'blocked', 'Institutional governance allocation cap leaves less than $1 of paper size.');
+      size.usd = cappedUsd;
+      size.pct = cappedUsd / Math.max(1e-9, this.equity.balance);
+      size.governanceCapped = true;
+    }
+    this.ledger.step(task, 'SIZER', 'sized', `${Math.round(size.pct * 10000) / 100}%${size.governanceCapped ? ' · governance cap' : ''}`);
 
     const reason = `new pair ${Math.round(token.ageMin)}m · ${scan.signals.map((s) => s.label).join(' · ')}`;
     const res = this.executor.open(token, size.usd, { sizePct: size.pct, reason, signals: scan.signals.length });

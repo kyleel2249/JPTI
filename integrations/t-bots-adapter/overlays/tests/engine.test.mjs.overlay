@@ -313,7 +313,7 @@ test('live feed: DexScreener and RugCheck mapping, fail-closed enrichment', asyn
 });
 
 
-test('JPTI bridge sends fresh token evidence to the paper preflight and caches its response', async () => {
+test('JPTI bridge sends fresh token evidence and rechecks governance on every entry', async () => {
   const originalFetch=globalThis.fetch;
   let calls=0;
   let payload=null;
@@ -331,7 +331,7 @@ test('JPTI bridge sends fresh token evidence to the paper preflight and caches i
     const second=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
     assert.equal(first.allowed,true);
     assert.equal(second.allowed,true);
-    assert.equal(calls,1);
+    assert.equal(calls,2);
     assert.equal(payload.profileId,'meme_new_pair');
     assert.equal(payload.securityStatus,'passed');
     assert.equal(payload.evidence.relativeVolume,2);
@@ -351,4 +351,14 @@ test('JPTI bridge fails closed when the paper preflight service is unavailable',
     assert.equal(result.allowed,false);
     assert.ok(result.reasons.some(reason=>reason.includes('fail-closed')));
   } finally { globalThis.fetch=originalFetch; }
+});
+
+test('JPTI preflight is requested on every entry and approvals are not cached', async () => {
+  let calls=0;
+  const bridge=new JptiBridge({fetchImpl:async()=>{calls++;return{ok:true,json:async()=>({allowed:true,maxEntrySizePct:1})};},storage:{getItem:()=>null,setItem:()=>{}}});
+  bridge.setToken('test-token');
+  const token={id:'governance-test',symbol:'TEST',change1hPct:5,volume5mUsd:2000,volume5mAvgUsd:1000,liquidityUsd:50000,fetchedAt:new Date().toISOString()};
+  const first=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
+  const second=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
+  assert.equal(first.allowed,true);assert.equal(second.allowed,true);assert.equal(calls,2);
 });
