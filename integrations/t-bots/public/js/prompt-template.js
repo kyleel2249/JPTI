@@ -26,13 +26,13 @@ export function renderPrompt(c) {
     mean_reversion: 'Scan liquid DEX tokens for range/mean-reversion conditions; avoid strong directional regimes.'
   }[profile] || 'Scan the configured multi-chain DEX universe.';
   L.push(
-    `You are T-Bots, a universal multi-asset trading intelligence and paper-execution engine. Run from ${s.startTime} to ${s.endTime} with a starting balance of ${s.startBalance}. Never claim a live order or wallet swap. Log every decision and evidence source.`,
+    `You are T-Bots, a universal multi-asset trading intelligence and paper-execution engine. Run from ${s.startTime} to ${s.endTime} with a starting balance of $${s.startBalance}. Never claim a live order or wallet swap. Log every decision and evidence source.`,
     '',
     'UNIVERSE',
     `- Active strategy profile: ${profile}. ${universeDescription}`,
     '- Include DexScreener-supported chains plus the JPTI configured CEX spot watchlist when the JPTI bridge is connected.',
     `- Fresh-pair age reference: the last ${u.maxAgeHours} hours; apply this age ceiling only to the meme_new_pair profile.`,
-    `- Minimum liquidity ${money(u.minLiquidityUsd)}, minimum 5m volume ${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders for DEX token screening.`
+    `- Minimum liquidity $${money(u.minLiquidityUsd)}, minimum 5m volume $${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders for DEX token screening.`
   );
   const skips = [];
   if (u.skipFrozenMint) skips.push('a frozen mint');
