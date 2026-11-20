@@ -124,28 +124,71 @@ test('exchange sells exceeding recorded inventory are reported instead of fabric
 });
 
 
-test('shared T-Bots paper equity drawdown pauses new entries independently of loss streak', () => {
+test('strategy scorecards compute expectancy and keep low sample sizes visibly unqualified', async () => {
+  const { buildStrategyScorecards } = await import('./universal-engine.js');
   const now=Date.now();
   const events=[
-    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-2000).toISOString(),metadata:{action:'paper_enter',equity:1000,equityPeak:1000}},
-    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-1000).toISOString(),metadata:{action:'paper_closed',pnl:2,equity:880,equityPeak:1000}}
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-3000).toISOString(),symbol:'A',metadata:{action:'paper_closed',strategyProfile:'spot_trend',assetClass:'crypto_spot',venue:'binance',pnl:10}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-2000).toISOString(),symbol:'B',metadata:{action:'paper_closed',strategyProfile:'spot_trend',assetClass:'crypto_spot',venue:'binance',pnl:-4}},
+    {source:'binance',eventType:'fill',occurredAt:new Date(now-1000).toISOString(),metadata:{pnl:999}}
   ];
-  const risk=calculateUnifiedRisk(events,{now,maxDailyLossUsd:0,maxDrawdownPct:10});
-  assert.equal(risk.paperDrawdownPct,12);
-  assert.equal(risk.newEntriesAllowed,false);
-  assert.ok(risk.pauseReasons.includes('shared_paper_drawdown_limit'));
-  assert.equal(risk.exitsRemainEnabled,true);
+  const report=buildStrategyScorecards(events,{days:30,minTrades:20});
+  assert.equal(report.count,1);
+  assert.equal(report.scorecards[0].trades,2);
+  assert.equal(report.scorecards[0].totalPnlUsd,6);
+  assert.equal(report.scorecards[0].expectancyUsdPerTrade,3);
+  assert.equal(report.scorecards[0].profitFactor,2.5);
+  assert.equal(report.scorecards[0].sampleQuality,'insufficient_sample');
 });
 
-test('missing paper equity telemetry does not fabricate a drawdown estimate', () => {
-  const risk=calculateUnifiedRisk([{source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',pnl:1}}]);
-  assert.equal(risk.paperDrawdownPct,null);
-  assert.equal(risk.newEntriesAllowed,true);
+test('strategy scorecards isolate profiles and ignore events outside the requested window', async () => {
+  const { buildStrategyScorecards } = await import('./universal-engine.js');
+  const events=[
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',strategyProfile:'breakout',pnl:2}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(Date.now()-100*86400000).toISOString(),metadata:{action:'paper_closed',strategyProfile:'breakout',pnl:100}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',strategyProfile:'mean_reversion',pnl:-1}}
+  ];
+  const report=buildStrategyScorecards(events,{days:30,minTrades:3});
+  assert.equal(report.count,2);
+  assert.equal(report.scorecards.find(x=>x.strategyProfile==='breakout').trades,1);
+  assert.equal(report.scorecards.find(x=>x.strategyProfile==='mean_reversion').totalPnlUsd,-1);
 });
 
-test('invalid paper drawdown limit falls back to the safe 10 percent default', () => {
-  const risk=calculateUnifiedRisk([],{maxDrawdownPct:'NaN'});
-  assert.equal(risk.maxDrawdownPct,10);
-  assert.equal(risk.riskConfiguration.valid,false);
-  assert.match(risk.riskConfiguration.warnings.join(' '),/safe default 10/);
+
+test('paper preflight passes only with fresh complete strategy, healthy risk and token security evidence', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const input={profileId:'meme_new_pair',assetClass:'meme_token',observedAt:new Date(now).toISOString(),securityStatus:'passed',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}};
+  const result=evaluatePaperEntryPreflight(input,[],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,true);
+  assert.equal(result.decision,'paper_candidate');
+  assert.equal(result.execution,'No order is created, submitted, or authorized by this endpoint. This is a paper-entry preflight only.');
+});
+
+test('paper preflight blocks stale, incomplete and unverified token evidence', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const result=evaluatePaperEntryPreflight({profileId:'meme_new_pair',assetClass:'meme_token',
+    observedAt:new Date(now-180000).toISOString(),securityStatus:'not-verified',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}},[],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,false);
+  assert.ok(result.reasons.includes('market_evidence_missing_or_stale'));
+  assert.ok(result.reasons.includes('independent_token_security_gate_not_passed'));
+  const missing=evaluatePaperEntryPreflight({profileId:'spot_trend',assetClass:'crypto_spot',
+    observedAt:new Date(now).toISOString(),evidence:{momentumPct:4}},[],now,{maxEvidenceAgeSeconds:90});
+  assert.ok(missing.reasons.includes('strategy_evidence_not_candidate'));
+});
+
+test('paper preflight fails closed when global risk is paused or risk config is invalid', async () => {
+  const { evaluatePaperEntryPreflight } = await import('./universal-engine.js');
+  const now=Date.now();
+  const paused={source:'jpti-control',eventType:'bot_decision',occurredAt:new Date(now).toISOString(),metadata:{action:'global_pause'}};
+  const input={profileId:'meme_new_pair',assetClass:'meme_token',observedAt:new Date(now).toISOString(),securityStatus:'passed',
+    evidence:{momentumPct:10,relativeVolume:2,liquidityUsd:50000}};
+  const result=evaluatePaperEntryPreflight(input,[paused],now,{maxEvidenceAgeSeconds:90});
+  assert.equal(result.allowed,false);
+  assert.ok(result.reasons.includes('global_kill_switch'));
+  const invalid=evaluatePaperEntryPreflight(input,[],now,{maxEvidenceAgeSeconds:90,maxConsecutiveLosses:'bad'});
+  assert.ok(invalid.reasons.includes('risk_configuration_invalid'));
 });

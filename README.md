@@ -23,6 +23,12 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - Smart Money Concepts (SMC) analysis calculated from closed OHLCV candles: three-candle Fair Value Gaps, confirmed swing-high/low liquidity sweeps, close-confirmed BOS/CHoCH structure breaks, and heuristic last-opposing-candle order-block zones.
 - Independent visibility controls for FVG, liquidity sweeps, BOS/CHoCH and order blocks, configurable swing sensitivity (2/3/5/8 bars), chart overlays and an SMC event summary.
 
+**Phase 8 — Unified strategy intelligence and T-Bots paper-entry controls**
+- Authenticated strategy scorecards by strategy profile, calculated from persisted T-Bots paper-closed events only, including expectancy, win rate, profit factor, drawdown, sample-size quality, and venue/asset-class breakdowns.
+- Authenticated paper-entry preflight combining required strategy evidence, server-enforced evidence freshness, persisted global pause state, consecutive-loss limits, daily realized-loss guard and token-security status.
+- T-Bots calls the shared JPTI preflight after its own rug check and before sizing/entry when the authenticated bridge is configured. Failed or unavailable preflight blocks new paper entries; open positions retain their exit logic.
+- New configuration: `JPTI_TBOTS_PREFLIGHT_MAX_EVIDENCE_AGE_SECONDS=90`. See `docs/PHASE_8_STRATEGY_INTELLIGENCE.md`.
+
 **Not yet implemented / not to be mistaken for complete functionality**
 - PostgreSQL-backed persistence requires `JPTI_STORAGE_BACKEND=postgres`, a reachable `DATABASE_URL`, and the documented TLS settings. Local JSONL mode is intended for single-process development; scheduler leader election and multi-instance coordination are not yet implemented.
 - The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Product availability and market classification are exchange-specific; an instrument is only shown when its adapter reports it in the public catalog. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.

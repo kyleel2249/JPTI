@@ -109,6 +109,39 @@ export class JptiBridge {
     }
     return this.risk;
   }
+  async preflightEntry({ token, profileId = 'meme_new_pair', securityPassed = false } = {}) {
+    if (!this.enabled) return { allowed:false, reasons:['JPTI bridge is not configured'] };
+    const id=String(token?.id||token?.symbol||'unknown');
+    const key=id+':'+profileId;
+    const cached=this.entryPreflightCache?.get(key);
+    if(cached&&Date.now()-cached.at<10000)return cached.result;
+    const relativeVolume=Number(token?.volume5mAvgUsd)>0?Number(token.volume5mUsd)/Number(token.volume5mAvgUsd):null;
+    const assetClass=String(token?.assetClass||token?.marketType||'unknown').toLowerCase();
+    const payload={
+      profileId,assetClass,observedAt:token?.fetchedAt||null,
+      securityStatus:securityPassed?'passed':'not-verified',
+      maxEvidenceAgeSeconds:90,
+      evidence:{
+        momentumPct:token?.change1hPct,
+        relativeVolume:Number.isFinite(relativeVolume)?relativeVolume:null,
+        timeframeAlignment:token?.timeframeAlignment,
+        rsi14:token?.rsi14,
+        orderBookImbalance:token?.orderBookImbalance,
+        fundingRate:token?.fundingRate,
+        liquidityUsd:token?.liquidityUsd
+      }
+    };
+    try {
+      const result=await this._request('/universal/entry-preflight',{method:'POST',body:JSON.stringify(payload)});
+      this.entryPreflightCache=this.entryPreflightCache||new Map();
+      this.entryPreflightCache.set(key,{at:Date.now(),result});
+      if(this.entryPreflightCache.size>500)this.entryPreflightCache.delete(this.entryPreflightCache.keys().next().value);
+      return result;
+    } catch(error) {
+      this.lastError=error.message;
+      return {allowed:false,reasons:['JPTI entry preflight unavailable; fail-closed',error.message]};
+    }
+  }
   async refreshDexWatchlist(force = false) {
     if (!this.enabled || this.now() - this.lastDexWatchlistAt < 15000 && !force) return this.dexWatchlist;
     this.lastDexWatchlistAt = this.now();
