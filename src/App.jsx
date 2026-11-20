@@ -69,6 +69,10 @@ function App() {
   const [labTrainBars, setLabTrainBars] = useState(300);
   const [labTestBars, setLabTestBars] = useState(100);
   const [streamData, setStreamData] = useState(null);
+  const [portfolioToken, setPortfolioToken] = useState('');
+  const [portfolioData, setPortfolioData] = useState(null);
+  const [portfolioError, setPortfolioError] = useState('');
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -163,6 +167,18 @@ function App() {
     } catch (error) { setLabError(error.message); }
     finally { setLabLoading(false); }
   }, [forecastExchange, forecastTimeframe, symbol, labTrainBars, labTestBars]);
+
+  const loadPortfolioAccounting = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setPortfolioLoading(true); setPortfolioError('');
+    try {
+      const response = await fetch('/api/advanced/portfolio/accounting', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Portfolio accounting unavailable');
+      setPortfolioData(data);
+    } catch (error) { setPortfolioError(error.message); }
+    finally { setPortfolioLoading(false); }
+  }, [portfolioToken]);
 
   useEffect(() => {
     if (page !== 'Forecast & Strategy') { setStreamData(null); return undefined; }
@@ -334,7 +350,22 @@ function App() {
      </section>;
      if (page === 'Spot & Markets' || page === 'Futures') return <ExchangeConnectivity symbol={symbol} onSymbolChange={setSymbol}/>;
     if (page === 'Market Scanner') return <section className="glass-panel detail-workspace"><span className="eyebrow">LIVE MARKET MONITOR</span><h3>Monitored market universe</h3><p>JPTI samples real exchange tickers on the configured market-monitor interval. Add symbols to the server-side watchlist in your .env file.</p><pre>JPTI_MONITOR_MARKETS=binance:BTC/USDT,bitget:ETH/USDT</pre><div className="scanner-table"><div><span>EXCHANGE</span><span>SYMBOL</span><span>LAST</span><span>24H CHANGE</span><span>QUOTE VOLUME</span></div>{(marketJob?.lastSnapshot || []).map((item) => <div key={item.exchange + item.symbol}><b>{item.exchange}</b><b>{item.symbol}</b><strong>{fmt(item.last)}</strong><strong className={Number(item.percentage) >= 0 ? 'up' : 'down'}>{item.percentage == null ? '—' : fmt(item.percentage) + '%'}</strong><span>{fmt(item.quoteVolume)}</span></div>)}{!marketJob?.lastSnapshot?.length && <p className="empty-state">No live watchlist snapshot yet. Configure JPTI_MONITOR_MARKETS and wait for the next scheduler cycle.</p>}</div>{renderOperations()}</section>;
-    if (page === 'Portfolio & Ledger') return <section className="glass-panel detail-workspace"><span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Append-only ledger</h3><p>{ledger?.eventCount ?? 0} transaction events recorded. This count is a journal count, not an exchange-verified balance. Authenticated weighted-average cost-basis accounting is available at GET /api/advanced/portfolio/accounting.</p><div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div><p className="subtle-note">Authenticated transaction ingestion endpoint: POST /api/operations/ledger/events. Duplicate source/account/external IDs are rejected idempotently.</p><p className="subtle-note">Private transaction details and portfolio accounting require the x-jpti-api-token header. Configure JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT for scheduled read-only fill ingestion.</p>{renderOperations()}</section>;
+    if (page === 'Portfolio & Ledger') return <section className="glass-panel detail-workspace">
+       <span className="eyebrow">PERSISTENT TRANSACTION JOURNAL</span><h3>Portfolio accounting & reconciliation</h3>
+       <p>{ledger?.eventCount ?? 0} transaction events recorded. Configure read-only trade-history keys and the fill watchlist to keep the ledger current.</p>
+       <div className="ledger-summary">{Object.entries(ledger?.byType || {}).map(([key, value]) => <div key={key}><span>{key}</span><b>{value}</b></div>)}</div>
+       <form className="news-search" onSubmit={loadPortfolioAccounting}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token (kept in this page's memory only)"/><button disabled={portfolioLoading || !portfolioToken}>{portfolioLoading ? 'Loading accounts…' : 'Load private portfolio'}</button></form>
+       {portfolioError && <p className="quote-error">{portfolioError}</p>}
+       {portfolioData && <>
+         <div className="quote-consensus-stats"><div><span>OPEN POSITIONS</span><b>{portfolioData.positions.length}</b></div><div><span>ASSET MOVEMENT LINES</span><b>{portfolioData.assetMovements.length}</b></div><div><span>EXCHANGE ACCOUNTS</span><b>{portfolioData.exchangeBalances.length}</b></div><div><span>REALIZED PNL CURRENCIES</span><b>{Object.keys(portfolioData.realizedPnlByQuoteCurrency).length}</b></div></div>
+         <h4>Open positions · weighted-average cost</h4>
+         <div className="scanner-table"><div><span>EXCHANGE / MARKET</span><span>QUANTITY</span><span>AVG COST</span><span>MARK</span><span>UNREALIZED PNL</span></div>{portfolioData.positions.map(p => <div key={p.exchange + p.accountId + p.symbol}><b>{p.exchange} · {p.symbol}</b><span>{fmt(p.quantity)}</span><span>{fmt(p.averageCost)}</span><span>{fmt(p.marketPrice)}</span><strong className={Number(p.unrealizedPnl) >= 0 ? 'up' : 'down'}>{fmt(p.unrealizedPnl)}</strong></div>)}{!portfolioData.positions.length && <p className="empty-state">No fill-based positions have been ingested yet.</p>}</div>
+         <h4>Current exchange balances</h4><div className="news-results">{portfolioData.exchangeBalances.map(b => <div key={b.exchange}><b>{b.exchange.toUpperCase()} · {b.status}</b><small>{b.status === 'ok' ? Object.keys(b.total || {}).length + ' currency balance fields · ' + b.fetchedAt : b.error || 'Balance capability unavailable'}</small></div>)}</div>
+         <p className="subtle-note">{portfolioData.reconciliationNote} {portfolioData.limitations.join(' ')}</p>
+       </>}
+       <p className="subtle-note">Private API token is held only in component memory and is not saved to local storage. Scheduled fill ingestion: JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT. Read-only keys only; withdrawals remain disabled.</p>
+       {renderOperations()}
+     </section>;
     if (page === 'News & Events') return <section className="glass-panel detail-workspace"><span className="eyebrow">GLOBAL NEWS DISCOVERY</span><h3>Market news radar</h3><p>Searches the GDELT global news index. Verify publication time, original reporting and source credibility before using any article as trading evidence.</p><form className="news-search" onSubmit={loadNews}><input value={newsQuery} onChange={(event) => setNewsQuery(event.target.value)} placeholder="Search market, ticker, central bank, event..."/><button disabled={newsLoading}>{newsLoading ? 'Searching...' : 'Search news'}</button></form>{newsError && <p className="subtle-note">{newsError}</p>}<div className="news-results">{newsData.map((article, index) => <a href={article.url} target="_blank" rel="noreferrer" key={article.url || index}><span>{article.domain || article.sourcecountry || 'NEWS SOURCE'} · {article.seendate || 'Timestamp unavailable'}</span><b>{article.title || 'Untitled article'}</b><small>{article.sourcecountry || 'Global'} · Open original source ↗</small></a>)}{!newsData.length && !newsLoading && <p className="empty-state">Search to load current news results.</p>}</div></section>;
     if (page === 'Risk Management') return <section className="glass-panel detail-workspace"><span className="eyebrow">CAPITAL PROTECTION</span><h3>Execution guardrails</h3><div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> USDT spot-only initial live-order policy.</p><p><ShieldCheck/> Per-order notional cap enforced server-side.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>{renderOperations()}</section>;
     if (page === 'Trading Bots' || page === 'AI Intelligence') return <section className="glass-panel detail-workspace"><span className="eyebrow">AGENT ORCHESTRATION</span><h3>{page === 'AI Intelligence' ? 'Explainable intelligence services' : 'Trading automation control'}</h3><p>Agent execution is not represented as active until its worker, strategy, data sources and risk policy are implemented and verified. Current service readiness is shown below.</p>{renderOperations()}</section>;
