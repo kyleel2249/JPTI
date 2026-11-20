@@ -185,3 +185,28 @@ These read-oriented endpoints are mounted under \`/api/advanced\`:
 This stage provides real exchange-fed OHLCV, order books, and exchange-reported derivatives fields where supported, plus deterministic research calculations. It does not claim calibrated forecast probabilities, trained ML models, proven spoofing identification, complete liquidation maps, automated multi-exchange fill ingestion, institutional lot accounting, autonomous AI agents, full parameter optimization, robust walk-forward orchestration, or live smart-order routing. Those require additional data coverage, durable time-series storage, venue-specific streaming adapters, portfolio accounting rules and validation. The current backtest is explicitly in-sample; do not use it as evidence of future profitability.
 
 All routes are read-only except the authenticated reconciliation calculation, which does not mutate the ledger. Existing live order controls remain separate and disabled by default. Keep API credentials server-side.
+
+
+## Walk-forward research, automatic fill ingestion and portfolio accounting
+
+The advanced laboratory is exposed through `api/advanced-lab.js`:
+
+- `POST /api/advanced/lab/walk-forward` — rolling walk-forward EMA research. Supply OHLCV candles and optional `trainBars`, `testBars`, `stepBars`, `fastPeriods`, `slowPeriods` and `feeBps`. Each fold selects parameters using only its preceding training window, then evaluates on a later out-of-sample window. The response separates fold-level training and OOS results and aggregates OOS returns. This is a research baseline, not proof of future profitability.
+- `POST /api/advanced/fills/sync/:exchange` — authenticated, read-only import of private exchange trade history using CCXT `fetchMyTrades`. Requires `x-jpti-api-token`; optional body: `{"symbol":"BTC/USDT","since":1795000000000}`. Trades are normalized into the existing append-only ledger and deduplicated by exchange/account/trade ID. Venue history limits and pagination vary; repeat from the returned time window to backfill older records. This endpoint performs a synchronization when called; it is not a continuously running background polling worker.
+- `GET /api/advanced/portfolio/accounting` — authenticated weighted-average cost-basis accounting from ingested fills, segregated by exchange/account/symbol. It reports realized PnL in each quote currency, remaining position quantity/cost basis, fee totals and unrealized PnL only when a current mark is available from the originating exchange. It is not FIFO or a tax statement. Deposits, withdrawals, transfers, funding, borrow interest, rebates and FX translation are not yet fully journaled.
+- `GET /api/advanced/stream/:exchange/:symbol?intervalMs=2000` — Server-Sent Events stream for live order-book, ticker and supported funding/open-interest snapshots. It polls the exchange through CCXT and emits `intelligence` events; it is not a native venue WebSocket subscription. Disconnect the client to stop polling. Sampling is bounded to 1–15 seconds.
+
+Example walk-forward body:
+```json
+{
+  "candles": [[1795000000000, 100, 102, 99, 101, 1200]],
+  "trainBars": 500,
+  "testBars": 100,
+  "stepBars": 100,
+  "fastPeriods": [5, 9, 12],
+  "slowPeriods": [21, 30, 50],
+  "feeBps": 10
+}
+```
+
+Private exchange keys must be configured server-side with trade-history read permission only where possible; withdrawal permissions should remain disabled. Do not expose the API publicly without TLS, strong authentication, durable database storage, audit controls and rate limiting. The current ledger remains a single-process local JSONL store. Walk-forward output models a simple EMA long/flat strategy; spread, slippage, funding, borrow, market impact, partial fills, taxes and venue-specific execution constraints are not included in its returns.
