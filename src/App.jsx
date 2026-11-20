@@ -18,6 +18,7 @@ const navigation = [
   { label: 'Financial & On-chain', icon: Blocks, group: 'INTELLIGENCE' },
   { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
   { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
+  { label: 'Performance Intelligence', icon: BarChart3, group: 'OPERATIONS' },
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Universal Engine', icon: Network, group: 'RESEARCH' },
@@ -74,6 +75,9 @@ function App() {
   const [streamData, setStreamData] = useState(null);
   const [portfolioToken, setPortfolioToken] = useState('');
   const [portfolioData, setPortfolioData] = useState(null);
+  const [performanceData, setPerformanceData] = useState(null);
+  const [performanceError, setPerformanceError] = useState('');
+  const [performanceLoading, setPerformanceLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState('');
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [reconciliationRun, setReconciliationRun] = useState(null);
@@ -220,6 +224,19 @@ function App() {
     finally { setPortfolioLoading(false); }
   }, [portfolioToken]);
 
+  const loadTradePerformance = useCallback(async () => {
+    setPerformanceLoading(true); setPerformanceError('');
+    try {
+      const response = await fetch('/api/advanced/portfolio/performance', {
+        headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Trade performance analytics unavailable');
+      setPerformanceData(data);
+    } catch (error) { setPerformanceError(error.message); }
+    finally { setPerformanceLoading(false); }
+  }, [portfolioToken]);
+
   const runPortfolioReconciliation = useCallback(async () => {
     setReconciliationBusy(true);
     setReconciliationRun(null);
@@ -260,6 +277,7 @@ function App() {
     'Financial & On-chain': 'Macro, digital-asset, provider and wallet intelligence.',
     'News & Events': 'News discovery and event context from connected sources.',
     'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
+    'Performance Intelligence': 'Ledger-backed realized PnL, trade expectancy, strategy attribution and performance calendar.',
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
@@ -427,6 +445,39 @@ function App() {
            {backfillResult.errors.map((error,index) => <p className="quote-error" key={index}>{error}</p>)}
          </div>}
        </div>
+       <div className="section-heading ops-title"><div><span className="eyebrow">PERFORMANCE & STRATEGY ATTRIBUTION</span><h3>Trade performance intelligence</h3><p>Closed exit executions only; results are separated by quote currency.</p></div><button className="small-refresh" onClick={loadTradePerformance} disabled={performanceLoading || !portfolioToken}>{performanceLoading ? 'Analyzing…' : 'Analyze ledger performance'}</button></div>
+       {performanceError && <p className="quote-error">{performanceError}</p>}
+       {performanceData && <>
+         <div className="quote-consensus-stats">
+           <div><span>RECORDED FILLS</span><b>{performanceData.fillCount}</b></div>
+           <div><span>MATCHED EXIT EXECUTIONS</span><b>{performanceData.matchedExitCount}</b></div>
+           <div><span>UNMATCHED SELL EXECUTIONS</span><b>{performanceData.unmatchedSellExecutions}</b></div>
+           <div><span>STRATEGY LABEL COVERAGE</span><b>{performanceData.fillCount ? Math.round((1-performanceData.dataQuality.unattributedExits/Math.max(1,performanceData.matchedExitCount))*100) + '%' : '—'}</b></div>
+         </div>
+         <h4>Realized performance by quote currency</h4>
+         <div className="scanner-table"><div><span>QUOTE</span><span>NET REALIZED PNL</span><span>WIN RATE</span><span>PROFIT FACTOR</span><span>EXPECTANCY / EXIT</span></div>
+           {performanceData.byCurrency.map(row => <div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong><span>{row.winRatePercent==null?'—':row.winRatePercent.toFixed(1)+'%'}</span><span>{row.profitFactor==null?'—':row.profitFactor.toFixed(2)}</span><span>{fmt(row.expectancyPerExit)}</span></div>)}
+           {!performanceData.byCurrency.length && <p className="empty-state">No matched sell executions yet. Import fills and ensure opening inventory is present.</p>}
+         </div>
+         <h4>Strategy attribution · separated by quote currency</h4>
+         <div className="scanner-table"><div><span>STRATEGY</span><span>QUOTE</span><span>EXITS</span><span>WINS / LOSSES</span><span>NET PNL</span></div>
+           {performanceData.byStrategy.map((row,index)=><div key={row.strategy+row.quoteCurrency+index}><b>{row.strategy}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>Market attribution</h4>
+         <div className="scanner-table"><div><span>MARKET</span><span>QUOTE</span><span>EXITS</span><span>AVERAGE PNL</span><span>NET PNL</span></div>
+           {performanceData.byMarket.map((row,index)=><div key={row.symbol+row.quoteCurrency+index}><b>{row.symbol}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{fmt(row.averagePnl)}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>UTC session attribution</h4>
+         <div className="scanner-table"><div><span>SESSION</span><span>QUOTE</span><span>EXITS</span><span>WINS / LOSSES</span><span>NET PNL</span></div>
+           {performanceData.bySession.map((row,index)=><div key={row.session+row.quoteCurrency+index}><b>{row.session}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
+         </div>
+         <h4>Daily realized PnL calendar data</h4>
+         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span><span>MAX DRAWDOWN</span></div>
+           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong><span>{fmt(currency.maxDrawdownCurrency)} {currency.quoteCurrency}</span></div>))}
+         </div>
+         <div className="risk-list">{performanceData.dataQuality.warnings.map((warning,index)=><p key={index}><ShieldCheck/>{warning}</p>)}</div>
+         <p className="subtle-note">{performanceData.methodology} {performanceData.limitations.join(' ')}</p>
+       </>}
        {portfolioError && <p className="quote-error">{portfolioError}</p>}
        {portfolioData && <>
          <div className="quote-consensus-stats"><div><span>OPEN POSITIONS</span><b>{portfolioData.positions.length}</b></div><div><span>ASSET MOVEMENT LINES</span><b>{portfolioData.assetMovements.length}</b></div><div><span>EXCHANGE ACCOUNTS</span><b>{portfolioData.exchangeBalances.length}</b></div><div><span>REALIZED PNL CURRENCIES</span><b>{Object.keys(portfolioData.realizedPnlByQuoteCurrency).length}</b></div></div>
