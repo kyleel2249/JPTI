@@ -4,7 +4,7 @@ import { DEFAULT_PROMPT } from './prompt-template.js';
 import { parsePrompt } from './prompt-parser.js';
 import { PromptManager } from './prompt-manager.js';
 import { SimFeed } from './market/sim-feed.js';
-import { LiveFeed } from './market/live-feed.js';
+import { UniversalFeed } from './market/universal-feed.js';
 import { SimClock, RealClock } from './core/clock.js';
 import { Orchestrator } from './core/orchestrator.js';
 import { Dashboard } from './ui/dashboard.js';
@@ -101,8 +101,8 @@ async function start() {
   cfg.scanner.assetProfile = $('selAssetProfile')?.value || 'meme_new_pair';
   store.set('grokbot.assetProfile', cfg.scanner.assetProfile);
   const clock = mode === 'live' ? new RealClock(sessionLen(cfg)) : new SimClock(cfg.session.startTime, cfg.session.endTime);
-  const feed = mode === 'live' ? new LiveFeed() : new SimFeed({ seed });
   jptiBridge.setToken($('jptiApiToken')?.value || '');
+  const feed = mode === 'live' ? new UniversalFeed({ bridge:jptiBridge }) : new SimFeed({ seed });
   orch = new Orchestrator({ config: cfg, feed, clock, seed });
   runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${seed}`;
   paused = false;
