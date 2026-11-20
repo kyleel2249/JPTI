@@ -11,6 +11,7 @@ export function calculateTradePerformance(events = []) {
   const ordered = [...events].filter(e => e?.eventType === 'fill')
     .sort((a,b) => Date.parse(a.occurredAt || 0) - Date.parse(b.occurredAt || 0));
   const books = new Map(), exits = [], warnings = new Set();
+  let unmatchedSellExecutions = 0, unmatchedSellQuantity = 0;
   for (const event of ordered) {
     const [base, quote] = String(event.symbol || '').split('/');
     const qty = number(event.quantity), price = number(event.price), fee = number(event.fee ?? 0);
@@ -32,7 +33,11 @@ export function calculateTradePerformance(events = []) {
       const unmatched = Math.max(0, disposed - matched);
       const proceeds = qty * price - (feeCurrency === quote ? fee : 0);
       const realized = matched > 0 ? proceeds * (matched / disposed) - book.averageCost * matched : null;
-      if (unmatched > 1e-12) warnings.add('Unmatched sell quantity exists; missing opening inventory or incomplete fill history prevents full cost-basis attribution.');
+      if (unmatched > 1e-12) {
+        unmatchedSellExecutions++;
+        unmatchedSellQuantity += unmatched;
+        warnings.add('Unmatched sell quantity exists; missing opening inventory or incomplete fill history prevents full cost-basis attribution.');
+      }
       const strategy = String(event.metadata?.strategyId || event.metadata?.strategy || event.metadata?.botId || 'unattributed').slice(0,80);
       if (matched > 1e-12) exits.push({
         occurredAt: event.occurredAt || null, date: new Date(event.occurredAt || Date.now()).toISOString().slice(0,10),
@@ -79,10 +84,10 @@ export function calculateTradePerformance(events = []) {
   }).sort((a,b)=>b.netRealizedPnl-a.netRealizedPnl);
   const thirdCurrencyFees = exits.filter(x=>x.thirdCurrencyFee>0).map(x=>({exchange:x.exchange,symbol:x.symbol,currency:x.feeCurrency,amount:x.thirdCurrencyFee}));
   return { generatedAt:new Date().toISOString(), methodology:'Weighted-average cost per exchange/account/market. Each sell execution is one closed-exit observation; partial exits are not merged into synthetic round trips. Results are separated by quote currency.',
-    fillCount:ordered.length, matchedExitCount:exits.length, unmatchedSellExecutions:exits.filter(x=>x.unmatchedQuantity>0).length,
+    fillCount:ordered.length, matchedExitCount:exits.length, unmatchedSellExecutions,
     byCurrency, byStrategy:group('strategy'), byMarket:group('symbol'), byExchange:group('exchange'), bySession:group('session'),
     recentExits:exits.slice(-100).reverse(), thirdCurrencyFees,
-    dataQuality:{warnings:[...warnings],unmatchedSellQuantity:exits.reduce((s,x)=>s+x.unmatchedQuantity,0),
+    dataQuality:{warnings:[...warnings],unmatchedSellQuantity,
       unattributedExits:exits.filter(x=>x.strategy==='unattributed').length,
       note:'Profit factor, expectancy and drawdown are calculated separately by quote currency. Do not add USD, USDT, BTC or other quote-currency values together without timestamp-aligned FX conversion.'},
     limitations:['This is ledger-derived realized trading performance, not total account return. It excludes open-position mark-to-market PnL.',
