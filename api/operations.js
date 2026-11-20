@@ -1,6 +1,5 @@
 import express from 'express';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { appendStoredEvent, appendUniqueLedgerEvent, getSyncCursor, getStorageStatus, readStoredEvents, setSyncCursor } from './storage.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { withExchange, listExchangeCatalog } from './exchanges.js';
@@ -9,8 +8,6 @@ import { getOperationalIntervals, providerDirectory } from './providers.js';
 import { requirePrivateApiAuth } from './policy.js';
 
 export const operationsRouter = express.Router();
-const dataFile = resolve(process.env.JPTI_DATA_DIR || 'data', 'jpti-events.jsonl');
-let writeQueue = Promise.resolve();
 const jobState = new Map();
 let schedulerStarted = false;
 let lastMonitorPersistAt = 0;
@@ -33,24 +30,11 @@ export const eventSchema = z.object({
 });
 
 async function readEvents(limit = 20000) {
-  try {
-    const raw = await readFile(dataFile, 'utf8');
-    return raw.split('\n').filter(Boolean).slice(-limit).map((line) => {
-      try { return JSON.parse(line); } catch { return null; }
-    }).filter(Boolean);
-  } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
-  }
+  return readStoredEvents(limit);
 }
 
 async function persistEvent(event) {
-  writeQueue = writeQueue.catch(() => {}).then(async () => {
-    await mkdir(dirname(dataFile), { recursive: true });
-    await appendFile(dataFile, JSON.stringify(event) + '\n', { encoding: 'utf8', mode: 0o600 });
-  });
-  await writeQueue;
-  return event;
+  return appendStoredEvent(event);
 }
 
 
@@ -64,19 +48,10 @@ export async function getLedgerTransactions() {
 }
 
 async function persistLedgerTransaction(parsed) {
-  let result;
-  writeQueue = writeQueue.catch(() => {}).then(async () => {
-    const events = await readEvents();
-    const duplicate = events.find((event) => event.kind === 'ledger-transaction' && event.source === parsed.source && event.accountId === parsed.accountId && event.externalId === parsed.externalId && event.symbol === parsed.symbol);
-    if (duplicate) { result = { duplicate: true, event: duplicate }; return; }
-    const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
-    await mkdir(dirname(dataFile), { recursive: true });
-    await appendFile(dataFile, JSON.stringify(event) + '\n', { encoding: 'utf8', mode: 0o600 });
-    result = { duplicate: false, event };
-  });
-  await writeQueue;
-  return result;
+  const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
+  return appendUniqueLedgerEvent(event);
 }
+
 
 function job(id, intervalSeconds, status, detail, extra = {}) {
   const previous = jobState.get(id) || {};
@@ -129,7 +104,6 @@ async function marketMonitor() {
   });
 }
 
-const fillCursors = new Map();
 async function exchangeFillMonitor() {
   const watchlist = String(process.env.JPTI_FILL_SYNC_MARKETS || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 20);
   if (!watchlist.length) {
@@ -142,7 +116,7 @@ async function exchangeFillMonitor() {
     if (split < 1) throw new Error('Invalid fill watchlist entry: ' + entry);
     const exchangeId = entry.slice(0, split).toLowerCase(), symbol = entry.slice(split + 1).toUpperCase();
     const cursorKey = exchangeId + ':' + symbol;
-    const since = fillCursors.get(cursorKey) || Date.now() - 24 * 60 * 60 * 1000;
+    const since = await getSyncCursor(cursorKey, Date.now() - 24 * 60 * 60 * 1000);
     const trades = await withExchange(exchangeId, { privateAccess: true }, async ex => {
       if (!ex.has?.fetchMyTrades) throw new Error('fetchMyTrades unavailable on ' + exchangeId);
       if (!ex.markets[symbol]) throw new Error('Unknown fill-watchlist market ' + symbol);
@@ -161,7 +135,7 @@ async function exchangeFillMonitor() {
       if (saved.duplicate) duplicates++; else ingested++;
       newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
     }
-    fillCursors.set(cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
+    await setSyncCursor(cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
     return { exchange: exchangeId, symbol, fetched: trades.length, ingested, duplicates };
   }));
   const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
@@ -263,6 +237,7 @@ export function getOperationsSnapshot() {
   ];
   return {
     generatedAt: new Date().toISOString(),
+    storage: getStorageStatus(),
     startedAt,
     uptimeSeconds: Math.floor(process.uptime()),
     schedulerEnabled: intervals.schedulerEnabled,
