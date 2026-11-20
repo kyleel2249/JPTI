@@ -15,12 +15,12 @@ export function normalizeDexPair(pair) {
     url: pair?.url || null,
     base: { address: pair?.baseToken?.address || null, symbol: pair?.baseToken?.symbol || null, name: pair?.baseToken?.name || null },
     quote: { address: pair?.quoteToken?.address || null, symbol: pair?.quoteToken?.symbol || null, name: pair?.quoteToken?.name || null },
-    priceUsd: finite(pair?.priceUsd), liquidityUsd: liquidity, volume24hUsd: volume24h, volume1hUsd: volume1h,
+    priceUsd: finite(pair?.priceUsd), liquidityUsd: liquidity, volume24hUsd: volume24h, volume1hUsd: volume1h, volume5mUsd: finite(pair?.volume?.m5) ?? 0,
     priceChange24hPercent: priceChange24h, priceChange1hPercent: priceChange1h,
     fdvUsd: finite(pair?.fdv), marketCapUsd: finite(pair?.marketCap),
     pairCreatedAt: createdAt ? new Date(createdAt).toISOString() : null,
     ageHours: createdAt ? Math.max(0, (Date.now() - createdAt) / 3600000) : null,
-    txns: { h1: pair?.txns?.h1 || null, h24: pair?.txns?.h24 || null },
+    txns: { m5: pair?.txns?.m5 || null, h1: pair?.txns?.h1 || null, h24: pair?.txns?.h24 || null },
     labels: Array.isArray(pair?.labels) ? pair.labels.slice(0, 12) : []
   };
 }
