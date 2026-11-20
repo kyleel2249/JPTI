@@ -2,6 +2,7 @@ import express from 'express';
 import { withExchange } from './exchanges.js';
 import { requirePrivateApiAuth } from './policy.js';
 import { ingestLedgerEvent, getLedgerTransactions } from './operations.js';
+import { analyzeOrderBook } from './advanced-intelligence.js';
 
 export const labRouter = express.Router();
 const finite = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
@@ -241,14 +242,18 @@ labRouter.get('/advanced/stream/:exchange/:symbol', async (req, res) => {
         const market = ex.markets[symbol];
         if (!market) throw Object.assign(new Error('Market not found.'), { status: 404 });
         const jobs = {};
-        if (ex.has?.fetchOrderBook) jobs.orderBook = ex.fetchOrderBook(symbol, 50);
-        if (market.contract && ex.has?.fetchFundingRate) jobs.funding = ex.fetchFundingRate(symbol);
-        if (market.contract && ex.has?.fetchOpenInterest) jobs.openInterest = ex.fetchOpenInterest(symbol);
-        if (ex.has?.fetchTicker) jobs.ticker = ex.fetchTicker(symbol);
+        if (ex.has?.fetchOrderBook) jobs.orderBook = ex.fetchOrderBook(symbol, 50).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchFundingRate) jobs.funding = ex.fetchFundingRate(symbol).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchOpenInterest) jobs.openInterest = ex.fetchOpenInterest(symbol).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchLiquidations) jobs.liquidations = ex.fetchLiquidations(symbol, undefined, 50).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchFundingRateHistory) jobs.fundingHistory = ex.fetchFundingRateHistory(symbol, undefined, 20).catch(error => ({ unavailable: error.message }));
+        if (market.contract && ex.has?.fetchOpenInterestHistory) jobs.openInterestHistory = ex.fetchOpenInterestHistory(symbol, undefined, '1h', 20).catch(error => ({ unavailable: error.message }));
+        if (ex.has?.fetchTicker) jobs.ticker = ex.fetchTicker(symbol).catch(error => ({ unavailable: error.message }));
         const pairs = await Promise.all(Object.entries(jobs).map(async ([k,p]) => [k, await p]));
         return Object.fromEntries(pairs);
       });
       const payload = { exchange: exchangeId, symbol, sampledAt: new Date().toISOString(), ...snapshot,
+        orderBookAnalysis: snapshot.orderBook && !snapshot.orderBook.unavailable ? analyzeOrderBook(snapshot.orderBook) : { status: 'unavailable' },
         transport: 'server-sent events over polling; venue websocket capability is not assumed' };
       if (!closed) res.write('event: intelligence\ndata: ' + JSON.stringify(payload) + '\n\n');
     } catch (e) {
