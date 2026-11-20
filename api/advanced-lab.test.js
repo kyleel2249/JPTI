@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runWalkForward, calculatePortfolioAccounting } from './advanced-lab.js';
+import { runWalkForward, calculatePortfolioAccounting, calculatePortfolioRisk } from './advanced-lab.js';
 
 const candles = Array.from({ length: 1000 }, (_, i) => {
   const close = 100 + i * 0.025 + Math.sin(i / 8) * 2;
@@ -73,4 +73,26 @@ test('walk-forward laboratory supports RSI and Donchian strategy families', () =
     assert.ok(result.folds.every(f => Object.keys(f.selectedParameters).length > 0));
   }
   assert.throws(() => runWalkForward(candles, { strategy: 'unknown' }), /Unsupported strategy/);
+});
+
+test('portfolio risk keeps quote currencies separate and calculates historical VaR and stress losses', () => {
+  const history = Array.from({ length: 80 }, (_, i) => {
+    const close = 100 * Math.pow(1 + (i % 7 === 0 ? -0.025 : 0.004), i);
+    return [1700000000000 + i * 86400000, close, close * 1.01, close * .99, close, 1000];
+  });
+  const positions = [
+    { exchange: 'binance', symbol: 'BTC/USDT', quote: 'USDT', quantity: 1, marketPrice: 100 },
+    { exchange: 'okx', symbol: 'ETH/USDT', quote: 'USDT', quantity: 2, marketPrice: 50 },
+    { exchange: 'kraken', symbol: 'BTC/USD', quote: 'USD', quantity: 1, marketPrice: 100 }
+  ];
+  const result = calculatePortfolioRisk(positions, {
+    'binance:BTC/USDT': history, 'okx:ETH/USDT': history, 'kraken:BTC/USD': history
+  });
+  assert.equal(result.portfolios.length, 2);
+  const usdt = result.portfolios.find(p => p.quoteCurrency === 'USDT');
+  assert.equal(usdt.grossExposure, 200);
+  assert.ok(usdt.historical.observations >= 20);
+  assert.ok(Number.isFinite(usdt.historical.var95Percent));
+  assert.equal(usdt.stress.estimatedLoss, 30);
+  assert.ok(usdt.concentration.effectivePositions > 1);
 });
