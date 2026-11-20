@@ -52,6 +52,14 @@
               <option value="sim">Simulated market (seeded, replayable)</option>
               <option value="live">Live DEX data (DexScreener + RugCheck)</option>
             </select>
+            <label for="selAssetProfile">Universal asset strategy</label>
+            <select id="selAssetProfile">
+              <option value="meme_new_pair">New listings / meme tokens</option>
+              <option value="established_token">Established tokens</option>
+              <option value="defi_rotation">DeFi token rotation</option>
+              <option value="breakout">Cross-asset breakout</option>
+              <option value="mean_reversion">Mean-reversion scan</option>
+            </select>
             <label for="inSeed">Seed</label>
             <input id="inSeed" type="number" min="1" max="999999" value="7">
             <label for="selSpeed">Speed</label>
