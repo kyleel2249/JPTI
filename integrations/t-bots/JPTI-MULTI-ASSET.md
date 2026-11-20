@@ -33,9 +33,9 @@ Start JPTI API and UI with npm run dev:all, open http://localhost:8787/t-bots/, 
 T-Bots now has selectable DEX scan profiles in the session composer:
 - `meme_new_pair` — strict recent-pair screen.
 - `established_token` — removes the new-pair age ceiling while retaining liquidity, holder and independent security checks.
-- `defi_rotation` — DeFi-oriented discovery profile; protocol TVL/fees are contextual only when a verified protocol mapping exists.
-- `breakout` — liquid token momentum/breakout discovery.
-- `mean_reversion` — liquid token range/reversion discovery.
+- `defi_rotation` — monitor-only until a verified token-to-protocol mapping, TVL change, fees change and protocol-risk score are available.
+- `breakout` — liquid token momentum-breakout discovery; it is not a validated range-breakout/retest strategy.
+- `mean_reversion` — requires JPTI RSI14 evidence; the current automatic RSI source is the configured CEX 5-minute feed. DEX tokens without RSI are blocked from new entries.
 
 When the JPTI bridge is connected, the live feed also merges a server-configured DEX contract watchlist (for established/older tokens) and a CEX spot watchlist with the live multi-chain DEX discovery feed. Configure in the JPTI server-side `.env`:
 
