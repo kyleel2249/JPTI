@@ -281,3 +281,18 @@ Authenticated outbox routes (send `x-jpti-api-token`):
 - `POST /api/operations/outbox/:id/retry` — release a failed message for retry with optional `error` and `delayMs` fields. The retry delay is bounded.
 
 Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once. If a consumer completes its side effect and crashes before acknowledgement, the message may be delivered again after its lease expires. Use the stable `event_id` as the consumer's deduplication key. PostgreSQL is required for transactional outbox claiming and acknowledgement. File mode retains replay-safe ledger insertion followed by cursor advancement, but those two writes are not a single crash-atomic transaction and no distributed outbox is available; use PostgreSQL for multi-instance production operation. No live orders or transfers are executed by this feature.
+
+
+## Ledger-backed trade performance intelligence
+
+The Portfolio & Ledger workspace includes an authenticated performance report at `GET /api/advanced/portfolio/performance`. It calculates realized PnL by quote currency, closed sell-execution win rate, profit factor, expectancy, average win/loss, realized-equity drawdown, daily realized PnL, and attribution by strategy, market, exchange and coarse UTC session. Strategy attribution uses `metadata.strategyId`, `metadata.strategy` or `metadata.botId`; otherwise the fill is explicitly unattributed.
+
+The report uses weighted-average cost per exchange/account/market. It does not call a sell a completed round trip: each matched sell execution is one exit observation. Unmatched sells are counted and warned about, third-currency fees are itemized without invented FX conversion, and quote currencies are never combined. This is realized ledger performance, not total account return or tax reporting. Open-position mark-to-market and derivatives funding remain outside this fill-only report.
+
+## Cloudflare hosting
+
+For the current architecture, deploy the Vite frontend to Cloudflare Pages and run the Node/Express/CCXT API on a separate Node.js host with managed PostgreSQL. A Pages Function under `functions/api/[[path]].js` proxies `/api/*` to that API over HTTPS. Set `JPTI_API_ORIGIN` and the secret `JPTI_EDGE_SECRET` in the Pages project; set the same edge secret plus `JPTI_REQUIRE_EDGE_SECRET=true` on the API host to block requests that bypass the Cloudflare proxy.
+
+Exact Pages settings, API host environment variables, secret generation, deployment verification, custom domain setup and the Workers-vs-Pages decision are documented in [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOYMENT.md).
+
+**Cloudflare Pages settings:** Framework preset React (Vite); root directory `/`; build command `npm run build`; output directory `dist`; Node.js version `22`. The existing Express API is not a static Pages asset and is not deployed by the Vite build. A future Workers backend migration must separately validate CCXT, PostgreSQL, filesystem use and scheduler behavior.
