@@ -55,3 +55,11 @@ test('portfolio journal tracks deposits, withdrawals, funding and transfers as c
   assert.equal(usdt.netMovement, 84.5);
   assert.equal(usdc.netMovement, 9.99);
 });
+
+test('accounting flags sells with missing opening inventory rather than inventing cost basis', () => {
+  const result = calculatePortfolioAccounting([
+    { eventType: 'fill', source: 'binance', accountId: 'main', symbol: 'SOL/USDT', side: 'sell', quantity: 3, price: 25, occurredAt: '2026-02-01T00:00:00.000Z' }
+  ]);
+  assert.equal(result.positions[0].unmatchedSellQuantity, 3);
+  assert.equal(result.positions[0].realizedPnl, 0);
+});
