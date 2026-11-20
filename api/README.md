@@ -211,3 +211,6 @@ Example walk-forward body:
 ```
 
 Private exchange keys must be configured server-side with trade-history read permission only where possible; withdrawal permissions should remain disabled. Do not expose the API publicly without TLS, strong authentication, durable database storage, audit controls and rate limiting. The current ledger remains a single-process local JSONL store. Walk-forward output models a simple EMA long/flat strategy; spread, slippage, funding, borrow, market impact, partial fills, taxes and venue-specific execution constraints are not included in its returns.
+
+
+The ledger schema also accepts `funding`, `interest`, `borrow` and `rebate` event types. For signed cash flows, provide `currency`, `quantity` and `metadata.signedAmount` (positive for a credit, negative for a debit). A `transfer` event should include `metadata.fromCurrency`, `metadata.fromAmount`, `metadata.toCurrency` and `metadata.toAmount`. The accounting response exposes net movements by exchange/account/currency; these are not absolute balances unless a verified opening balance and complete history are supplied. Sells exceeding the known inventory are flagged as unmatched rather than assigned an invented cost basis.
