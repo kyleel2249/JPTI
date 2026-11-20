@@ -3,6 +3,7 @@ import { withExchange } from './exchanges.js';
 import { requirePrivateApiAuth } from './policy.js';
 import { ingestLedgerEvent, getLedgerTransactions } from './operations.js';
 import { analyzeOrderBook } from './advanced-intelligence.js';
+import { calculateTradePerformance } from './performance.js';
 
 export const labRouter = express.Router();
 const finite = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
@@ -314,6 +315,17 @@ labRouter.post('/advanced/lab/walk-forward', (req, res) => {
   try { res.json(runWalkForward(req.body?.candles, req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
+labRouter.get('/advanced/portfolio/performance', async (req, res) => {
+  try {
+    requirePrivateApiAuth(req);
+    const events = await getLedgerTransactions();
+    const report = calculateTradePerformance(events);
+    res.set('Cache-Control', 'no-store').json(report);
+  } catch (error) {
+    res.status(error.status || 400).json({ error: error.message || 'Trade performance analytics unavailable.' });
+  }
+});
+
 labRouter.get('/advanced/portfolio/risk', async (req, res) => {
   try {
     requirePrivateApiAuth(req);
