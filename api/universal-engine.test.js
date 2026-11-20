@@ -122,3 +122,34 @@ test('exchange sells exceeding recorded inventory are reported instead of fabric
   assert.equal(result.unmatchedSellQuantityBySymbol['ETH/USDT'],0.5);
   assert.equal(result.openInventory.length,0);
 });
+
+
+test('strategy scorecards compute expectancy and keep low sample sizes visibly unqualified', async () => {
+  const { buildStrategyScorecards } = await import('./universal-engine.js');
+  const now=Date.now();
+  const events=[
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-3000).toISOString(),symbol:'A',metadata:{action:'paper_closed',strategyProfile:'spot_trend',assetClass:'crypto_spot',venue:'binance',pnl:10}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(now-2000).toISOString(),symbol:'B',metadata:{action:'paper_closed',strategyProfile:'spot_trend',assetClass:'crypto_spot',venue:'binance',pnl:-4}},
+    {source:'binance',eventType:'fill',occurredAt:new Date(now-1000).toISOString(),metadata:{pnl:999}}
+  ];
+  const report=buildStrategyScorecards(events,{days:30,minTrades:20});
+  assert.equal(report.count,1);
+  assert.equal(report.scorecards[0].trades,2);
+  assert.equal(report.scorecards[0].totalPnlUsd,6);
+  assert.equal(report.scorecards[0].expectancyUsdPerTrade,3);
+  assert.equal(report.scorecards[0].profitFactor,2.5);
+  assert.equal(report.scorecards[0].sampleQuality,'insufficient_sample');
+});
+
+test('strategy scorecards isolate profiles and ignore events outside the requested window', async () => {
+  const { buildStrategyScorecards } = await import('./universal-engine.js');
+  const events=[
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',strategyProfile:'breakout',pnl:2}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date(Date.now()-100*86400000).toISOString(),metadata:{action:'paper_closed',strategyProfile:'breakout',pnl:100}},
+    {source:'tbots',eventType:'bot_trade',occurredAt:new Date().toISOString(),metadata:{action:'paper_closed',strategyProfile:'mean_reversion',pnl:-1}}
+  ];
+  const report=buildStrategyScorecards(events,{days:30,minTrades:3});
+  assert.equal(report.count,2);
+  assert.equal(report.scorecards.find(x=>x.strategyProfile==='breakout').trades,1);
+  assert.equal(report.scorecards.find(x=>x.strategyProfile==='mean_reversion').totalPnlUsd,-1);
+});
