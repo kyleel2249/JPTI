@@ -66,7 +66,7 @@ function App() {
   const [labData, setLabData] = useState(null);
   const [labError, setLabError] = useState('');
   const [labLoading, setLabLoading] = useState(false);
-  const [labTrainBars, setLabTrainBars] = useState(500);
+  const [labTrainBars, setLabTrainBars] = useState(300);
   const [labTestBars, setLabTestBars] = useState(100);
   const [streamData, setStreamData] = useState(null);
 
@@ -154,11 +154,9 @@ function App() {
     if (event) event.preventDefault();
     setLabLoading(true); setLabError('');
     try {
-      const url = '/api/exchanges/' + encodeURIComponent(forecastExchange) + '/ohlcv/' + encodeURIComponent(symbol) + '?timeframe=' + encodeURIComponent(forecastTimeframe) + '&limit=1000';
-      const historyResponse = await fetch(url, { cache: 'no-store' });
-      const history = await historyResponse.json();
-      if (!historyResponse.ok) throw new Error(history.error || 'Exchange history unavailable');
-      const response = await fetch('/api/advanced/lab/walk-forward', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ candles: history.candles, trainBars: Number(labTrainBars), testBars: Number(labTestBars), stepBars: Number(labTestBars), feeBps: 10 }) });
+      const params = new URLSearchParams({ timeframe: forecastTimeframe, limit: '1000', trainBars: String(labTrainBars), testBars: String(labTestBars), stepBars: String(labTestBars), feeBps: '10' });
+      const url = '/api/advanced/lab/walk-forward/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?' + params.toString();
+      const response = await fetch(url, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Walk-forward research failed');
       setLabData(data);
