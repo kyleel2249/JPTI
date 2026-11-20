@@ -245,7 +245,7 @@ operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
   try {
     const events = await readEvents();
     const transactions = events.filter((e) => e.kind === 'ledger-transaction');
-    const byType = Object.fromEntries(['fill','deposit','withdrawal','fee','transfer','adjustment'].map((type) => [type, transactions.filter((e) => e.eventType === type).length]));
+    const byType = Object.fromEntries(['fill','deposit','withdrawal','fee','transfer','adjustment','funding','interest','borrow','rebate'].map((type) => [type, transactions.filter((e) => e.eventType === type).length]));
     res.json({ eventCount: transactions.length, byType, lastEventAt: transactions.at(-1)?.occurredAt || null, note: 'This is an append-only transaction event count, not a reconciled balance or realized PnL statement.' });
   } catch (error) { next(error); }
 });
