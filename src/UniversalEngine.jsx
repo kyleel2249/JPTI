@@ -22,6 +22,7 @@ export default function UniversalEngine() {
   const [macro,setMacro]=useState(null);
   const [risk,setRisk]=useState(null);
   const [performance,setPerformance]=useState(null);
+  const [portfolio,setPortfolio]=useState(null);
   const [controlStatus,setControlStatus]=useState('');
   const [controlBusy,setControlBusy]=useState(false);
   const [error,setError]=useState('');
@@ -55,10 +56,10 @@ export default function UniversalEngine() {
     setLoading(true);setError('');
     try{
       const headers={'x-jpti-api-token':token};
-      const [r1,r2]=await Promise.all([fetch('/api/universal/risk',{headers,cache:'no-store'}),fetch('/api/universal/performance',{headers,cache:'no-store'})]);
-      const [a,b]=await Promise.all([r1.json(),r2.json()]);
-      if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');
-      setRisk(a);setPerformance(b);
+      const [r1,r2,r3]=await Promise.all([fetch('/api/universal/risk',{headers,cache:'no-store'}),fetch('/api/universal/performance',{headers,cache:'no-store'}),fetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
+      const [a,b,c]=await Promise.all([r1.json(),r2.json(),r3.json()]);
+      if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');if(!r3.ok)throw new Error(c.error||'Portfolio valuation unavailable');
+      setRisk(a);setPerformance(b);setPortfolio(c);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[token]);
 
@@ -146,9 +147,15 @@ export default function UniversalEngine() {
     <p className="subtle-note">Sources: {Object.entries(macro.sources||{}).map(([k,v])=>k+': '+v.status).join(' · ')}. Missing providers remain unavailable, not zero.</p></>}
 
     <div className="section-heading"><div><span className="eyebrow">PORTFOLIO-WIDE CONTROL</span><h3>Unified risk & performance</h3></div></div>
-    <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!token}>{loading?'Loading…':'Load unified risk & performance'}</button></div>
+    <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!token}>{loading?'Loading…':'Load risk, performance & portfolio'}</button></div>
     {risk&&<><div className="news-search"><button onClick={()=>setGlobalControl('pause_new_entries')} disabled={controlBusy||!token}>Pause all new T-Bots entries</button><button onClick={()=>setGlobalControl('resume_new_entries')} disabled={controlBusy||!token}>Resume new entries</button></div>{controlStatus&&<p className="subtle-note">{controlStatus}</p>}<div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>GLOBAL PAUSE</span><b>{risk.globalPaused?'ON':'OFF'}</b><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
     {performance&&<><div className="quote-consensus-stats"><div><span>T-BOTS CLOSED PAPER TRADES</span><b>{performance.paperStrategy.closedTrades}</b></div><div><span>PAPER WIN RATE</span><b>{performance.paperStrategy.winRatePercent==null?'—':fmt(performance.paperStrategy.winRatePercent)+'%'}</b></div><div><span>PAPER REALIZED PNL</span><b>{fmt(performance.paperStrategy.realizedPnlUsd)} USD</b></div><div><span>EXCHANGE FILLS</span><b>{performance.exchangeExecution.fillCount}</b></div></div><p className="subtle-note">{performance.caveat}</p></>}
+    {portfolio&&<><div className="section-heading"><div><span className="eyebrow">RECORDED EXCHANGE INVENTORY</span><h3>Spot portfolio mark-to-market</h3></div><span className="subtle-note">{portfolio.positions?.length||0} recorded open positions</span></div>
+      {Object.keys(portfolio.byQuote||{}).length>0?<><div className="quote-consensus-stats">{Object.entries(portfolio.byQuote).map(([quote,row])=><div key={quote}><span>{quote} · COST BASIS</span><b>{fmt(row.costBasis)}</b><span>MARKET VALUE</span><b>{fmt(row.marketValue)}</b><span>UNREALIZED PNL</span><b>{fmt(row.unrealizedPnl)}</b></div>)}</div>
+      <div className="scanner-table"><div><span>VENUE / SYMBOL</span><span>QUANTITY</span><span>AVG COST</span><span>MARK</span><span>UNREALIZED PNL</span></div>{portfolio.positions.map((p,i)=><div key={p.exchange+':'+p.accountId+':'+p.symbol+':'+i}><b>{p.exchange} · {p.symbol}</b><span>{fmt(p.quantity)}</span><span>{fmt(p.averageCost)} {p.quote}</span><span>{p.status==='marked'?fmt(p.markPrice):'Unavailable'}</span><strong>{p.status==='marked'?fmt(p.unrealizedPnl)+' '+p.quote:'Unmarked'}</strong></div>)}</div></>:<p className="subtle-note">No open spot inventory can currently be reconstructed from recorded exchange fills.</p>}
+      <p className="subtle-note">{portfolio.valuation} {portfolio.caveat}</p>
+      <p className="subtle-note">Unmatched sell quantity by symbol: {Object.entries(portfolio.unmatchedSellQuantityBySymbol||{}).map(([q,v])=>q+' '+fmt(v)).join(' · ')||'None recorded'}. Cash balances and unrecorded opening inventory are not included.</p>
+    </>}
     {error&&<p className="quote-error">{error}</p>}
   </section>;
 }
