@@ -88,9 +88,39 @@ export function runWalkForward(candles, options = {}) {
     caveats: ['Research baseline, not a profitability claim.', 'Fees are modeled; spread, funding, borrow, market impact, latency, partial fills and taxes are not.', 'Use venue-specific data quality checks and additional untouched holdout data before deployment.'] };
 }
 export function calculatePortfolioAccounting(events, marks = {}) {
-  const ordered = [...events].filter(e => e.eventType === 'fill').sort((a,b) => new Date(a.occurredAt) - new Date(b.occurredAt));
-  const positions = new Map(), realizedByQuote = {}, feesByCurrency = {};
+  const ordered = [...events].sort((a,b) => new Date(a.occurredAt) - new Date(b.occurredAt));
+  const positions = new Map(), realizedByQuote = {}, feesByCurrency = {}, movementMap = new Map();
+  const movement = (e, currency, amount) => {
+    if (!currency || !Number.isFinite(amount) || amount === 0) return;
+    const key = e.accountId + ':' + e.source + ':' + currency;
+    const row = movementMap.get(key) || { accountId: e.accountId, exchange: e.source, currency, netMovement: 0 };
+    row.netMovement += amount;
+    movementMap.set(key, row);
+  };
   for (const e of ordered) {
+    if (e.eventType === 'fill') {
+      const [base, quote] = String(e.symbol || '').split('/');
+      const qty = finite(e.quantity), price = finite(e.price), fee = finite(e.fee || 0);
+      if (base && quote && qty != null && price != null && qty > 0 && price > 0) {
+        const baseDelta = e.side === 'buy' ? qty : e.side === 'sell' ? -qty : 0;
+        const quoteDelta = e.side === 'buy' ? -qty * price : e.side === 'sell' ? qty * price : 0;
+        movement(e, base, baseDelta);
+        movement(e, quote, quoteDelta);
+        if (fee > 0) movement(e, e.feeCurrency || quote, -fee);
+      }
+    } else if (e.eventType === 'deposit' && e.currency) movement(e, e.currency, finite(e.quantity) || 0);
+    else if (e.eventType === 'withdrawal' && e.currency) movement(e, e.currency, -(finite(e.quantity) || 0));
+    else if (e.eventType === 'fee' && e.currency) movement(e, e.currency, -(finite(e.quantity) || 0));
+    else if (e.eventType === 'adjustment' && e.currency) movement(e, e.currency, finite(e.metadata?.signedAmount) ?? (finite(e.quantity) || 0));
+    else if (e.eventType === 'transfer') {
+      const fromAmount = finite(e.metadata?.fromAmount), toAmount = finite(e.metadata?.toAmount);
+      if (e.metadata?.fromCurrency && fromAmount != null) movement(e, e.metadata.fromCurrency, -fromAmount);
+      if (e.metadata?.toCurrency && toAmount != null) movement(e, e.metadata.toCurrency, toAmount);
+    }
+  }
+  const assetMovements = [...movementMap.values()];
+  const fillEvents = ordered.filter(e => e.eventType === 'fill');
+  for (const e of fillEvents) {
     const [base, quote] = String(e.symbol || '').split('/');
     const qty = finite(e.quantity), price = finite(e.price), fee = finite(e.fee || 0);
     if (!base || !quote || qty == null || price == null || qty <= 0 || price <= 0) continue;
@@ -123,9 +153,9 @@ export function calculatePortfolioAccounting(events, marks = {}) {
       marketValue: mark == null ? null : mark * p.quantity, costBasis: p.averageCost * p.quantity,
       valuationStatus: mark == null ? 'mark-price-unavailable' : 'marked-from-supplied-price' };
   }).map(({ _reportedRealized, ...p }) => p);
-  return { generatedAt: new Date().toISOString(), positions: rows, realizedPnlByQuoteCurrency: realizedByQuote, feesByCurrency,
+  return { generatedAt: new Date().toISOString(), positions: rows, assetMovements, realizedPnlByQuoteCurrency: realizedByQuote, feesByCurrency,
     accountingMethod: 'weighted-average cost per exchange/account/symbol; FIFO is not implied',
-    limitations: ['Only ingested fills are included. Deposits, withdrawals, transfers, funding, borrow interest, rebates and corporate actions require separate journal treatment.',
+    limitations: ['Asset movements include only explicitly ingested deposits, withdrawals, fees, adjustments and transfers with from/to metadata. Missing opening balances mean these are net ledger movements, not verified exchange balances.',
       'Realized PnL is quote-currency denominated and should not be summed across currencies without FX conversion. Fees paid in a third token are reported separately and are not FX-converted into realized PnL.',
       'Unrealized PnL is reported only where a current mark price is supplied. This is not a tax statement.'] };
 }
