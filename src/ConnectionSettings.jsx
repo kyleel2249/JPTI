@@ -42,8 +42,8 @@ export default function ConnectionSettings() {
     <h3>Choose where this JPTI app connects</h3>
     <p>JPTI can run against its local desktop API or connect to a secured remote API through your Cloudflare Pages address. This setting changes the API destination only; it does not upload your local ledger or exchange credentials.</p>
     <div className="quote-consensus-stats">
-      <div><span>ACTIVE CONNECTION</span><b>{saved ? 'REMOTE / CLOUD' : 'LOCAL / SAME ORIGIN'}</b></div>
-      <div><span>API BASE</span><b>{saved || 'Current device origin'}</b></div>
+      <div><span>ACTIVE CONNECTION</span><b>{saved ? 'REMOTE / CLOUD' : 'SAME-ORIGIN DEFAULT'}</b></div>
+      <div><span>API BASE</span><b>{saved || 'Current app origin'}</b></div>
       <div><span>PRIVATE TOKEN</span><b>Not stored here</b></div>
       <div><span>TRADING MODE</span><b>Paper-first</b></div>
     </div>
@@ -56,7 +56,7 @@ export default function ConnectionSettings() {
       <div className="news-search">
         <button type="button" onClick={test} disabled={busy}>{busy ? 'Testing connection…' : 'Test connection'}</button>
         <button type="button" onClick={save} disabled={!isDirty}>Save connection</button>
-        <button type="button" onClick={useLocal}>Use local / same origin</button>
+        <button type="button" onClick={useLocal}>Use same-origin default</button>
       </div>
     </div>
     <div className="detail-workspace">
