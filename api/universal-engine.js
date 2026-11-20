@@ -4,6 +4,8 @@ import { requirePrivateApiAuth } from './policy.js';
 import { getLedgerTransactions, ingestLedgerEvent } from './operations.js';
 import { buildEvidenceCouncil } from './advanced-intelligence.js';
 import { normalizeDexPair, scoreAssetEvidence } from './multi-asset-intelligence.js';
+import { listExchangeCatalog } from './exchanges.js';
+import { buildUniversalCoverage } from './universal-coverage.js';
 
 export const universalRouter = express.Router();
 const finite = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
@@ -183,6 +185,12 @@ export function buildUnifiedPerformance(events) {
 }
 
 universalRouter.get('/universal/profiles',(req,res)=>res.json({profiles:STRATEGY_PROFILES,assetClasses:[...new Set(Object.values(STRATEGY_PROFILES).flatMap(p=>p.assetClasses))]}));
+
+// Configuration/catalog visibility only; this deliberately does not claim provider health or symbol entitlement.
+universalRouter.get('/universal/coverage',(_req,res)=>{
+  try { res.set('Cache-Control','no-store').json(buildUniversalCoverage(process.env,listExchangeCatalog())); }
+  catch(error) { res.status(500).json({error:'Coverage registry unavailable.',detail:error.message}); }
+});
 
 universalRouter.post('/universal/strategy/evaluate',(req,res)=>{
   try{res.json(evaluateStrategyProfile(String(req.body?.profileId||''),req.body?.evidence||{}));}
