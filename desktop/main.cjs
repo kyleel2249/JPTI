@@ -1,5 +1,7 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const dotenv = require('dotenv');
+const net = require('node:net');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -9,12 +11,23 @@ let isQuitting = false;
 
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function assertLocalPortAvailable(port) {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', error => reject(new Error('JPTI cannot start because local port ' + port + ' is already in use. Close the other service or change its port.')));
+    probe.listen(port, '127.0.0.1', () => probe.close(error => error ? reject(error) : resolve()));
+  });
+}
+
 async function waitForApi() {
   const url = 'http://127.0.0.1:8787/api/health';
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1200) });
-      if (response.ok) return;
+      if (response.ok) {
+        const health = await response.json();
+        if (health.desktopInstanceId === process.env.JPTI_DESKTOP_INSTANCE_ID) return;
+      }
     } catch {}
     await delay(300);
   }
@@ -37,8 +50,11 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  app.setAppUserModelId('com.jopearl.jpti');
   try {
     const root = app.getAppPath();
+    await assertLocalPortAvailable(8787);
+    process.env.JPTI_DESKTOP_INSTANCE_ID = randomUUID();
     dotenv.config({ path: path.join(app.getPath('userData'), '.env'), override: false });
     process.env.JPTI_API_HOST = '127.0.0.1';
     process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS = 'true';
