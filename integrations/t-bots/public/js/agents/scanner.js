@@ -13,13 +13,22 @@ export class ScannerAgent extends BaseAgent {
   /** Universe gate: age, liquidity, volume, holders, mint / LP flags. */
   universe(t) {
     const u = this.cfg.universe;
+    const profile = this.cfg.scanner.assetProfile || 'meme_new_pair';
+    const profiles = {
+      meme_new_pair: { maxAgeHours:u.maxAgeHours, minLiquidityUsd:u.minLiquidityUsd, minVolume5mUsd:u.minVolume5mUsd, minHolders:u.minHolders },
+      established_token: { maxAgeHours:Infinity, minLiquidityUsd:Math.max(40000,u.minLiquidityUsd), minVolume5mUsd:Math.max(10000,u.minVolume5mUsd/2), minHolders:Math.min(300,u.minHolders) },
+      defi_rotation: { maxAgeHours:Infinity, minLiquidityUsd:Math.max(100000,u.minLiquidityUsd), minVolume5mUsd:Math.max(10000,u.minVolume5mUsd/2), minHolders:Math.min(300,u.minHolders) },
+      breakout: { maxAgeHours:Infinity, minLiquidityUsd:Math.max(50000,u.minLiquidityUsd), minVolume5mUsd:Math.max(10000,u.minVolume5mUsd/2), minHolders:Math.min(300,u.minHolders) },
+      mean_reversion: { maxAgeHours:Infinity, minLiquidityUsd:Math.max(75000,u.minLiquidityUsd), minVolume5mUsd:Math.max(10000,u.minVolume5mUsd/2), minHolders:Math.min(300,u.minHolders) }
+    };
+    const active = profiles[profile] || profiles.meme_new_pair;
     if (t.security === null || t.security === undefined) return { pass: false, pending: true, reasons: ['security data pending'] };
     const sec = t.security;
     const why = [];
-    if (!(t.ageMin <= u.maxAgeHours * 60)) why.push(`older than ${u.maxAgeHours}h`);
-    if (!(t.liquidityUsd >= u.minLiquidityUsd)) why.push('liquidity below minimum');
-    if (!(t.volume5mUsd >= u.minVolume5mUsd)) why.push('5m volume below minimum');
-    if (!(t.holders >= u.minHolders)) why.push('holders below minimum');
+    if (Number.isFinite(active.maxAgeHours) && !(t.ageMin <= active.maxAgeHours * 60)) why.push(`older than ${active.maxAgeHours}h`);
+    if (!(t.liquidityUsd >= active.minLiquidityUsd)) why.push('liquidity below minimum');
+    if (!(t.volume5mUsd >= active.minVolume5mUsd)) why.push('5m volume below minimum');
+    if (!(t.holders >= active.minHolders)) why.push('holders below minimum');
     if (u.skipFrozenMint && sec.frozenMint) why.push('frozen mint');
     if (u.skipOpenMintAuthority && sec.mintAuthorityOpen) why.push('open mint authority');
     if (u.skipLpUnlocked && sec.lpUnlocked) why.push('LP unlocked');
@@ -36,6 +45,8 @@ export class ScannerAgent extends BaseAgent {
     if (t.holderGrowth10mPct !== null && t.holderGrowth10mPct >= c.holderGrowthMinPct) out.push({ key: 'holders', label: `holders +${t.holderGrowth10mPct.toFixed(0)}% / 10m` });
     if (t.smartWallets10m !== null && t.smartWallets10m >= c.smartWallets.min) out.push({ key: 'smart', label: `${t.smartWallets10m} smart wallets in` });
     if (t.kolBought === true) out.push({ key: 'kol', label: 'KOL bought' });
+    const profile = this.cfg.scanner.assetProfile || 'meme_new_pair';
+    if (profile !== 'meme_new_pair' && Number.isFinite(t.change1hPct) && Math.abs(t.change1hPct) >= 1) out.push({ key: 'momentum', label: `1h momentum ${t.change1hPct >= 0 ? '+' : ''}${t.change1hPct.toFixed(1)}%` });
     if (t.jptiEvidence && t.jptiEvidence.score >= 45) out.push({ key: 'jpti-evidence', label: `JPTI evidence ${t.jptiEvidence.score}/100` });
     return out;
   }
