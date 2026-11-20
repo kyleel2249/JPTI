@@ -30,34 +30,34 @@ export default function UniversalEngine() {
   const [loading,setLoading]=useState(false);
 
   useEffect(()=>{apiFetch('/api/universal/profiles').then(r=>r.json()).then(d=>setProfiles(Object.entries(d.profiles||{}).map(([id,p])=>({id,...p})))).catch(()=>setProfiles([]));
-    fetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
+    apiFetch('/api/universal/coverage',{cache:'no-store'}).then(r=>r.json()).then(setCoverage).catch(()=>setCoverage(null));
   },[]);
 
   const loadMarket=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const r=await fetch('/api/universal/market/'+encodeURIComponent(exchange)+'/'+encodeURIComponent(symbol)+'?timeframe=1h',{cache:'no-store'});
+      const r=await apiFetch('/api/universal/market/'+encodeURIComponent(exchange)+'/'+encodeURIComponent(symbol)+'?timeframe=1h',{cache:'no-store'});
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Market evidence unavailable');
       setMarket(d);
       const ev=d.evidence||{};
       const payload={profileId,evidence:{...extraEvidence,momentumPct:extraEvidence.momentumPct??ev.momentumPct,relativeVolume:extraEvidence.relativeVolume??ev.relativeVolume,timeframeAlignment:extraEvidence.timeframeAlignment??ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:extraEvidence.fundingRate??ev.fundingRate,rsi14:extraEvidence.rsi14??ev.rsi14,liquidityUsd:extraEvidence.liquidityUsd??ev.visibleDepthUsd}};
-      const evalRes=await fetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+      const evalRes=await apiFetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
       const result=await evalRes.json();if(evalRes.ok)setEvaluation(result);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[exchange,symbol,profileId,extraEvidence]);
 
   const loadMacro=useCallback(async()=>{
-    try{const r=await fetch('/api/universal/macro',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Macro sources unavailable');setMacro(d);}catch(e){setError(e.message);}
+    try{const r=await apiFetch('/api/universal/macro',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Macro sources unavailable');setMacro(d);}catch(e){setError(e.message);}
   },[]);
   const loadDex=useCallback(async(event)=>{
     if(event)event.preventDefault();setLoading(true);setError('');
-    try{const r=await fetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
+    try{const r=await apiFetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
   },[query,token]);
   const loadPrivate=useCallback(async()=>{
     setLoading(true);setError('');
     try{
       const headers={'x-jpti-api-token':token};
-      const [r1,r2,r3]=await Promise.all([fetch('/api/universal/risk',{headers,cache:'no-store'}),fetch('/api/universal/performance',{headers,cache:'no-store'}),fetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
+      const [r1,r2,r3]=await Promise.all([apiFetch('/api/universal/risk',{headers,cache:'no-store'}),apiFetch('/api/universal/performance',{headers,cache:'no-store'}),apiFetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
       const [a,b,c]=await Promise.all([r1.json(),r2.json(),r3.json()]);
       if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');if(!r3.ok)throw new Error(c.error||'Portfolio valuation unavailable');
       setRisk(a);setPerformance(b);setPortfolio(c);
@@ -67,7 +67,7 @@ export default function UniversalEngine() {
   const setGlobalControl=useCallback(async(action)=>{
     setControlBusy(true);setError('');setControlStatus('');
     try{
-      const r=await fetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
+      const r=await apiFetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
         body:JSON.stringify({action,reason:'Universal Engine operator control'})});
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Global control update failed');
       setControlStatus(action==='pause_new_entries'?'Global T-Bots entry pause recorded.':'Global T-Bots entry pause cleared.');
