@@ -98,6 +98,8 @@ async function start() {
   store.set('grokbot.seed', String(seed));
   store.set('grokbot.speed', $('selSpeed').value);
   const cfg = res.config;
+  cfg.scanner.assetProfile = $('selAssetProfile')?.value || 'meme_new_pair';
+  store.set('grokbot.assetProfile', cfg.scanner.assetProfile);
   const clock = mode === 'live' ? new RealClock(sessionLen(cfg)) : new SimClock(cfg.session.startTime, cfg.session.endTime);
   const feed = mode === 'live' ? new LiveFeed() : new SimFeed({ seed });
   jptiBridge.setToken($('jptiApiToken')?.value || '');
@@ -245,6 +247,7 @@ $('btnBrief').addEventListener('click', async () => {
 // ---------- init ----------
 $('promptInput').value = store.get('grokbot.prompt', DEFAULT_PROMPT);
 $('selMode').value = store.get('grokbot.mode', 'sim');
+$('selAssetProfile').value = store.get('grokbot.assetProfile', 'meme_new_pair');
 $('inSeed').value = store.get('grokbot.seed', '7');
 $('selSpeed').value = store.get('grokbot.speed', '20');
 refreshCompose();
