@@ -42,6 +42,12 @@ Example request:
 - Returns `allowed`, a list of block reasons, strategy evidence, risk state, evidence freshness and security-gate status.
 - This endpoint is a paper/research eligibility check only. It never creates, submits, or authorizes an order.
 
+## T-Bots integration
+
+The embedded T-Bots bridge now calls the authenticated entry-preflight endpoint for a candidate after the local scanner, Rug Check and shared-regime checks pass. The orchestrator awaits this response before sizing and opening a paper position. A timeout, API error, stale market observation, failed strategy evidence, paused shared risk or missing token-security pass blocks the new paper entry. Open-position exit management runs before candidate review and remains active.
+
+The bridge maps only observations actually present on the token feed into the preflight payload. If a strategy profile requires evidence that the selected feed does not provide (for example, multi-timeframe alignment), the preflight returns a block rather than fabricating a value. CEX spot and DEX token feeds therefore need profile-appropriate evidence coverage before they can pass.
+
 ## Dashboard
 
 The Universal Engine now loads strategy scorecards alongside unified risk, performance and portfolio data. The scorecard table exposes sample quality so a small number of trades cannot be mistaken for a proven edge.
