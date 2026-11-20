@@ -69,11 +69,17 @@ export class JptiBridge {
   attach(orchestrator, runId) {
     if (!this.enabled) return;
     const bus = orchestrator.bus;
-    bus.on('trade:enter', event => this.publish('bot_trade', runId, event.symbol, { action: 'paper_enter', reason: event.reason, sizePct: event.sizePct, price: event.price }));
-    bus.on('trade:exit', event => this.publish('bot_trade', runId, event.symbol, { action: 'paper_exit', reason: event.reason, pnl: event.pnl, price: event.price, partial: event.partial }));
-    bus.on('trade:closed', event => this.publish('bot_trade', runId, event.symbol, { action: 'paper_closed', pnl: event.pnl, cost: event.cost, proceeds: event.proceeds, reason: event.reason }));
-    bus.on('trade:filtered', event => this.publish('bot_filter', runId, event.symbol, { reason: event.reason }));
+    const tags = event => {
+      const token = event.tokenId ? orchestrator.feed.get(event.tokenId) : null;
+      return { strategyProfile: orchestrator.cfg.scanner.assetProfile || 'meme_new_pair',
+        assetClass: token?.assetClass || (token?.marketType === 'cex' ? 'crypto_spot' : 'dex_token'),
+        chain: token?.chain || null, venue: token?.exchange || token?.dex || null, runId };
+    };
+    bus.on('trade:enter', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action: 'paper_enter', reason: event.reason, sizePct: event.sizePct, price: event.price }));
+    bus.on('trade:exit', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action: 'paper_exit', reason: event.reason, pnl: event.pnl, price: event.price, partial: event.partial }));
+    bus.on('trade:closed', event => this.publish('bot_trade', runId, event.symbol, { ...tags(event), action: 'paper_closed', pnl: event.pnl, cost: event.cost, proceeds: event.proceeds, reason: event.reason }));
+    bus.on('trade:filtered', event => this.publish('bot_filter', runId, event.symbol, { ...tags(event), reason: event.reason }));
     bus.on('sys', event => this.publish('bot_decision', runId, 'SYSTEM', { reason: event.reason }));
-    bus.on('session:end', recap => this.publish('bot_session', runId, 'SESSION', { action: 'paper_session_closed', trades: recap.trades, wins: recap.wins, losses: recap.losses, returnPct: recap.returnPct, start: recap.start, end: recap.end }));
+    bus.on('session:end', recap => this.publish('bot_session', runId, 'SESSION', { action: 'paper_session_closed', strategyProfile: orchestrator.cfg.scanner.assetProfile || 'meme_new_pair', trades: recap.trades, wins: recap.wins, losses: recap.losses, returnPct: recap.returnPct, start: recap.start, end: recap.end }));
   }
 }
