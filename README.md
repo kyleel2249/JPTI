@@ -256,3 +256,6 @@ Universal Engine endpoints are documented in `integrations/t-bots/JPTI-MULTI-ASS
 ### T-Bots upstream adapter safety
 
 The hourly upstream sync continues to bring in T-Bots changes and open a review PR. JPTI-owned integration-critical files now have pinned upstream baselines and separate overlays. If upstream modifies one of those files, the sync script deliberately stops rather than overwriting either side; the change must be reconciled and the baseline/overlay refreshed before the sync PR can proceed. Other upstream files continue to sync normally. This is a guarded review process, not automatic live synchronization or automatic merging.
+
+
+The Universal Engine also includes a persisted central T-Bots new-entry pause/resume control. It blocks new paper entries across connected T-Bots sessions while allowing existing positions to continue their configured exits. It does not force-close positions or cancel live exchange orders.
