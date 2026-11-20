@@ -1,5 +1,5 @@
 import express from 'express';
-import { appendStoredEvent, appendUniqueLedgerEvent, getSyncCursor, getStorageStatus, readStoredEvents, setSyncCursor } from './storage.js';
+import { acknowledgeOutboxMessage, appendStoredEvent, appendUniqueLedgerEvent, claimOutboxMessages, commitLedgerBatchAndCursor, getOutboxStatus, getSyncCursor, getStorageStatus, readStoredEvents, retryOutboxMessage, setSyncCursor } from './storage.js';
 import { acquireSchedulerLease, getSchedulerLeaseStatus, releaseSchedulerLease, schedulerLeaseConfig } from './scheduler-lease.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -126,21 +126,23 @@ async function exchangeFillMonitor() {
       if (!ex.markets[symbol]) throw new Error('Unknown fill-watchlist market ' + symbol);
       return ex.fetchMyTrades(symbol, since, 100);
     });
-    let newest = since, ingested = 0, duplicates = 0;
+    let newest = since;
+    const ledgerEvents = [];
     for (const trade of trades) {
       if (!trade.id || !trade.symbol || !['buy','sell'].includes(trade.side) || !(trade.amount > 0) || !(trade.price > 0)) continue;
       const [base, quote] = trade.symbol.split('/');
       const fee = trade.fee || {};
-      const saved = await persistLedgerTransaction(eventSchema.parse({ source: exchangeId, eventType: 'fill', externalId: String(trade.id),
+      const parsed = eventSchema.parse({ source: exchangeId, eventType: 'fill', externalId: String(trade.id),
         accountId: exchangeId, symbol: trade.symbol, side: trade.side, quantity: Number(trade.amount), price: Number(trade.price),
         fee: Number(fee.cost || 0), feeCurrency: fee.currency || quote,
         occurredAt: new Date(Number(trade.timestamp) || Date.parse(trade.datetime) || Date.now()).toISOString(),
-        metadata: { base, quote, orderId: String(trade.order || ''), tradeId: String(trade.id) } }));
-      if (saved.duplicate) duplicates++; else ingested++;
+        metadata: { base, quote, orderId: String(trade.order || ''), tradeId: String(trade.id) } });
+      ledgerEvents.push({ id: randomUUID(), kind: 'ledger-transaction', ...parsed, ingestedAt: new Date().toISOString() });
       newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
     }
-    await setSyncCursor(cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
-    return { exchange: exchangeId, symbol, fetched: trades.length, ingested, duplicates };
+    const commit = await commitLedgerBatchAndCursor(ledgerEvents, cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
+    return { exchange: exchangeId, symbol, fetched: trades.length, ingested: commit.inserted, duplicates: commit.duplicates,
+      outboxEnqueued: commit.outboxEnqueued, transactional: commit.transactional };
   }));
   const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
   const errors = outcomes.filter(x => x.status === 'rejected').map(x => x.reason?.message || 'Fill sync failed');
@@ -289,6 +291,37 @@ export function getOperationsSnapshot() {
     jobs: definitions.map(([id, seconds, label]) => job(id, seconds, jobState.get(id)?.status || 'not-started', jobState.get(id)?.detail || 'Scheduler has not started.', { label, ...(jobState.get(id) || {}) }))
   };
 }
+
+operationsRouter.get('/operations/outbox/status', async (req, res) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
+  try { res.json(await getOutboxStatus()); } catch (error) { res.status(503).json({ error: error.message }); }
+});
+
+operationsRouter.post('/operations/outbox/claim', async (req, res) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
+  try {
+    const workerId = String(req.body?.workerId || '').trim();
+    const messages = await claimOutboxMessages({ workerId, limit: req.body?.limit, leaseMs: req.body?.leaseMs });
+    res.json({ count: messages.length, messages });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+operationsRouter.post('/operations/outbox/:id/ack', async (req, res) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
+  try {
+    const acknowledged = await acknowledgeOutboxMessage({ id: req.params.id, workerId: String(req.body?.workerId || '') });
+    res.status(acknowledged ? 200 : 409).json({ acknowledged });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+operationsRouter.post('/operations/outbox/:id/retry', async (req, res) => {
+  try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
+  try {
+    const retried = await retryOutboxMessage({ id: req.params.id, workerId: String(req.body?.workerId || ''),
+      error: req.body?.error, delayMs: req.body?.delayMs });
+    res.status(retried ? 200 : 409).json({ retried });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
 
 operationsRouter.get('/operations/overview', (_req, res) => res.json(getOperationsSnapshot()));
 operationsRouter.get('/operations/events', async (req, res, next) => {

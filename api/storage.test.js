@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { appendStoredEvent, appendUniqueLedgerEvent, getStorageStatus, getSyncCursor, initializeStorage, readStoredEvents, setSyncCursor } from './storage.js';
+import { appendStoredEvent, appendUniqueLedgerEvent, commitLedgerBatchAndCursor, getOutboxStatus, getStorageStatus, getSyncCursor, initializeStorage, readStoredEvents, setSyncCursor } from './storage.js';
 
 test('file storage initializes and reports its selected backend', async () => {
   const status = await initializeStorage();
@@ -38,4 +38,25 @@ test('operational events can be read back from the selected storage adapter', as
   const events = await readStoredEvents(100, 'storage-test-event');
   assert.ok(events.some(event => event.marker === marker));
   assert.equal(getStorageStatus().initialized, true);
+});
+
+test('ledger batch commit is replay-safe and advances its cursor in file mode', async () => {
+  await initializeStorage();
+  const externalId = 'batch-' + randomUUID();
+  const key = 'batch:' + randomUUID();
+  const event = { id:randomUUID(), kind:'ledger-transaction', source:'batch-test', accountId:'batch-account',
+    externalId, symbol:'ETH/USDT', eventType:'fill', quantity:1, price:2500, occurredAt:new Date().toISOString() };
+  const first = await commitLedgerBatchAndCursor([event], key, 500);
+  const replay = await commitLedgerBatchAndCursor([{ ...event, id:randomUUID() }], key, 500);
+  assert.equal(first.inserted, 1);
+  assert.equal(first.duplicates, 0);
+  assert.equal(replay.inserted, 0);
+  assert.equal(replay.duplicates, 1);
+  assert.equal(await getSyncCursor(key), 500);
+  assert.equal(first.transactional, false);
+});
+
+test('outbox status is explicit when the file backend is selected', async () => {
+  await initializeStorage();
+  assert.deepEqual(await getOutboxStatus(), { supported:false, pending:null, processing:null, delivered:null });
 });

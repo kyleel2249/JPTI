@@ -28,6 +28,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS jpti_ledger_event_dedupe
   WHERE kind = 'ledger-transaction';
 CREATE INDEX IF NOT EXISTS jpti_events_kind_time
   ON jpti_events (kind, occurred_at DESC, created_at DESC);
+CREATE TABLE IF NOT EXISTS jpti_outbox (
+  id BIGSERIAL PRIMARY KEY,
+  event_id UUID NOT NULL UNIQUE,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','delivered')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  locked_by TEXT,
+  locked_until TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS jpti_outbox_ready ON jpti_outbox(status, available_at, created_at);
 CREATE TABLE IF NOT EXISTS jpti_sync_cursors (
   cursor_key TEXT PRIMARY KEY,
   cursor_value BIGINT NOT NULL,
@@ -66,7 +82,7 @@ export async function initializeStorage() {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required when JPTI_STORAGE_BACKEND=postgres.');
     const db = await getPool();
     await db.query(migration);
-    await db.query("INSERT INTO jpti_schema_migrations(version) VALUES ('001_initial_durable_storage') ON CONFLICT DO NOTHING");
+    await db.query("INSERT INTO jpti_schema_migrations(version) VALUES ('001_initial_durable_storage'),('003_transactional_ledger_outbox') ON CONFLICT DO NOTHING");
   } else {
     await mkdir(dataDir, { recursive: true });
   }
@@ -155,6 +171,98 @@ export async function appendUniqueLedgerEvent(input) {
     [event.source, event.accountId, event.externalId, event.symbol || null]
   );
   return { duplicate: true, event: duplicate.rows[0]?.payload || null };
+}
+
+
+export async function commitLedgerBatchAndCursor(events, cursorKey, cursorValue) {
+  assertInitialized();
+  if (!Array.isArray(events) || !cursorKey) throw new Error('Ledger batch and cursor key are required.');
+  const cursor = Math.max(0, Math.floor(Number(cursorValue)));
+  if (!Number.isFinite(cursor)) throw new Error('Sync cursor must be a finite non-negative number.');
+  const normalized = events.map(input => ({ id: input.id || randomUUID(), kind: 'ledger-transaction', ...input }));
+  if (backend === 'file') {
+    let inserted = 0, duplicates = 0;
+    for (const event of normalized) {
+      const result = await appendUniqueLedgerEvent(event);
+      if (result.duplicate) duplicates++; else inserted++;
+    }
+    await setSyncCursor(cursorKey, cursor);
+    return { inserted, duplicates, cursor, transactional: false, outboxEnqueued: 0 };
+  }
+  const db = await getPool();
+  const client = await db.connect();
+  let inserted = 0, duplicates = 0;
+  try {
+    await client.query('BEGIN');
+    for (const event of normalized) {
+      const result = await client.query(
+        "INSERT INTO jpti_events(id,kind,source,account_id,external_id,symbol,occurred_at,payload) VALUES($1,'ledger-transaction',$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT (source,account_id,external_id,(COALESCE(symbol,''))) WHERE kind='ledger-transaction' DO NOTHING RETURNING id",
+        [event.id, event.source, event.accountId, event.externalId, event.symbol || null,
+          event.occurredAt || event.ingestedAt || new Date().toISOString(), JSON.stringify(event)]
+      );
+      if (result.rowCount) {
+        inserted++;
+        await client.query(
+          "INSERT INTO jpti_outbox(event_id,event_type,payload) VALUES($1,'ledger.transaction.recorded',$2::jsonb) ON CONFLICT(event_id) DO NOTHING",
+          [event.id, JSON.stringify({ eventId: event.id, source: event.source, accountId: event.accountId, externalId: event.externalId, symbol: event.symbol || null })]
+        );
+      } else duplicates++;
+    }
+    await client.query(
+      'INSERT INTO jpti_sync_cursors(cursor_key,cursor_value) VALUES($1,$2) ON CONFLICT(cursor_key) DO UPDATE SET cursor_value=GREATEST(jpti_sync_cursors.cursor_value,EXCLUDED.cursor_value),updated_at=NOW()',
+      [cursorKey, cursor]
+    );
+    await client.query('COMMIT');
+    return { inserted, duplicates, cursor, transactional: true, outboxEnqueued: inserted };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function claimOutboxMessages({ workerId, limit = 25, leaseMs = 30000 } = {}) {
+  assertInitialized();
+  if (backend !== 'postgres') throw new Error('Transactional outbox claiming requires PostgreSQL storage.');
+  if (!workerId || typeof workerId !== 'string' || workerId.length > 128) throw new Error('A valid outbox workerId is required.');
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 25)));
+  const safeLease = Math.max(5000, Math.min(300000, Math.floor(Number(leaseMs) || 30000)));
+  const db = await getPool();
+  const result = await db.query(
+    "WITH candidates AS (SELECT id FROM jpti_outbox WHERE (status='pending' AND available_at<=NOW()) OR (status='processing' AND locked_until<=NOW()) ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED) UPDATE jpti_outbox o SET status='processing',locked_by=$2,locked_until=NOW()+($3 * INTERVAL '1 millisecond'),attempts=o.attempts+1,updated_at=NOW() FROM candidates c WHERE o.id=c.id RETURNING o.id,o.event_id,o.event_type,o.payload,o.attempts",
+    [safeLimit, workerId, safeLease]
+  );
+  return result.rows;
+}
+
+export async function acknowledgeOutboxMessage({ id, workerId } = {}) {
+  assertInitialized();
+  if (backend !== 'postgres') throw new Error('Transactional outbox acknowledgement requires PostgreSQL storage.');
+  const result = await (await getPool()).query(
+    "UPDATE jpti_outbox SET status='delivered',delivered_at=NOW(),locked_by=NULL,locked_until=NULL,updated_at=NOW() WHERE id=$1 AND status='processing' AND locked_by=$2 RETURNING id",
+    [id, workerId]
+  );
+  return result.rowCount === 1;
+}
+
+export async function retryOutboxMessage({ id, workerId, error, delayMs = 5000 } = {}) {
+  assertInitialized();
+  if (backend !== 'postgres') throw new Error('Transactional outbox retry requires PostgreSQL storage.');
+  const delay = Math.max(1000, Math.min(3600000, Math.floor(Number(delayMs) || 5000)));
+  const result = await (await getPool()).query(
+    "UPDATE jpti_outbox SET status='pending',available_at=NOW()+($3 * INTERVAL '1 millisecond'),locked_by=NULL,locked_until=NULL,last_error=$4,updated_at=NOW() WHERE id=$1 AND status='processing' AND locked_by=$2 RETURNING id",
+    [id, workerId, delay, String(error || 'Delivery failed').slice(0, 1000)]
+  );
+  return result.rowCount === 1;
+}
+
+export async function getOutboxStatus() {
+  assertInitialized();
+  if (backend !== 'postgres') return { supported: false, pending: null, processing: null, delivered: null };
+  const result = await (await getPool()).query("SELECT status,COUNT(*)::int AS count FROM jpti_outbox GROUP BY status");
+  const counts = Object.fromEntries(result.rows.map(row => [row.status, row.count]));
+  return { supported: true, pending: counts.pending || 0, processing: counts.processing || 0, delivered: counts.delivered || 0 };
 }
 
 export async function getSyncCursor(key, fallback = null) {
