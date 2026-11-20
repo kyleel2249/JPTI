@@ -198,6 +198,7 @@ universalRouter.get('/universal/cex-watchlist',async(req,res)=>{
       return withExchange(exchange,{privateAccess:false},async ex=>{
         const market=ex.markets[symbol];
         if(!market||market.active===false||!market.spot)throw new Error('Active spot market unavailable: '+exchange+' '+symbol);
+        if(!['USD','USDT','USDC','DAI','FDUSD'].includes(String(market.quote||'').toUpperCase()))throw new Error('T-Bots CEX paper feed requires a USD/stablecoin quote market: '+symbol);
         const [ticker,candles,book]=await Promise.all([
           ex.has?.fetchTicker?ex.fetchTicker(symbol):Promise.resolve(null),
           ex.has?.fetchOHLCV?ex.fetchOHLCV(symbol,'5m',undefined,24):Promise.resolve(null),
