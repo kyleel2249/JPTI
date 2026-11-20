@@ -60,6 +60,7 @@ app.whenReady().then(async () => {
     process.env.JPTI_ALLOW_LOCAL_PRIVATE_ACCESS = 'true';
     process.env.JPTI_REQUIRE_EDGE_SECRET = 'false';
     process.env.JPTI_API_PORT = '8787';
+    process.env.PORT = '8787';
     process.env.JPTI_STORAGE_BACKEND = 'file';
     process.env.JPTI_DATA_DIR = path.join(app.getPath('userData'), 'data');
     process.env.JPTI_WEB_DIST = path.join(root, 'dist');
