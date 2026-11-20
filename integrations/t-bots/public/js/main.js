@@ -119,6 +119,7 @@ async function start() {
     await jptiBridge.loadMemory();
     sharedContext = mode === 'live' ? await jptiBridge.refreshContext(true) : null;
     orch.setSharedContext(sharedContext);
+    orch.setSharedRisk(await jptiBridge.refreshRisk(true));
     $('jptiBridgeStatus').textContent = sharedContext ? 'JPTI linked · ' + sharedContext.regime + ' · paper gate active' : 'JPTI linked · context unavailable';
   } else { sharedContext = null; orch.setSharedContext(null); }
   orch.bus.on('session:end', onEnd);
@@ -147,7 +148,10 @@ function schedule() {
       try {
         const now = performance.now();
         if (mode === 'live') {
-          if (jptiBridge.enabled) orch.setSharedContext(await jptiBridge.refreshContext());
+          if (jptiBridge.enabled) {
+            orch.setSharedContext(await jptiBridge.refreshContext());
+            orch.setSharedRisk(await jptiBridge.refreshRisk());
+          }
           await orch.step();
         } else {
           acc += (Number($('selSpeed2').value) * (now - lastFrame)) / 1000;
