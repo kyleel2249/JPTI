@@ -337,7 +337,7 @@ universalRouter.get('/universal/asset/:chain/:address',async(req,res)=>{
 });
 
 universalRouter.get('/universal/risk',async(req,res)=>{
-  try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses,maxDailyLossUsd:req.query.maxDailyLossUsd};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
+  try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses??process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,maxDailyLossUsd:req.query.maxDailyLossUsd??process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
   catch(e){res.status(e.status||401).json({error:e.message});}
 });
 
