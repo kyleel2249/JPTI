@@ -256,3 +256,31 @@ Authenticated endpoints:
 - `GET /api/integrations/tbots/context?exchange=binance&symbol=BTC%2FUSDT` — selected CEX benchmark context.
 
 The shared risk gate pauses new T-Bots entries after three consecutive losing closed paper trades. If its state cannot be retrieved, new entries are blocked; existing positions continue through their normal exit logic. This is not a fully consolidated JPTI + T-Bots portfolio equity calculation. DEX execution remains simulated; no wallet signing or live swap execution is implemented.
+
+
+## Universal cross-asset engine
+
+Routes are mounted under `/api/universal`:
+- `GET /profiles` — strategy profiles and asset-class coverage.
+- `POST /strategy/evaluate` — evidence-based deterministic profile evaluation.
+- `GET /market/:exchange/:symbol?timeframe=1h` — public CEX ticker, OHLCV, 15m/1h/4h/1d trend alignment where supported, RSI, visible book depth, funding/open interest where supported and deterministic evidence council.
+- `GET /cex-watchlist` — private-token authenticated read-only active spot watchlist configured with `JPTI_TBOTS_CEX_MARKETS`.
+- `POST /asset-evidence` — private-token authenticated batch per-asset heuristic evidence score. This is not a safety check.
+- `GET /asset/:chain/:address` — private-token authenticated DEX pair plus RugCheck (Solana) or GoPlus (selected EVM) security observations. Security output is review-required/fail-closed, not an approval.
+- `GET /dex/search?q=...` — private-token authenticated multi-chain pair search.
+- `GET /macro` — CoinGecko global crypto metrics, DeFiLlama chain TVL, and FRED FEDFUNDS when configured.
+- `GET /news?q=...` — GDELT article discovery.
+- `GET /risk` — private-token authenticated shared entry gate and realized loss state.
+- `GET /performance` — private-token authenticated paper-trade and exchange-fill attribution.
+
+T-Bots can merge its multi-chain DEX feed with a configured CEX spot watchlist. Example server-side settings:
+
+```env
+JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,binance:ETH/USDT,binance:SOL/USDT,bitget:BTC/USDT
+JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES=3
+JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
+```
+
+The CEX watchlist is limited to active spot markets and checks 24h quote volume, visible order-book depth and spread before T-Bots can consider a paper entry. No private exchange credentials are required for this read-only feed.
+
+Unified realized PnL is computed from recorded exchange fills with weighted-average cost and reported per quote currency. USD, USDT, USDC, DAI and FDUSD are treated as approximate USD equivalents for the daily loss guard; other currencies are not FX-converted. T-Bots paper PnL is separately denominated in USD. This is not full account equity reconciliation: unrealized positions, complete cashflows, transfers, funding, borrow, third-token fees and missing opening inventory remain limitations.
