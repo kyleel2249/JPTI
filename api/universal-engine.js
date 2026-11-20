@@ -102,6 +102,7 @@ function fillsCount(events) { return events.filter(e=>e.eventType==='fill').leng
 
 export function calculateExchangeRealized(events, now = Date.now()) {
   const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={},unmatchedSellQuantity={};
+  let invalidBaseFeeEvents=0;
   const fills=events.filter(e=>e.eventType==='fill'&&e.symbol&&!String(e.symbol).includes(':')&&e.side&&finite(e.quantity)>0&&finite(e.price)>0)
     .sort((a,b)=>(Date.parse(a.occurredAt)||0)-(Date.parse(b.occurredAt)||0));
   for(const e of fills){
@@ -115,7 +116,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     if(e.side==='buy'){
       const acquired=qty-(e.feeCurrency===base?fee:0);
       if(acquired>0){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=acquired;}
-      else unmatchedSellQuantity[quote]=(unmatchedSellQuantity[quote]||0)+qty;
+      else invalidBaseFeeEvents++;
     } else {
       const baseFee=e.feeCurrency===base?fee:0;
       const requestedOut=qty+baseFee;
@@ -134,7 +135,7 @@ export function calculateExchangeRealized(events, now = Date.now()) {
     }
     inventory.set(key,row);
   }
-  return {realizedByQuote,dailyByQuote,feeTotals,unmatchedSellQuantity,
+  return {realizedByQuote,dailyByQuote,feeTotals,unmatchedSellQuantity,invalidBaseFeeEvents,
     openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
     caveat:'Weighted-average cost on recorded spot fills only. Base-denominated fees reduce acquired/disposed inventory; quote-denominated fees affect cost/proceeds. Missing opening inventory, transfers, funding, taxes and third-token fee conversion prevent a complete account PnL statement.'};
 }
@@ -427,4 +428,56 @@ universalRouter.get('/universal/risk',async(req,res)=>{
 universalRouter.get('/universal/performance',async(req,res)=>{
   try{requirePrivateApiAuth(req);res.set('Cache-Control','no-store').json(buildUnifiedPerformance(await getLedgerTransactions()));}
   catch(e){res.status(e.status||401).json({error:e.message});}
+});
+
+universalRouter.get('/universal/portfolio',async(req,res)=>{
+  try {
+    requirePrivateApiAuth(req);
+    const events=await getLedgerTransactions();
+    const accounting=calculateExchangeRealized(events);
+    const grouped=new Map();
+    for(const item of accounting.openInventory){
+      const rows=grouped.get(item.exchange)||[];
+      rows.push(item);grouped.set(item.exchange,rows);
+    }
+    const outcomes=await Promise.all([...grouped.entries()].map(async([exchangeId,items])=>{
+      try {
+        return await withExchange(exchangeId,{privateAccess:false},async exchange=>{
+          if(!exchange.has?.fetchTicker)throw new Error('Public ticker capability unavailable.');
+          return items.map(item=>{
+            try {
+              if(!exchange.markets[item.symbol])throw new Error('Recorded market is not currently listed.');
+              const tickerCache=item.symbol;
+              const ticker=exchange.fetchTicker(tickerCache);
+              return {item,ticker};
+            } catch(error) { return {item,error:error.message}; }
+          });
+        });
+      } catch(error) { return items.map(item=>({item,error:error.message})); }
+    }));
+    const flat=outcomes.flat();
+    const positions=[];
+    for(const outcome of flat){
+      if(outcome.error){positions.push({...outcome.item,status:'mark_unavailable',markPrice:null,marketValue:null,unrealizedPnl:null,error:outcome.error});continue;}
+      const ticker=await outcome.ticker;
+      const mark=finite(ticker?.last)??finite(ticker?.close);
+      if(mark===null||mark<=0){positions.push({...outcome.item,status:'mark_unavailable',markPrice:null,marketValue:null,unrealizedPnl:null,error:'No valid last/close price returned.'});continue;}
+      positions.push({...outcome.item,status:'marked',markPrice:mark,marketValue:outcome.item.quantity*mark,
+        unrealizedPnl:(mark-outcome.item.averageCost)*outcome.item.quantity,markedAt:new Date().toISOString()});
+    }
+    const byQuote={};
+    for(const p of positions){
+      const row=byQuote[p.quote]||(byQuote[p.quote]={positions:0,costBasis:0,marketValue:0,unrealizedPnl:0,unmarkedPositions:0});
+      row.positions++;
+      if(p.status==='marked'){row.costBasis+=p.cost;row.marketValue+=p.marketValue;row.unrealizedPnl+=p.unrealizedPnl;}
+      else row.unmarkedPositions++;
+    }
+    res.set('Cache-Control','no-store').json({
+      generatedAt:new Date().toISOString(),valuation:'Public exchange last/close price; no FX conversion or account-balance reconciliation.',
+      positions,byQuote,realizedPnlByQuote:accounting.realizedByQuote,feesByCurrency:accounting.feeTotals,
+      unmatchedSellQuantityByQuote:accounting.unmatchedSellQuantity,invalidBaseFeeEvents:accounting.invalidBaseFeeEvents,
+      completeness:{openSpotInventory:'recorded fills only',unrealizedPnl:'only positions with a current public mark',cashBalances:'not included',paperPositions:'reported separately in paper performance',derivatives:'not included'},
+      caveat:accounting.caveat
+    });
+  } catch(e) { res.status(e.status||401).json({error:e.message}); }
 });
