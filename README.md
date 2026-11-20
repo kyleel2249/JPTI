@@ -309,3 +309,13 @@ JPTI now includes a Windows Electron desktop shell, Capacitor Android project co
 - Android debug APK: `cd android; .\\gradlew.bat assembleDebug` after Capacitor sync.
 
 The desktop runs a loopback-only Node API and file ledger in Electron's private user-data directory. Android is a native installed client and connects to a secured HTTPS API; it does not bundle the Node/CCXT server. API base URL settings store only the URL, never private tokens or exchange keys. Local and cloud ledgers are not automatically synchronized in this phase.
+
+
+## Unified portfolio accounting and risk intelligence
+
+The Portfolio & Ledger and Risk Management workspaces are now backed by authenticated server-side reports:
+- `GET /api/advanced/portfolio/accounting` reconstructs ledger-derived spot inventory, weighted-average cost, public ticker marks, read-only exchange balances and asset movements.
+- `GET /api/advanced/portfolio/performance` calculates realized fill-ledger performance and strategy/market attribution.
+- `GET /api/advanced/portfolio/risk` calculates quote-currency-separated exposure, concentration, historical VaR/expected shortfall when enough aligned daily data exists, and a configurable parallel stress scenario.
+
+The reports preserve quote-currency separation and disclose missing data. They do not infer FX conversions, derivative liabilities or missing cost basis, and they do not execute orders. See [Portfolio risk intelligence methodology](docs/PORTFOLIO_RISK_INTELLIGENCE.md) for calculation rules, data requirements and exclusions.
