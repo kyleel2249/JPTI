@@ -10,7 +10,7 @@ const utcSession = date => {
 export function calculateTradePerformance(events = []) {
   const ordered = [...events].filter(e => e?.eventType === 'fill')
     .sort((a,b) => Date.parse(a.occurredAt || 0) - Date.parse(b.occurredAt || 0));
-  const books = new Map(), exits = [], warnings = new Set();
+  const books = new Map(), exits = [], warnings = new Set(), thirdCurrencyFees = [];
   let unmatchedSellExecutions = 0, unmatchedSellQuantity = 0;
   for (const event of ordered) {
     const [base, quote] = String(event.symbol || '').split('/');
@@ -22,6 +22,7 @@ export function calculateTradePerformance(events = []) {
     const key = [event.accountId || 'unknown-account', event.source || 'unknown-source', event.symbol].join(':');
     const book = books.get(key) || { quantity: 0, averageCost: 0 };
     const feeCurrency = String(event.feeCurrency || quote).toUpperCase();
+    if (fee > 0 && feeCurrency !== base && feeCurrency !== quote) thirdCurrencyFees.push({ occurredAt:event.occurredAt || null, exchange:event.source || 'unknown', symbol:event.symbol, currency:feeCurrency, amount:fee, side:event.side });
     if (event.side === 'buy') {
       const acquired = Math.max(0, qty - (feeCurrency === base ? fee : 0));
       const totalCost = qty * price + (feeCurrency === quote ? fee : 0);
@@ -86,7 +87,6 @@ export function calculateTradePerformance(events = []) {
       losses:rows.filter(x=>x.realizedPnl<0).length, netRealizedPnl:net,
       averagePnl:rows.length?net/rows.length:null, quoteCurrencies:[...new Set(rows.map(x=>x.quote))] };
   }).sort((a,b)=>b.netRealizedPnl-a.netRealizedPnl);
-  const thirdCurrencyFees = exits.filter(x=>x.thirdCurrencyFee>0).map(x=>({exchange:x.exchange,symbol:x.symbol,currency:x.feeCurrency,amount:x.thirdCurrencyFee}));
   const analystInsights = [];
   for (const row of byCurrency) {
     if (row.closedExitExecutions < 20) analystInsights.push({severity:'info',title:'Small performance sample',quoteCurrency:row.quoteCurrency,evidence:row.closedExitExecutions+' matched exit executions; use caution interpreting win rate and expectancy.',review:'Collect a larger sample before treating the observed edge as stable.'});
