@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { apiFetch } from './lib/api.js';
 
 const macroSeries = [
   ['FEDFUNDS', 'Fed funds rate'], ['CPIAUCSL', 'US CPI'], ['UNRATE', 'US unemployment'],
@@ -22,7 +23,7 @@ export default function FinancialIntelligence() {
   const [providerStatus, setProviderStatus] = useState(null);
   const [providerError, setProviderError] = useState('');
 
-  const loadProviders = useCallback(async () => { try { const response = await fetch('/api/providers'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Provider registry unavailable'); setProviderStatus(data); setProviderError(''); } catch (e) { setProviderError(e.message); } }, []);
+  const loadProviders = useCallback(async () => { try { const response = await apiFetch('/api/providers'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Provider registry unavailable'); setProviderStatus(data); setProviderError(''); } catch (e) { setProviderError(e.message); } }, []);
 
   const loadOverview = useCallback(async () => {
     try {
