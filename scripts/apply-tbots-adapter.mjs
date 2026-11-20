@@ -22,7 +22,8 @@ const guardedFiles = [
 async function applyGuardedOverlay(relative) {
   const target = resolve(appRoot, relative);
   const baseline = await readFile(resolve(adapterRoot, 'baselines', relative + '.base'), 'utf8');
-  const overlay = await readFile(resolve(adapterRoot, 'overlays', relative), 'utf8');
+  const overlayRelative = relative === 'tests/engine.test.mjs' ? relative + '.overlay' : relative;
+  const overlay = await readFile(resolve(adapterRoot, 'overlays', overlayRelative), 'utf8');
   const current = await readFile(target, 'utf8');
   if (current !== baseline && current !== overlay) {
     throw new Error('T-Bots upstream changed an adapter-owned file: ' + relative + '. Reconcile the upstream change with the JPTI overlay before syncing; no overwrite was applied.');
@@ -43,9 +44,9 @@ await copyOverlay('jpti-bridge.js', 'public/js/services/jpti-bridge.js');
 await copyOverlay('universal-feed.js', 'public/js/market/universal-feed.js');
 
 const tests = [
-  ['overlays/public/js/market/live-feed.multi-chain.test.js', 'public/js/market/live-feed.multi-chain.test.js'],
-  ['overlays/public/js/market/universal-feed.test.js', 'public/js/market/universal-feed.test.js'],
-  ['overlays/public/js/agents/universal-scanner.test.js', 'public/js/agents/universal-scanner.test.js']
+  ['overlays/public/js/market/live-feed.multi-chain.test.js.overlay', 'public/js/market/live-feed.multi-chain.test.js'],
+  ['overlays/public/js/market/universal-feed.test.js.overlay', 'public/js/market/universal-feed.test.js'],
+  ['overlays/public/js/agents/universal-scanner.test.js.overlay', 'public/js/agents/universal-scanner.test.js']
 ];
 for (const [source, destination] of tests) await copyOverlay(source, destination);
 
