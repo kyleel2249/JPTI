@@ -36,5 +36,19 @@ test('unified performance attributes paper results and exchange fills separately
   assert.equal(report.paperStrategy.closedTrades,1);
   assert.equal(report.paperStrategy.realizedPnlUsd,5);
   assert.equal(report.exchangeExecution.fillCount,1);
-  assert.equal(report.exchangeExecution.realizedPnl,'not computed here; use lot-based portfolio accounting and preserve quote currencies');
+  assert.equal(report.exchangeExecution.realizedPnl,'weighted-average on recorded fills only; quote currencies remain separate');
+});
+
+test('exchange fill realized PnL uses weighted average and preserves quote currencies', async () => {
+  const { calculateExchangeRealized } = await import('./universal-engine.js');
+  const now=Date.now();
+  const events=[
+    {source:'binance',accountId:'a',eventType:'fill',symbol:'BTC/USDT',side:'buy',quantity:1,price:100,fee:0,occurredAt:new Date(now-3000).toISOString()},
+    {source:'binance',accountId:'a',eventType:'fill',symbol:'BTC/USDT',side:'buy',quantity:1,price:120,fee:0,occurredAt:new Date(now-2000).toISOString()},
+    {source:'binance',accountId:'a',eventType:'fill',symbol:'BTC/USDT',side:'sell',quantity:1,price:130,fee:1,feeCurrency:'USDT',occurredAt:new Date(now-1000).toISOString()}
+  ];
+  const result=calculateExchangeRealized(events,now);
+  assert.equal(result.realizedByQuote.USDT,19);
+  assert.equal(result.openInventory[0].quantity,1);
+  assert.equal(result.openInventory[0].averageCost,110);
 });
