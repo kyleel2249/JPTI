@@ -102,6 +102,12 @@ async function start() {
   store.set('grokbot.assetProfile', cfg.scanner.assetProfile);
   const clock = mode === 'live' ? new RealClock(sessionLen(cfg)) : new SimClock(cfg.session.startTime, cfg.session.endTime);
   jptiBridge.setToken($('jptiApiToken')?.value || '');
+  if (mode === 'live' && !jptiBridge.enabled) {
+    $('jptiBridgeStatus').textContent = 'Blocked · connect JPTI API and authorize shared paper-entry governance before using live market data.';
+    $('live').textContent = 'Start blocked: JPTI governance connection is required for live-market paper execution.';
+    window.alert('JPTI governance is required for live-market paper execution. Enter your JPTI API token and verify the local API connection. Simulated paper mode remains available.');
+    return;
+  }
   const feed = mode === 'live' ? new UniversalFeed({ bridge:jptiBridge }) : new SimFeed({ seed });
   orch = new Orchestrator({ config: cfg, feed, clock, seed });
   runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${seed}`;

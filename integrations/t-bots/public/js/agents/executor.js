@@ -180,6 +180,10 @@ export class ExecutorAgent extends BaseAgent {
       multiple: (pos.lastExit || t.price) / pos.avgEntry,
       reason,
       t: this.now(),
+      slippagePct: pos.slipPct,
+      entryPrice: pos.avgEntry,
+      exitPrice: pos.lastExit,
+      holdDurationMin: Math.max(0, this.now() - pos.entryAt),
     });
   }
 

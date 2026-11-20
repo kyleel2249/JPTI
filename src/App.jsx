@@ -4,6 +4,7 @@ import FinancialIntelligence from './FinancialIntelligence.jsx';
 import UniversalEngine from './UniversalEngine.jsx';
 import ConnectionSettings from './ConnectionSettings.jsx';
 import InstitutionalTerminal from './InstitutionalTerminal.jsx';
+import InstitutionalGovernance from './InstitutionalGovernance.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -23,6 +24,7 @@ const navigation = [
   { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
   { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
+  { label: 'Institutional Governance', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Universal Engine', icon: Network, group: 'RESEARCH' },
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
@@ -283,6 +285,7 @@ function App() {
     'News & Events': 'News discovery and event context from connected sources.',
     'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
+    'Institutional Governance': 'Strategy scorecards, T-Bots paper-entry authorization, execution feedback and fail-closed safety controls.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
@@ -394,6 +397,7 @@ function App() {
   const renderWorkspace = () => {
     if (page === 'Connection Settings') return <ConnectionSettings/>;
     if (page === 'Institutional Terminal') return <InstitutionalTerminal currentSymbol={symbol} onSymbolChange={setSymbol} onNavigate={activeNav}/>;
+    if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
