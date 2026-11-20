@@ -238,14 +238,23 @@ export function calculateUnifiedRisk(events, options = {}) {
   const now=options.now !== undefined && options.now !== null && String(options.now).trim() !== '' && Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
   const lossLimit = riskSetting(options.maxConsecutiveLosses, 3, { min: 1, max: 20, integer: true });
   const dailyLimit = riskSetting(options.maxDailyLossUsd, 100, { min: 0, max: 10000000 });
+  const drawdownLimit = riskSetting(options.maxDrawdownPct, 10, { min: 1, max: 50 });
   const maxConsecutiveLosses = lossLimit.value;
   const maxDailyLossUsd = dailyLimit.value;
-  const configurationWarnings = [lossLimit.warning, dailyLimit.warning].filter(Boolean);
+  const maxDrawdownPct = drawdownLimit.value;
+  const configurationWarnings = [lossLimit.warning, dailyLimit.warning, drawdownLimit.warning].filter(Boolean);
   const botEvents=events.filter(e=>e.source==='tbots'&&e.eventType==='bot_trade'&&e.metadata?.action==='paper_closed')
     .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
   const closed=botEvents.map(e=>({at:e.occurredAt,pnl:finite(e.metadata?.pnl)})).filter(e=>e.pnl!==null);
   const dayAgo=now-86400000,recent=closed.filter(e=>Date.parse(e.at)>=dayAgo);
   let streak=0;for(const trade of [...closed].reverse()){if(trade.pnl<0)streak++;else break;}
+  const paperEquityEvents=events.filter(e=>e.source==='tbots'&&['bot_trade','bot_session'].includes(e.eventType)
+    && (finite(e.metadata?.equity)!==null || finite(e.metadata?.equityPeak)!==null))
+    .sort((a,b)=>Date.parse(a.occurredAt||0)-Date.parse(b.occurredAt||0));
+  const peakEquity=Math.max(0,...paperEquityEvents.map(e=>finite(e.metadata?.equityPeak)).filter(v=>v!==null));
+  const latestEquity=[...paperEquityEvents].reverse().map(e=>finite(e.metadata?.equity)).find(v=>v!==null);
+  const paperDrawdownPct=peakEquity>0&&latestEquity!==undefined
+    ? Math.max(0,(peakEquity-latestEquity)/peakEquity*100) : null;
   const exchangeRealized=calculateExchangeRealized(events,now);
   const dailyByQuote={...exchangeRealized.dailyByQuote};
   for(const trade of recent)dailyByQuote.USD=(dailyByQuote.USD||0)+trade.pnl;
@@ -260,9 +269,11 @@ export function calculateUnifiedRisk(events, options = {}) {
   if(globalPaused)reasons.push('global_kill_switch');
   if(streak>=maxConsecutiveLosses)reasons.push('consecutive_paper_loss_limit');
   if(maxDailyLossUsd>0&&usdLoss>=maxDailyLossUsd)reasons.push('daily_usd_loss_limit');
+  if(paperDrawdownPct!==null&&paperDrawdownPct>=maxDrawdownPct)reasons.push('shared_paper_drawdown_limit');
   return {generatedAt:new Date(now).toISOString(),newEntriesAllowed:reasons.length===0,pauseReasons:reasons,
     consecutiveLosses:streak,maxConsecutiveLosses,rolling24hRealizedPnlByQuote:dailyByQuote,
-    maxDailyLossUsd,rolling24hUsdLoss:usdLoss,
+    maxDailyLossUsd,rolling24hUsdLoss:usdLoss,maxDrawdownPct,paperDrawdownPct,
+    paperEquity:{peak:peakEquity||null,latest:latestEquity??null},
     sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)},
     exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote,exchangeFeesByCurrency:exchangeRealized.feeTotals,
     globalPaused, exitsRemainEnabled:true,mode:'paper-first',
@@ -528,7 +539,7 @@ universalRouter.post('/universal/control',async(req,res)=>{
 });
 
 universalRouter.get('/universal/risk',async(req,res)=>{
-  try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses??process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,maxDailyLossUsd:req.query.maxDailyLossUsd??process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
+  try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses??process.env.JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES,maxDailyLossUsd:req.query.maxDailyLossUsd??process.env.JPTI_TBOTS_DAILY_LOSS_LIMIT_USD,maxDrawdownPct:req.query.maxDrawdownPct??process.env.JPTI_TBOTS_MAX_DRAWDOWN_PCT};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
   catch(e){res.status(e.status||401).json({error:e.message});}
 });
 
