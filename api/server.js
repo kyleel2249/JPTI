@@ -9,6 +9,7 @@ import { operationsRouter, startOperationsScheduler } from './operations.js';
 import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './policy.js';
 import { buildCrossVenueComparison } from './market-intelligence.js';
 import { advancedRouter } from './advanced-intelligence.js';
+import { labRouter } from './advanced-lab.js';
 
 const app = express();
 const port = Number(process.env.JPTI_API_PORT || 8787);
@@ -38,6 +39,7 @@ app.use('/api/intelligence', intelligenceRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
+app.use('/api', labRouter);
 
 app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
