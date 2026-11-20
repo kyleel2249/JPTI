@@ -24,6 +24,7 @@ export default function UniversalEngine({ localPrivateAccess = false }) {
   const [risk,setRisk]=useState(null);
   const [performance,setPerformance]=useState(null);
   const [portfolio,setPortfolio]=useState(null);
+  const [strategyScorecards,setStrategyScorecards]=useState(null);
   const [controlStatus,setControlStatus]=useState('');
   const [controlBusy,setControlBusy]=useState(false);
   const [error,setError]=useState('');
@@ -58,10 +59,10 @@ export default function UniversalEngine({ localPrivateAccess = false }) {
     setLoading(true);setError('');
     try{
       const headers={'x-jpti-api-token':token};
-      const [r1,r2,r3]=await Promise.all([apiFetch('/api/universal/risk',{headers,cache:'no-store'}),apiFetch('/api/universal/performance',{headers,cache:'no-store'}),apiFetch('/api/universal/portfolio',{headers,cache:'no-store'})]);
-      const [a,b,c]=await Promise.all([r1.json(),r2.json(),r3.json()]);
-      if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');if(!r3.ok)throw new Error(c.error||'Portfolio valuation unavailable');
-      setRisk(a);setPerformance(b);setPortfolio(c);
+      const [r1,r2,r3,r4]=await Promise.all([apiFetch('/api/universal/risk',{headers,cache:'no-store'}),apiFetch('/api/universal/performance',{headers,cache:'no-store'}),apiFetch('/api/universal/portfolio',{headers,cache:'no-store'}),apiFetch('/api/universal/strategy/scorecards?days=90&minTrades=20',{headers,cache:'no-store'})]);
+      const [a,b,c,d]=await Promise.all([r1.json(),r2.json(),r3.json(),r4.json()]);
+      if(!r1.ok)throw new Error(a.error||'Unified risk unavailable');if(!r2.ok)throw new Error(b.error||'Performance report unavailable');if(!r3.ok)throw new Error(c.error||'Portfolio valuation unavailable');if(!r4.ok)throw new Error(d.error||'Strategy scorecards unavailable');
+      setRisk(a);setPerformance(b);setPortfolio(c);setStrategyScorecards(d);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[token]);
 
@@ -151,6 +152,10 @@ export default function UniversalEngine({ localPrivateAccess = false }) {
     <div className="section-heading"><div><span className="eyebrow">PORTFOLIO-WIDE CONTROL</span><h3>Unified risk & performance</h3></div></div>
     <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={loadPrivate} disabled={loading||!canUsePrivateApi}>{loading?'Loading…':'Load risk, performance & portfolio'}</button></div>
     {risk&&<><div className="news-search"><button onClick={()=>setGlobalControl('pause_new_entries')} disabled={controlBusy||!canUsePrivateApi}>Pause all new T-Bots entries</button><button onClick={()=>setGlobalControl('resume_new_entries')} disabled={controlBusy||!token}>Resume new entries</button></div>{controlStatus&&<p className="subtle-note">{controlStatus}</p>}<div className="quote-consensus-stats"><div><span>NEW ENTRIES</span><b>{risk.newEntriesAllowed?'ALLOWED':'PAUSED'}</b></div><div><span>GLOBAL PAUSE</span><b>{risk.globalPaused?'ON':'OFF'}</b><span>LOSS STREAK</span><b>{risk.consecutiveLosses}</b></div><div><span>24H USD LOSS</span><b>{fmt(risk.rolling24hUsdLoss)}</b></div><div><span>DAILY LIMIT</span><b>{fmt(risk.maxDailyLossUsd)}</b></div></div><p className="subtle-note">{(risk.pauseReasons||[]).join(' · ')||'No configured shared pause condition currently breached'}. Existing exits remain enabled. {risk.caveat}</p></>}
+
+    {strategyScorecards&&<><div className="section-heading"><div><span className="eyebrow">STRATEGY FEEDBACK LOOP</span><h3>Historical strategy scorecards</h3></div><span className="subtle-note">Last {strategyScorecards.windowDays} days · paper trades only</span></div>
+      {strategyScorecards.scorecards?.length?<div className="scanner-table"><div><span>STRATEGY PROFILE</span><span>TRADES / WIN RATE</span><span>EXPECTANCY</span><span>PROFIT FACTOR</span><span>SAMPLE QUALITY</span></div>{strategyScorecards.scorecards.map(row=><div key={row.strategyProfile}><b>{row.strategyProfile.replaceAll('_',' ')}</b><span>{row.trades} · {fmt(row.winRatePercent)}%</span><span>{fmt(row.expectancyUsdPerTrade)} USD</span><span>{row.profitFactor==null?'No losses':fmt(row.profitFactor)}</span><strong>{row.sampleQuality.replaceAll('_',' ')}</strong></div>)}</div>:<p className="subtle-note">No closed T-Bots paper trades are recorded in this lookback window. Scorecards will populate as tagged results are persisted.</p>}
+      <p className="subtle-note">{strategyScorecards.caveat}</p></>}
     {performance&&<><div className="quote-consensus-stats"><div><span>T-BOTS CLOSED PAPER TRADES</span><b>{performance.paperStrategy.closedTrades}</b></div><div><span>PAPER WIN RATE</span><b>{performance.paperStrategy.winRatePercent==null?'—':fmt(performance.paperStrategy.winRatePercent)+'%'}</b></div><div><span>PAPER REALIZED PNL</span><b>{fmt(performance.paperStrategy.realizedPnlUsd)} USD</b></div><div><span>EXCHANGE FILLS</span><b>{performance.exchangeExecution.fillCount}</b></div></div><p className="subtle-note">{performance.caveat}</p></>}
     {portfolio&&<><div className="section-heading"><div><span className="eyebrow">RECORDED EXCHANGE INVENTORY</span><h3>Spot portfolio mark-to-market</h3></div><span className="subtle-note">{portfolio.positions?.length||0} recorded open positions</span></div>
       {Object.keys(portfolio.byQuote||{}).length>0?<><div className="quote-consensus-stats">{Object.entries(portfolio.byQuote).map(([quote,row])=><div key={quote}><span>{quote} · COST BASIS</span><b>{fmt(row.costBasis)}</b><span>MARKET VALUE</span><b>{fmt(row.marketValue)}</b><span>UNREALIZED PNL</span><b>{fmt(row.unrealizedPnl)}</b></div>)}</div>
