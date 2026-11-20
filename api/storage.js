@@ -133,7 +133,7 @@ export async function appendUniqueLedgerEvent(input) {
   if (backend === 'file') {
     let result;
     fileWriteQueue = fileWriteQueue.catch(() => {}).then(async () => {
-      const events = await readFileEvents(20000);
+      const events = await readFileEvents(Infinity);
       const duplicate = events.find(item => item.kind === 'ledger-transaction' && item.source === event.source &&
         item.accountId === event.accountId && item.externalId === event.externalId && item.symbol === event.symbol);
       if (duplicate) { result = { duplicate: true, event: duplicate }; return; }
