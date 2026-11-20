@@ -234,8 +234,8 @@ labRouter.get('/advanced/stream/:exchange/:symbol', async (req, res) => {
   const exchangeId = req.params.exchange.toLowerCase(), symbol = req.params.symbol.toUpperCase().replace('-', '/');
   res.status(200).set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders?.();
-  let busy = false, closed = false;
-  req.on('close', () => { closed = true; });
+  let busy = false, closed = false, timer = null;
+  res.on('close', () => { closed = true; if (timer) clearInterval(timer); });
   const publish = async () => {
     if (busy || closed) return;
     busy = true;
@@ -263,6 +263,5 @@ labRouter.get('/advanced/stream/:exchange/:symbol', async (req, res) => {
     } finally { busy = false; }
   };
   await publish();
-  const timer = setInterval(publish, clamp(Number(req.query.intervalMs || 2000), 1000, 15000));
-  req.on('close', () => clearInterval(timer));
+  if (!closed) timer = setInterval(publish, clamp(Number(req.query.intervalMs || 2000), 1000, 15000));
 });
