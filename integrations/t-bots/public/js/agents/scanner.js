@@ -55,7 +55,7 @@ export class ScannerAgent extends BaseAgent {
     if (t.smartWallets10m !== null && t.smartWallets10m >= c.smartWallets.min) out.push({ key: 'smart', label: `${t.smartWallets10m} smart wallets in` });
     if (t.kolBought === true) out.push({ key: 'kol', label: 'KOL bought' });
     const profile = this.cfg.scanner.assetProfile || 'meme_new_pair';
-    if (profile !== 'meme_new_pair' && Number.isFinite(t.change1hPct) && Math.abs(t.change1hPct) >= 1) out.push({ key: 'momentum', label: `1h momentum ${t.change1hPct >= 0 ? '+' : ''}${t.change1hPct.toFixed(1)}%` });
+    if ((profile !== 'meme_new_pair' || t.marketType === 'cex') && Number.isFinite(t.change1hPct) && Math.abs(t.change1hPct) >= 1) out.push({ key: 'momentum', label: `1h momentum ${t.change1hPct >= 0 ? '+' : ''}${t.change1hPct.toFixed(1)}%` });
     if (t.jptiEvidence && t.jptiEvidence.score >= 45) out.push({ key: 'jpti-evidence', label: `JPTI evidence ${t.jptiEvidence.score}/100` });
     return out;
   }
