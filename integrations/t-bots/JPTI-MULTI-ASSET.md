@@ -37,9 +37,10 @@ T-Bots now has selectable DEX scan profiles in the session composer:
 - `breakout` — liquid token momentum/breakout discovery.
 - `mean_reversion` — liquid token range/reversion discovery.
 
-When the JPTI bridge is connected, the live feed also merges a server-configured CEX spot watchlist with multi-chain DEX pairs. Configure in the JPTI server-side `.env`:
+When the JPTI bridge is connected, the live feed also merges a server-configured DEX contract watchlist (for established/older tokens) and a CEX spot watchlist with the live multi-chain DEX discovery feed. Configure in the JPTI server-side `.env`:
 
 ```env
+JPTI_TBOTS_DEX_WATCHLIST=solana:YourSolanaMint,base:0xYourTokenContract
 JPTI_TBOTS_CEX_MARKETS=binance:BTC/USDT,binance:ETH/USDT,binance:SOL/USDT,bitget:BTC/USDT,bitget:ETH/USDT
 JPTI_TBOTS_MAX_CONSECUTIVE_LOSSES=3
 JPTI_TBOTS_DAILY_LOSS_LIMIT_USD=100
@@ -54,6 +55,7 @@ T-Bots requests fresh per-asset evidence from JPTI before new entries. If the ev
 - `GET /api/universal/profiles` — strategy profile registry and asset-class mapping.
 - `POST /api/universal/strategy/evaluate` — deterministic evidence evaluation for a selected profile; research-only.
 - `GET /api/universal/market/:exchange/:symbol?timeframe=1h` — ticker, OHLCV, multi-timeframe trend, RSI, order-book depth, funding/open interest where supported, and evidence council.
+- `GET /api/universal/dex-watchlist` — authenticated configured DEX contract-address watchlist.
 - `GET /api/universal/cex-watchlist` — authenticated configured CEX spot market feed for T-Bots.
 - `POST /api/universal/asset-evidence` — authenticated batch evidence scoring for DEX and CEX instruments.
 - `GET /api/universal/asset/:chain/:address` — authenticated DEX pair and provider-specific token security observations (RugCheck for Solana, GoPlus for selected EVM chains).
