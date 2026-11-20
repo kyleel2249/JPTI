@@ -10,13 +10,17 @@
 
 const DS = 'https://api.dexscreener.com';
 const RC = 'https://api.rugcheck.xyz';
+const GP = 'https://api.gopluslabs.io/api/v1';
+const GOPLUS_CHAIN_IDS = { ethereum: '1', bsc: '56', polygon: '137', arbitrum: '42161', optimism: '10', base: '8453', avalanche: '43114', linea: '59144', blast: '81457' };
 const num = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
 
 export function mapPair(p, now = Date.now()) {
   const buys = num(p?.txns?.m5?.buys) ?? 0;
   const sells = num(p?.txns?.m5?.sells) ?? 0;
   return {
-    id: p?.baseToken?.address,
+    id: `${p?.chainId || 'unknown'}:${p?.baseToken?.address || ''}`,
+    chainId: String(p?.chainId || 'unknown').toLowerCase(),
+    tokenAddress: p?.baseToken?.address,
     symbol: String(p?.baseToken?.symbol || '?').slice(0, 12),
     dex: p?.dexId || 'unknown',
     ageMin: p?.pairCreatedAt ? (now - p.pairCreatedAt) / 60000 : Infinity,
@@ -87,27 +91,40 @@ export class LiveFeed {
     const list = await this._json(`${DS}/token-profiles/latest/v1`);
     if (!Array.isArray(list)) return;
     for (const p of list) {
-      if (p.chainId !== 'solana' || !p.tokenAddress || this.tokens.has(p.tokenAddress)) continue;
-      this.tokens.set(p.tokenAddress, { id: p.tokenAddress, tracked: true, hist: [], liqMax: 0, security: undefined, holdHist: [], view: null, order: this.ticks });
+      if (!p.chainId || !p.tokenAddress) continue;
+      const id = `${String(p.chainId).toLowerCase()}:${p.tokenAddress}`;
+      if (this.tokens.has(id)) continue;
+      this.tokens.set(id, { id, chainId: String(p.chainId).toLowerCase(), tokenAddress: p.tokenAddress, tracked: true, hist: [], liqMax: 0, security: undefined, holdHist: [], view: null, order: this.ticks });
     }
     const ids = [...this.tokens.values()].sort((a, b) => b.order - a.order);
     for (const stale of ids.slice(this.maxTracked)) if (!stale.view?.__open) this.tokens.delete(stale.id);
   }
 
   async _refresh() {
-    const ids = [...this.tokens.keys()];
-    for (let i = 0; i < ids.length; i += 30) {
-      const batch = ids.slice(i, i + 30);
-      const pairs = await this._json(`${DS}/tokens/v1/solana/${batch.join(',')}`);
-      if (!Array.isArray(pairs)) continue;
-      const best = new Map();
-      for (const p of pairs) {
-        const id = p?.baseToken?.address;
-        if (!id) continue;
-        const liq = num(p?.liquidity?.usd) ?? 0;
-        if (!best.has(id) || liq > (num(best.get(id)?.liquidity?.usd) ?? 0)) best.set(id, p);
+    const byChain = new Map();
+    for (const token of this.tokens.values()) {
+      const rows = byChain.get(token.chainId) || [];
+      rows.push(token);
+      byChain.set(token.chainId, rows);
+    }
+    for (const [chain, tokens] of byChain) {
+      const addresses = tokens.map(t => t.tokenAddress);
+      for (let i = 0; i < addresses.length; i += 30) {
+        const batch = addresses.slice(i, i + 30);
+        const pairs = await this._json(`${DS}/tokens/v1/${encodeURIComponent(chain)}/${batch.join(',')}`);
+        if (!Array.isArray(pairs)) continue;
+        const best = new Map();
+        for (const pair of pairs) {
+          const address = pair?.baseToken?.address;
+          if (!address) continue;
+          const liq = num(pair?.liquidity?.usd) ?? 0;
+          if (!best.has(address) || liq > (num(best.get(address)?.liquidity?.usd) ?? 0)) best.set(address, pair);
+        }
+        for (const [address, pair] of best) {
+          const token = this.tokens.get(`${chain}:${address}`);
+          this._apply(token, mapPair(pair, this.now()));
+        }
       }
-      for (const [id, p] of best) this._apply(this.tokens.get(id), mapPair(p, this.now()));
     }
   }
 
@@ -149,19 +166,48 @@ export class LiveFeed {
   }
 
   async _enrich() {
-    let budget = 4;
-    for (const t of this.tokens.values()) {
+    let budget = 8;
+    for (const token of this.tokens.values()) {
       if (budget <= 0) break;
-      const m = t.m;
-      if (t.security !== undefined || !m) continue;
-      if ((m.liquidityUsd ?? 0) < 1 || (m.volume5mUsd ?? 0) < 1) continue;
+      const market = token.m;
+      if (token.security !== undefined || !market) continue;
+      if ((market.liquidityUsd ?? 0) < 1 || (market.volume5mUsd ?? 0) < 1) continue;
       budget--;
-      const report = await this._json(`${RC}/v1/tokens/${t.id}/report`);
-      t.security = mapRugCheck(report);
-      if (t.security === null) t.security = { failedLookup: true, frozenMint: true, mintAuthorityOpen: true, lpUnlocked: true, devPct: 100, top10Pct: 100, bundledLaunch: true, lpLockedDays: 0, honeypot: true, holders: 0 };
-      if (t.view) {
-        t.view.security = t.security;
-        t.view.holders = t.security.holders ?? 0;
+      if (token.chainId === 'solana') {
+        const report = await this._json(`${RC}/v1/tokens/${token.tokenAddress}/report`);
+        token.security = mapRugCheck(report);
+      } else if (GOPLUS_CHAIN_IDS[token.chainId]) {
+        const report = await this._json(`${GP}/token_security/${GOPLUS_CHAIN_IDS[token.chainId]}?contract_addresses=${encodeURIComponent(token.tokenAddress)}`);
+        const item = report?.result?.[token.tokenAddress.toLowerCase()] || report?.result?.[token.tokenAddress];
+        if (item) {
+          const holders = Array.isArray(item.holders) ? item.holders : [];
+          const lpRows = Array.isArray(item.lp_holders) ? item.lp_holders : [];
+          const locked = lpRows.some(row => row.is_locked === '1' || row.is_locked === 1);
+          const lockEnds = lpRows.map(row => num(row?.locked_detail?.[0]?.end_time)).filter(Boolean);
+          const lockDays = locked && lockEnds.length ? Math.max(0, (Math.max(...lockEnds) * 1000 - this.now()) / 86400000) : 0;
+          const holderPercents = holders.slice(0, 10).map(row => num(row.percent)).filter(v => v !== null);
+          token.security = {
+            holders: num(item.holder_count),
+            frozenMint: false,
+            mintAuthorityOpen: item.is_mintable === '1',
+            lpUnlocked: !locked,
+            devPct: num(item.creator_percent) === null ? null : Number(item.creator_percent) * 100,
+            top10Pct: holderPercents.length ? holderPercents.reduce((sum, v) => sum + v * 100, 0) : null,
+            bundledLaunch: false,
+            lpLockedDays: lockDays,
+            honeypot: item.is_honeypot === '1' || item.is_blacklisted === '1',
+            source: 'GoPlus token security'
+          };
+        }
+      }
+      // Unknown chains or incomplete security responses fail closed in the Rug Check agent.
+      if (token.security === null || token.security === undefined) token.security = {
+        failedLookup: true, frozenMint: true, mintAuthorityOpen: true, lpUnlocked: true,
+        devPct: null, top10Pct: null, bundledLaunch: true, lpLockedDays: 0, honeypot: true, holders: 0
+      };
+      if (token.view) {
+        token.view.security = token.security;
+        token.view.holders = token.security.holders ?? 0;
       }
     }
   }
