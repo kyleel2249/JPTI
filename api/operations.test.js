@@ -5,7 +5,7 @@ import { eventSchema, getOperationsSnapshot } from './operations.js';
 test('operations snapshot exposes monitored services and honest waiting states', () => {
   const snapshot = getOperationsSnapshot();
   const ids = snapshot.jobs.map((job) => job.id);
-  for (const id of ['market-monitor','provider-health','reconciliation','investor-monitor','market-maker','news-monitor','onchain-monitor']) assert.ok(ids.includes(id));
+  for (const id of ['market-monitor','fill-ingestion','provider-health','reconciliation','investor-monitor','market-maker','news-monitor','onchain-monitor']) assert.ok(ids.includes(id));
   assert.equal(snapshot.schedulerEnabled, true);
   assert.ok(snapshot.uptimeSeconds >= 0);
 });
@@ -26,4 +26,11 @@ test('transaction event schema rejects negative quantities and prices', () => {
     quantity: -1, price: 0
   });
   assert.equal(result.success, false);
+});
+
+test('transaction event schema accepts derivative cash-flow events', () => {
+  for (const eventType of ['funding', 'interest', 'borrow', 'rebate']) {
+    const result = eventSchema.safeParse({ source: 'bitget', eventType, externalId: 'cashflow-123', accountId: 'main-account', currency: 'USDT', quantity: 0.25 });
+    assert.equal(result.success, true, eventType);
+  }
 });
