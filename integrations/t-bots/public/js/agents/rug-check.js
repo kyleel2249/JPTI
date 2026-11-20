@@ -11,6 +11,12 @@ export class RugCheckAgent extends BaseAgent {
   }
 
   check(t) {
+    if (t.marketType === 'cex') {
+      const pass = t.exchangeMarketActive === true && t.spreadPct != null && t.spreadPct <= 0.5 && t.quoteVolume24h >= 100000 && t.liquidityUsd >= 10000;
+      this.bump(pass ? 'passed' : 'filtered');
+      this.set(pass ? 'pass' : 'fail', `${pass ? 'exchange market verified' : 'exchange market rejected'} ${t.symbol}`);
+      return { pass, reasons: pass ? [] : ['CEX market activity, spread, quote volume or visible depth failed the exchange-market gate'] };
+    }
     const r = this.cfg.rug;
     const s = t.security;
     const fail = [];
