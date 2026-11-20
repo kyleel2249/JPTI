@@ -105,7 +105,7 @@ Live order execution is disabled by default. The API requires all of the followi
 
 These are initial guardrails, not a complete risk-management or production security system. Keep the API bound to localhost. JPTI is designed to run locally with a Node.js API, web interface, Windows desktop application and Android client. Keep the API bound to localhost on the PC; use secured device settings only over a trusted local network.
 
-## Android
+## Android local-network access
 
 JPTI supports a native Android client built with Capacitor. The Android app connects to a JPTI API instance running on your Windows PC or another computer on your trusted local network. Build the Android project and debug APK with:
 
