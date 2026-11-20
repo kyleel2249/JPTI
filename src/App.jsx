@@ -453,8 +453,8 @@ function App() {
            <div><span>STRATEGY LABEL COVERAGE</span><b>{performanceData.matchedExitCount ? Math.round((1-performanceData.dataQuality.unattributedExits/performanceData.matchedExitCount)*100) + '%' : '—'}</b></div>
          </div>
          <h4>Realized performance by quote currency</h4>
-         <div className="scanner-table"><div><span>QUOTE</span><span>NET REALIZED PNL</span><span>WIN RATE</span><span>PROFIT FACTOR</span><span>EXPECTANCY / EXIT</span></div>
-           {performanceData.byCurrency.map(row => <div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong><span>{row.winRatePercent==null?'—':row.winRatePercent.toFixed(1)+'%'}</span><span>{row.profitFactor==null?'—':row.profitFactor.toFixed(2)}</span><span>{fmt(row.expectancyPerExit)}</span></div>)}
+         <div className="scanner-table"><div><span>QUOTE</span><span>NET REALIZED PNL</span><span>WIN RATE</span><span>PROFIT FACTOR</span><span>EXPECTANCY / EXIT</span><span>MAX DD (QUOTE)</span></div>
+           {performanceData.byCurrency.map(row => <div key={row.quoteCurrency}><b>{row.quoteCurrency}</b><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong><span>{row.winRatePercent==null?'—':row.winRatePercent.toFixed(1)+'%'}</span><span>{row.profitFactor==null?'—':row.profitFactor.toFixed(2)}</span><span>{fmt(row.expectancyPerExit)}</span><span>{fmt(row.maxDrawdownCurrency)}</span></div>)}
            {!performanceData.byCurrency.length && <p className="empty-state">No matched sell executions yet. Import fills and ensure opening inventory is present.</p>}
          </div>
          <h4>Strategy attribution · separated by quote currency</h4>
