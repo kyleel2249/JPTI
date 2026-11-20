@@ -27,7 +27,7 @@ test('calculates weighted-average realized PnL for matched sell executions', () 
 test('flags unmatched sell quantity rather than fabricating opening cost basis', () => {
   const report=calculateTradePerformance([fill({side:'sell',quantity:2,price:50})]);
   assert.equal(report.matchedExitCount,0);
-  assert.equal(report.unmatchedSellExecutions,0);
+  assert.equal(report.unmatchedSellExecutions,1);
   assert.ok(report.dataQuality.warnings.some(x=>x.includes('Unmatched sell quantity')));
 });
 
