@@ -79,7 +79,7 @@ app.use('/api', labRouter);
 app.use('/api', tbotsRouter);
 app.use('/api', universalRouter);
 // T-Bots is preserved as an independently versioned paper-trading subsystem.
-app.use('/t-bots', express.static(resolve('integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
+app.use('/t-bots', express.static(resolve(process.env.JPTI_TBOTS_PUBLIC_DIR || 'integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
 
 app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
