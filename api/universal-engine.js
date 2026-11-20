@@ -444,14 +444,13 @@ universalRouter.get('/universal/portfolio',async(req,res)=>{
       try {
         return await withExchange(exchangeId,{privateAccess:false},async exchange=>{
           if(!exchange.has?.fetchTicker)throw new Error('Public ticker capability unavailable.');
-          return items.map(item=>{
+          return await Promise.all(items.map(async item=>{
             try {
               if(!exchange.markets[item.symbol])throw new Error('Recorded market is not currently listed.');
-              const tickerCache=item.symbol;
-              const ticker=exchange.fetchTicker(tickerCache);
+              const ticker=await exchange.fetchTicker(item.symbol);
               return {item,ticker};
             } catch(error) { return {item,error:error.message}; }
-          });
+          }));
         });
       } catch(error) { return items.map(item=>({item,error:error.message})); }
     }));
@@ -459,7 +458,7 @@ universalRouter.get('/universal/portfolio',async(req,res)=>{
     const positions=[];
     for(const outcome of flat){
       if(outcome.error){positions.push({...outcome.item,status:'mark_unavailable',markPrice:null,marketValue:null,unrealizedPnl:null,error:outcome.error});continue;}
-      const ticker=await outcome.ticker;
+      const ticker=outcome.ticker;
       const mark=finite(ticker?.last)??finite(ticker?.close);
       if(mark===null||mark<=0){positions.push({...outcome.item,status:'mark_unavailable',markPrice:null,marketValue:null,unrealizedPnl:null,error:'No valid last/close price returned.'});continue;}
       positions.push({...outcome.item,status:'marked',markPrice:mark,marketValue:outcome.item.quantity*mark,
