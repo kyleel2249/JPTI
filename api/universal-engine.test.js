@@ -106,7 +106,7 @@ test('exchange inventory accounts for base-denominated buy and sell fees', async
   assert.ok(Math.abs(result.openInventory[0].quantity-0.485)<1e-10);
   assert.ok(Math.abs(result.openInventory[0].cost-48.98989898989899)<1e-8);
   assert.ok(Math.abs(result.realizedByQuote.USDT-8.98989898989899)<1e-8);
-  assert.equal(result.unmatchedSellQuantity.USDT,undefined);
+  assert.equal(result.unmatchedSellQuantityBySymbol['ETH/USDT'],undefined);
   assert.equal(result.feeTotals.BTC,0.015);
 });
 
