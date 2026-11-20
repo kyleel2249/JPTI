@@ -23,7 +23,7 @@ tbotsRouter.get('/integrations/tbots/status', (_req, res) => res.json({
   executionMode: 'paper-only',
   sharedMemory: 'JPTI append-only transaction/event ledger',
   liveWalletExecution: false,
-  note: 'T-Bots live mode reads DEX market data but its executor remains simulated.'
+  note: 'Live discovery spans DexScreener-supported chains; chain-specific security coverage is provider-dependent and the executor remains simulated.'
 }));
 
 tbotsRouter.get('/integrations/tbots/memory', async (req, res) => {
@@ -87,7 +87,7 @@ tbotsRouter.get('/integrations/tbots/context', async (req, res) => {
         ticker: ticker ? { last: ticker.last, bid: ticker.bid, ask: ticker.ask, timestamp: ticker.timestamp } : null,
         momentum1hWindowPercent: momentumPct, orderBookImbalance: imbalance, fundingRate,
         riskScore, regime, observations: { candles: closes.length, orderBook: Boolean(book), funding: Boolean(funding) },
-        caveat: 'A coarse BTC/selected-market regime proxy, not a Solana token valuation or trade signal. Use as an optional risk gate only.' };
+        caveat: 'A coarse BTC/selected-market regime proxy, not a token-specific valuation or trade signal. Use as an optional risk gate only.' };
     });
     res.set('Cache-Control', 'no-store');
     res.json(context);
