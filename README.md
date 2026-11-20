@@ -5,6 +5,7 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 ## Implementation status
 
 **Implemented in this build**
+- Selectable local JSONL or PostgreSQL event storage; PostgreSQL mode uses JSONB event records, database-enforced ledger idempotency, durable per-market exchange fill-sync cursors and startup schema initialization. Local-file mode remains the default for development.
 - Responsive React dashboard for desktop and mobile browsers.
 - Node.js API gateway with live public ticker and market-catalog endpoints.
 - Multi-exchange CCXT adapter catalog (availability is detected from the installed CCXT version).
@@ -23,6 +24,7 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - Independent visibility controls for FVG, liquidity sweeps, BOS/CHoCH and order blocks, configurable swing sensitivity (2/3/5/8 bars), chart overlays and an SMC event summary.
 
 **Not yet implemented / not to be mistaken for complete functionality**
+- PostgreSQL-backed persistence requires `JPTI_STORAGE_BACKEND=postgres`, a reachable `DATABASE_URL`, and the documented TLS settings. Local JSONL mode is intended for single-process development; scheduler leader election and multi-instance coordination are not yet implemented.
 - The main candlestick chart and top market strip use live OHLCV/ticker data from the selected exchange. Product availability and market classification are exchange-specific; an instrument is only shown when its adapter reports it in the public catalog. Portfolio balances, PnL, scanner, autonomous-agent status and watchlist sample values remain illustrative until their services are implemented.
 - SMC markings are rule-based technical interpretations, not proof of institutional activity. Order blocks are candidate zones, and all signals require trader validation. Multi-timeframe confluence, advanced alerts and SMC-based strategy backtesting are not yet implemented. FVGs are marked filled after a full traversal of the gap, and order-block zones are marked invalidated after a close through the far boundary.
 - Financial and on-chain coverage is provider-dependent: CoinGecko/DeFiLlama endpoints are public and may rate-limit; FRED, Alchemy and Helius require user-created server-side API keys. Wallet history is indexed/provider-limited, not a complete chain archive, and wallet ownership/intent is not inferred. The confluence scoring endpoint is not yet a validated backtested strategy or an order trigger; on-chain wallet histories are currently available through separate read-only address lookups and are not automatically attributed to exchange netflows or fed into pair scores. Equities, bonds, FX and commodity feeds are not yet connected as live tradable market feeds; FRED provides selected macroeconomic time series only.
