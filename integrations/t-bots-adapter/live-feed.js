@@ -107,7 +107,7 @@ export class LiveFeed {
       this.tokens.set(id, { id, chainId: String(p.chainId).toLowerCase(), tokenAddress: p.tokenAddress, tracked: true, hist: [], liqMax: 0, security: undefined, holdHist: [], view: null, order: this.ticks });
     }
     const ids = [...this.tokens.values()].sort((a, b) => b.order - a.order);
-    for (const stale of ids.slice(this.maxTracked)) if (stale.chainId !== 'cex' && !stale.view?.__open) this.tokens.delete(stale.id);
+    for (const stale of ids.slice(this.maxTracked)) if (stale.chainId !== 'cex' && stale.source !== 'jpti-watchlist' && !stale.view?.__open) this.tokens.delete(stale.id);
   }
 
   async _refresh() {
