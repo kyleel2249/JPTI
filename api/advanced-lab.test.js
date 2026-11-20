@@ -63,3 +63,14 @@ test('accounting flags sells with missing opening inventory rather than inventin
   assert.equal(result.positions[0].unmatchedSellQuantity, 3);
   assert.equal(result.positions[0].realizedPnl, 0);
 });
+
+test('walk-forward laboratory supports RSI and Donchian strategy families', () => {
+  for (const strategy of ['rsi', 'donchian']) {
+    const result = runWalkForward(candles, { strategy, trainBars: 400, testBars: 100, stepBars: 100 });
+    assert.equal(result.strategy, strategy);
+    assert.ok(result.folds.length >= 5);
+    assert.ok(result.folds.every(f => f.outOfSample.observations === 100));
+    assert.ok(result.folds.every(f => Object.keys(f.selectedParameters).length > 0));
+  }
+  assert.throws(() => runWalkForward(candles, { strategy: 'unknown' }), /Unsupported strategy/);
+});
