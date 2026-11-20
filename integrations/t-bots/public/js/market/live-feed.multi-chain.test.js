@@ -8,7 +8,7 @@ test('maps a DEX pair with chain and contract identity', () => {
     priceUsd: '0.25', pairCreatedAt: Date.now() - 60000 });
   assert.equal(mapped.chainId, 'base');
   assert.equal(mapped.tokenAddress, '0xabc');
-  assert.equal(mapped.id, 'base:0xabc');
+  assert.equal(mapped.id, '0xabc');
 });
 
 test('discovers tokens across chains and keeps unsupported security evidence fail-closed', async () => {
