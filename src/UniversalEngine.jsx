@@ -154,7 +154,7 @@ export default function UniversalEngine() {
       {Object.keys(portfolio.byQuote||{}).length>0?<><div className="quote-consensus-stats">{Object.entries(portfolio.byQuote).map(([quote,row])=><div key={quote}><span>{quote} · COST BASIS</span><b>{fmt(row.costBasis)}</b><span>MARKET VALUE</span><b>{fmt(row.marketValue)}</b><span>UNREALIZED PNL</span><b>{fmt(row.unrealizedPnl)}</b></div>)}</div>
       <div className="scanner-table"><div><span>VENUE / SYMBOL</span><span>QUANTITY</span><span>AVG COST</span><span>MARK</span><span>UNREALIZED PNL</span></div>{portfolio.positions.map((p,i)=><div key={p.exchange+':'+p.accountId+':'+p.symbol+':'+i}><b>{p.exchange} · {p.symbol}</b><span>{fmt(p.quantity)}</span><span>{fmt(p.averageCost)} {p.quote}</span><span>{p.status==='marked'?fmt(p.markPrice):'Unavailable'}</span><strong>{p.status==='marked'?fmt(p.unrealizedPnl)+' '+p.quote:'Unmarked'}</strong></div>)}</div></>:<p className="subtle-note">No open spot inventory can currently be reconstructed from recorded exchange fills.</p>}
       <p className="subtle-note">{portfolio.valuation} {portfolio.caveat}</p>
-      <p className="subtle-note">Unmatched sell quantity by quote: {Object.entries(portfolio.unmatchedSellQuantityByQuote||{}).map(([q,v])=>q+' '+fmt(v)).join(' · ')||'None recorded'}. Cash balances and unrecorded opening inventory are not included.</p>
+      <p className="subtle-note">Unmatched sell quantity by symbol: {Object.entries(portfolio.unmatchedSellQuantityBySymbol||{}).map(([q,v])=>q+' '+fmt(v)).join(' · ')||'None recorded'}. Cash balances and unrecorded opening inventory are not included.</p>
     </>}
     {error&&<p className="quote-error">{error}</p>}
   </section>;
