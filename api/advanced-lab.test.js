@@ -93,7 +93,7 @@ test('portfolio risk keeps quote currencies separate and calculates historical V
   assert.equal(usdt.grossExposure, 200);
   assert.ok(usdt.historical.observations >= 20);
   assert.ok(Number.isFinite(usdt.historical.var95Percent));
-  assert.equal(usdt.stress.estimatedLoss, 30);
+  assert.equal(usdt.stress.estimatedLoss, 2); // USDT uses the configured -1% stable-quote shock.
   assert.ok(usdt.concentration.effectivePositions > 1);
   assert.ok(Number.isFinite(usdt.historical.diagnostics.annualizedVolatilityPercent));
   assert.ok(Number.isFinite(usdt.historical.diagnostics.maxHistoricalDrawdownPercent));
