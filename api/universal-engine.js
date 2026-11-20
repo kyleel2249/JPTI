@@ -214,6 +214,48 @@ universalRouter.post('/universal/asset-evidence',(req,res)=>{
     policy:'Evidence score is a discovery/ranking feature, not a token safety pass. Rug Check remains an independent mandatory gate.'});
 });
 
+
+const GOPLUS_IDS={ethereum:'1',bsc:'56',polygon:'137',arbitrum:'42161',optimism:'10',base:'8453',avalanche:'43114',linea:'59144',blast:'81457'};
+universalRouter.get('/universal/asset/:chain/:address',async(req,res)=>{
+  try{
+    requirePrivateApiAuth(req);
+    const chain=String(req.params.chain).toLowerCase(),address=String(req.params.address);
+    if(!/^[a-z0-9-]{2,32}$/.test(chain)||address.length<20||address.length>64)return res.status(400).json({error:'Invalid chain or token address.'});
+    const [pairsResult,securityResult]=await Promise.allSettled([
+      fetch('https://api.dexscreener.com/token-pairs/v1/'+encodeURIComponent(chain)+'/'+encodeURIComponent(address),{signal:AbortSignal.timeout(10000)}).then(async r=>{if(!r.ok)throw new Error('DexScreener HTTP '+r.status);return r.json();}),
+      chain==='solana'
+        ? fetch('https://api.rugcheck.xyz/v1/tokens/'+encodeURIComponent(address)+'/report',{signal:AbortSignal.timeout(10000)}).then(async r=>{if(!r.ok)throw new Error('RugCheck HTTP '+r.status);return r.json();})
+        : GOPLUS_IDS[chain]
+          ? fetch('https://api.gopluslabs.io/api/v1/token_security/'+GOPLUS_IDS[chain]+'?contract_addresses='+encodeURIComponent(address),{signal:AbortSignal.timeout(10000)}).then(async r=>{if(!r.ok)throw new Error('GoPlus HTTP '+r.status);return r.json();})
+          : Promise.reject(new Error('No validated security adapter for this chain.'))
+    ]);
+    const pairs=pairsResult.status==='fulfilled'&&Array.isArray(pairsResult.value)?pairsResult.value:[];
+    const normalized=pairs.map(normalizeDexPair).map(p=>({...p,evidence:scoreAssetEvidence(p)})).sort((a,b)=>b.liquidityUsd-a.liquidityUsd);
+    let security=null,securityError=null;
+    if(securityResult.status==='fulfilled'){
+      const report=securityResult.value;
+      if(chain==='solana'){
+        const top=Array.isArray(report.topHolders)?report.topHolders:[];
+        const risks=Array.isArray(report.risks)?report.risks:[];
+        const lpPct=finite(report.markets?.[0]?.lp?.lpLockedPct);
+        security={provider:'RugCheck',holders:finite(report.totalHolders),freezeAuthorityOpen:report.freezeAuthority!=null,mintAuthorityOpen:report.mintAuthority!=null,
+          top10Percent:top.length?top.slice(0,10).reduce((s,h)=>s+(finite(h.pct)||0),0):null,
+          lpLockedPercent:lpPct,risks:risks.map(r=>({name:r.name||null,level:r.level||null,description:r.description||null})).slice(0,30),
+          status:report.mintAuthority==null&&report.freezeAuthority==null&&lpPct!==null&&top.length?'evidence_available':'incomplete'};
+      }else{
+        const item=report?.result?.[address.toLowerCase()]||report?.result?.[address]||null;
+        if(item)security={provider:'GoPlus',holders:finite(item.holder_count),mintable:item.is_mintable,honeypot:item.is_honeypot,
+          blacklist:item.is_blacklisted,hiddenOwner:item.hidden_owner,proxy:item.is_proxy,buyTax:finite(item.buy_tax),sellTax:finite(item.sell_tax),
+          lpHolders:Array.isArray(item.lp_holders)?item.lp_holders.length:null,
+          status:item.is_mintable!==undefined&&item.is_honeypot!==undefined&&item.is_blacklisted!==undefined?'evidence_available':'incomplete'};
+      }
+    }else securityError=securityResult.reason?.message||'Security provider unavailable';
+    res.set('Cache-Control','no-store').json({chain,address,fetchedAt:new Date().toISOString(),pairCount:normalized.length,pairs:normalized,
+      security,securityError,securityDecision:security?.status==='evidence_available'?'review_required':'fail_closed',
+      note:'Provider evidence is not a safety guarantee. Run chain-specific simulations, holder and LP verification, and independent contract review before considering a trade.'});
+  }catch(e){res.status(e.status||502).json({error:e.message});}
+});
+
 universalRouter.get('/universal/risk',async(req,res)=>{
   try{requirePrivateApiAuth(req);const events=await getLedgerTransactions();const settings={maxConsecutiveLosses:req.query.maxConsecutiveLosses,maxDailyLossUsd:req.query.maxDailyLossUsd};res.set('Cache-Control','no-store').json(calculateUnifiedRisk(events,settings));}
   catch(e){res.status(e.status||401).json({error:e.message});}
