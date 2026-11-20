@@ -293,7 +293,7 @@ The report uses weighted-average cost per exchange/account/market. It does not c
 
 For the current architecture, deploy the Vite frontend to Cloudflare Pages and run the Node/Express/CCXT API on a separate Node.js host with managed PostgreSQL. A Pages Function under `functions/api/[[path]].js` proxies `/api/*` to that API over HTTPS. Set `JPTI_API_ORIGIN` and the secret `JPTI_EDGE_SECRET` in the Pages project; set the same edge secret plus `JPTI_REQUIRE_EDGE_SECRET=true` on the API host to block requests that bypass the Cloudflare proxy.
 
-Exact Pages settings, API host environment variables, secret generation, deployment verification, custom domain setup and the Workers-vs-Pages decision are documented in [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOYMENT.md).
+Exact Pages settings, API host environment variables, secret generation, deployment verification, custom domain setup and the Workers-vs-Pages decision are documented in [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOYMENT.md). The local-first Windows and Android installation model is documented in [Desktop and Android guide](docs/LOCAL_DESKTOP_ANDROID.md).
 
 **Cloudflare Pages settings:** Framework preset React (Vite); root directory `/`; build command `npm run build`; output directory `dist`; Node.js version `22`. The existing Express API is not a static Pages asset and is not deployed by the Vite build. A future Workers backend migration must separately validate CCXT, PostgreSQL, filesystem use and scheduler behavior.
 
