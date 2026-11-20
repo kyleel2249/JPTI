@@ -32,95 +32,68 @@ export function classifyInstrument({ market = {}, chain = null, pair = null } = 
 export function evaluateStrategyProfile(profileId, evidence = {}) {
   const profile = STRATEGY_PROFILES[profileId];
   if (!profile) throw new Error('Unknown strategy profile.');
-  const missing = [];
+  const fields = {
+    momentumPct: finite(evidence.momentumPct), relativeVolume: finite(evidence.relativeVolume),
+    timeframeAlignment: finite(evidence.timeframeAlignment), rsi14: finite(evidence.rsi14),
+    orderBookImbalance: finite(evidence.orderBookImbalance), fundingRate: finite(evidence.fundingRate),
+    liquidityUsd: finite(evidence.liquidityUsd), tvlChangePct: finite(evidence.tvlChangePct),
+    feesChangePct: finite(evidence.feesChangePct), protocolRiskScore: finite(evidence.protocolRiskScore),
+    earningsRiskDays: finite(evidence.earningsRiskDays), macroMomentumPct: finite(evidence.macroMomentumPct),
+    relativeStrengthPct: finite(evidence.relativeStrengthPct), dollarIndexChangePct: finite(evidence.dollarIndexChangePct),
+    rateDifferentialBps: finite(evidence.rateDifferentialBps)
+  };
+  const required = {
+    spot_trend: ['momentumPct','relativeVolume','timeframeAlignment','liquidityUsd'],
+    perp_momentum: ['momentumPct','relativeVolume','timeframeAlignment','fundingRate','liquidityUsd'],
+    mean_reversion: ['rsi14','relativeVolume','liquidityUsd'],
+    breakout: ['momentumPct','relativeVolume','timeframeAlignment','liquidityUsd'],
+    defi_rotation: ['tvlChangePct','feesChangePct','protocolRiskScore','liquidityUsd'],
+    meme_new_pair: ['momentumPct','relativeVolume','liquidityUsd'],
+    equity_swing: ['momentumPct','relativeVolume','timeframeAlignment','earningsRiskDays','liquidityUsd'],
+    macro_rotation: ['macroMomentumPct','relativeStrengthPct','liquidityUsd']
+  }[profileId] || ['liquidityUsd'];
+  const missing = required.filter(key => fields[key] === null && !(key === 'macroMomentumPct' && ['risk-on','risk-off','neutral'].includes(evidence.macroBias)));
   const signals = [];
-  const momentum = finite(evidence.momentumPct);
-  const volume = finite(evidence.relativeVolume);
-  const rsi = finite(evidence.rsi14);
-  const alignment = finite(evidence.timeframeAlignment);
-  const imbalance = finite(evidence.orderBookImbalance);
-  const funding = finite(evidence.fundingRate);
-  const liquidity = finite(evidence.liquidityUsd);
-  if (momentum === null) missing.push('momentum');
-  else signals.push({ factor:'momentum', bias: momentum > 0 ? 'bullish' : momentum < 0 ? 'bearish' : 'neutral', value:momentum });
-  if (volume === null) missing.push('relative_volume');
-  else signals.push({ factor:'relative_volume', bias:volume >= 1.5 ? 'confirming' : 'weak', value:volume });
-  if (alignment === null) missing.push('timeframe_alignment');
-  else signals.push({ factor:'timeframe_alignment', bias:alignment > 0 ? 'bullish' : alignment < 0 ? 'bearish' : 'mixed', value:alignment });
-  if (imbalance !== null) signals.push({ factor:'order_book', bias:imbalance > .15 ? 'bullish' : imbalance < -.15 ? 'bearish' : 'balanced', value:imbalance });
-  if (funding !== null) signals.push({ factor:'funding', bias:Math.abs(funding) > .001 ? 'crowded' : 'normal', value:funding });
-  let score = 50 + clamp(momentum ?? 0,-10,10)*1.5 + clamp((volume ?? 1)-1,-2,3)*5 + clamp(alignment ?? 0,-1,1)*12 + clamp(imbalance ?? 0,-1,1)*8;
-  if (profileId === 'mean_reversion' && rsi !== null) score += rsi < 30 ? 12 : rsi > 70 ? -12 : 0;
-  if (profileId === 'perp_momentum' && funding !== null) score -= clamp(Math.abs(funding)*10000,0,15);
-  if (liquidity !== null && liquidity < 10000) score -= 20;
-  score = Math.round(clamp(score,0,100));
-  const conflict = signals.filter(s => ['bullish','bearish'].includes(s.bias)).some((s,i,arr) => arr.some(t => t.bias !== s.bias));
-  const ready = missing.length <= 1 && liquidity !== null && liquidity >= 10000 && !conflict;
-  return { profileId, profile, score, bias:score >= 60 ? 'bullish' : score <= 40 ? 'bearish' : 'neutral',
-    status:!ready ? 'insufficient_or_conflicting_evidence' : score >= 65 ? 'research_candidate' : 'monitor',
-    signals, missingEvidence:missing, conflicts:conflict, leveragePolicy:profile.leverageAllowed ? 'exchange and account risk limits still required; profile maximum is not an authorization' : 'no leverage',
-    decision:'research-only; not an order instruction' };
-}
-
-
-export function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
-
-export function calculateExchangeRealized(events, now = Date.now()) {
-  const inventory = new Map(), realizedByQuote = {}, dailyByQuote = {}, feeTotals = {};
-  const fills = events.filter(e=>e.eventType==='fill' && e.symbol && e.side && finite(e.quantity)>0 && finite(e.price)>0)
-    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
-  for(const e of fills){
-    const key=e.source+':'+e.accountId+':'+e.symbol;
-    const [base,quote]=String(e.symbol).split('/');
-    if(!base||!quote)continue;
-    const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,symbol:e.symbol};
-    const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
-    if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
-    let realized=0;
-    if(e.side==='buy'){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=qty;}
-    else{
-      const matched=Math.min(qty,row.quantity),avg=row.quantity>0?row.cost/row.quantity:0;
-      realized=(price-avg)*matched;
-      row.quantity-=matched;row.cost=Math.max(0,row.cost-avg*matched);
-      if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
-      // Only quote-denominated fees are subtracted from quote PnL; other fee tokens remain separate.
-      if(e.feeCurrency===quote)realized-=fee;
-      realizedByQuote[quote]=(realizedByQuote[quote]||0)+realized;
-      if(Date.parse(e.occurredAt)>=now-86400000)dailyByQuote[quote]=(dailyByQuote[quote]||0)+realized;
-    }
-    inventory.set(key,row);
+  const push = (factor,bias,value) => signals.push({factor,bias,value});
+  let score = 50;
+  if (fields.momentumPct !== null) { push('momentum',fields.momentumPct>0?'bullish':fields.momentumPct<0?'bearish':'neutral',fields.momentumPct); score += clamp(fields.momentumPct,-10,10)*1.5; }
+  if (fields.relativeVolume !== null) { push('relative_volume',fields.relativeVolume>=1.5?'confirming':'weak',fields.relativeVolume); score += clamp(fields.relativeVolume-1,-2,3)*5; }
+  if (fields.timeframeAlignment !== null) { push('timeframe_alignment',fields.timeframeAlignment>0?'bullish':fields.timeframeAlignment<0?'bearish':'mixed',fields.timeframeAlignment); score += clamp(fields.timeframeAlignment,-1,1)*12; }
+  if (fields.orderBookImbalance !== null) { push('order_book',fields.orderBookImbalance>.15?'bullish':fields.orderBookImbalance<-.15?'bearish':'balanced',fields.orderBookImbalance); score += clamp(fields.orderBookImbalance,-1,1)*8; }
+  if (fields.fundingRate !== null) { push('funding',Math.abs(fields.fundingRate)>.001?'crowded':'normal',fields.fundingRate); score -= clamp(Math.abs(fields.fundingRate)*10000,0,15); }
+  if (profileId === 'mean_reversion' && fields.rsi14 !== null) {
+    const bias=fields.rsi14<30?'bullish-reversion':fields.rsi14>70?'bearish-reversion':'neutral';
+    push('rsi14',bias,fields.rsi14); score += fields.rsi14<30?14:fields.rsi14>70?-14:0;
   }
-  return {realizedByQuote,dailyByQuote,feeTotals,openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
-    caveat:'Weighted-average cost on recorded fills only. Missing opening inventory, transfers, funding, taxes and fees paid in third tokens prevent a complete account PnL statement.'};
-}
-
-export function calculateUnifiedRisk(events, options = {}) {
-  const now = options.now ?? Date.now();
-  const maxConsecutiveLosses = clamp(Number(options.maxConsecutiveLosses ?? 3),1,20);
-  const maxDailyLossUsd = Math.max(0, Number(options.maxDailyLossUsd ?? 100));
-  const botEvents = events.filter(e => e.source === 'tbots' && e.eventType === 'bot_trade' && e.metadata?.action === 'paper_closed')
-    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
-  const closed = botEvents.map(e=>({ at:e.occurredAt, pnl:finite(e.metadata?.pnl), source:'tbots-paper', quote:'USD' })).filter(e=>e.pnl!==null);
-  const dayAgo = now - 86400000;
-  const recent = closed.filter(e=>Date.parse(e.at)>=dayAgo);
-  let streak=0;
-  for(const trade of [...closed].reverse()){if(trade.pnl<0)streak++;else break;}
-  const exchangeRealized = calculateExchangeRealized(events, now);
-  const dailyByQuote = { ...exchangeRealized.dailyByQuote };
-  for(const trade of recent) dailyByQuote[trade.quote]=(dailyByQuote[trade.quote]||0)+trade.pnl;
-  dailyByQuote.USD = (dailyByQuote.USD || 0) + (dailyByQuote.USDT || 0) + (dailyByQuote.USDC || 0) + (dailyByQuote.DAI || 0) + (dailyByQuote.FDUSD || 0);
-  const paperDailyUsd = closed.filter(e=>Date.parse(e.at)>=dayAgo).reduce((sum,e)=>sum+e.pnl,0);
-  const stableDailyUsd = ['USDT','USDC','DAI','FDUSD'].reduce((sum,q)=>sum+(exchangeRealized.dailyByQuote[q]||0),0);
-  const usdLoss = Math.max(0,-(paperDailyUsd + stableDailyUsd + (exchangeRealized.dailyByQuote.USD||0)));
-  const reasons=[];
-  if(streak>=maxConsecutiveLosses) reasons.push('consecutive_paper_loss_limit');
-  if(maxDailyLossUsd>0 && usdLoss>=maxDailyLossUsd) reasons.push('daily_usd_loss_limit');
-  return { generatedAt:new Date(now).toISOString(), newEntriesAllowed:reasons.length===0, pauseReasons:reasons,
-    consecutiveLosses:streak, maxConsecutiveLosses, rolling24hRealizedPnlByQuote:dailyByQuote,
-    maxDailyLossUsd, rolling24hUsdLoss:usdLoss,
-    sources:{tbotsPaperClosedTrades:closed.length,jptiExchangeFills:fillsCount(events)}, exchangeRealizedPnlByQuote:exchangeRealized.realizedByQuote, exchangeFeesByCurrency:exchangeRealized.feeTotals,
-    exitsRemainEnabled:true, mode:'paper-first',
-    caveat:'T-Bots paper PnL is USD-denominated. Exchange realized PnL is calculated from recorded fills; USD/USDT/USDC/DAI/FDUSD quote amounts are treated as approximate USD equivalents for the daily guard. Other quote currencies remain separate until an FX source is available.' };
+  if (profileId === 'defi_rotation') {
+    push('protocol_tvl',fields.tvlChangePct>0?'improving':fields.tvlChangePct<0?'declining':'flat',fields.tvlChangePct);
+    push('protocol_fees',fields.feesChangePct>0?'improving':fields.feesChangePct<0?'declining':'flat',fields.feesChangePct);
+    push('protocol_risk','risk_score',fields.protocolRiskScore);
+    score += clamp(fields.tvlChangePct,-30,30)*.45 + clamp(fields.feesChangePct,-40,40)*.3 - clamp(fields.protocolRiskScore,0,100)*.2;
+  }
+  if (profileId === 'equity_swing' && fields.earningsRiskDays !== null) {
+    push('earnings_calendar',fields.earningsRiskDays<=2?'event-risk':'clear-window',fields.earningsRiskDays);
+    if (fields.earningsRiskDays<=2) score-=18;
+  }
+  if (profileId === 'macro_rotation') {
+    const macroBias=String(evidence.macroBias||'').toLowerCase();
+    if (macroBias) { push('macro_regime',macroBias,macroBias); score += macroBias==='risk-on'?10:macroBias==='risk-off'?-10:0; }
+    if (fields.macroMomentumPct!==null) score+=clamp(fields.macroMomentumPct,-20,20)*.4;
+    if (fields.relativeStrengthPct!==null) score+=clamp(fields.relativeStrengthPct,-20,20)*.5;
+    if (fields.dollarIndexChangePct!==null) score-=clamp(fields.dollarIndexChangePct,-10,10)*.5;
+    if (fields.rateDifferentialBps!==null) push('rate_differential','context-only',fields.rateDifferentialBps);
+  }
+  if (fields.liquidityUsd !== null && fields.liquidityUsd < 10000) score -= 20;
+  score = Math.round(clamp(score,0,100));
+  const directional = signals.map(s=>s.bias).filter(b=>['bullish','bearish'].includes(b));
+  const conflict = directional.includes('bullish') && directional.includes('bearish');
+  const ready = missing.length === 0 && fields.liquidityUsd !== null && fields.liquidityUsd >= 10000 && !conflict;
+  return { profileId, profile, score, bias:score>=60?'bullish':score<=40?'bearish':'neutral',
+    status:!ready?'insufficient_or_conflicting_evidence':score>=65?'research_candidate':'monitor',
+    signals, missingEvidence:missing, conflicts:conflict,
+    leveragePolicy:profile.leverageAllowed?'exchange and account risk limits still required; profile maximum is not an authorization':'no leverage',
+    decision:'research-only; not an order instruction',
+    caveat:'Profile-specific required evidence must be present. Scores are deterministic heuristics, not calibrated probabilities or validated live strategies.' };
 }
 
 export function buildUnifiedPerformance(events) {
