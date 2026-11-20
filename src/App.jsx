@@ -74,6 +74,9 @@ function App() {
   const [portfolioData, setPortfolioData] = useState(null);
   const [portfolioError, setPortfolioError] = useState('');
   const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [riskData, setRiskData] = useState(null);
+  const [riskError, setRiskError] = useState('');
+  const [riskLoading, setRiskLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -168,6 +171,18 @@ function App() {
     } catch (error) { setLabError(error.message); }
     finally { setLabLoading(false); }
   }, [forecastExchange, forecastTimeframe, symbol, labTrainBars, labTestBars, labStrategy]);
+
+  const loadPortfolioRisk = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setRiskLoading(true); setRiskError('');
+    try {
+      const response = await fetch('/api/advanced/portfolio/risk', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Portfolio risk analytics unavailable');
+      setRiskData(data);
+    } catch (error) { setRiskError(error.message); }
+    finally { setRiskLoading(false); }
+  }, [portfolioToken]);
 
   const loadPortfolioAccounting = useCallback(async (event) => {
     if (event) event.preventDefault();
@@ -370,7 +385,22 @@ function App() {
        {renderOperations()}
      </section>;
     if (page === 'News & Events') return <section className="glass-panel detail-workspace"><span className="eyebrow">GLOBAL NEWS DISCOVERY</span><h3>Market news radar</h3><p>Searches the GDELT global news index. Verify publication time, original reporting and source credibility before using any article as trading evidence.</p><form className="news-search" onSubmit={loadNews}><input value={newsQuery} onChange={(event) => setNewsQuery(event.target.value)} placeholder="Search market, ticker, central bank, event..."/><button disabled={newsLoading}>{newsLoading ? 'Searching...' : 'Search news'}</button></form>{newsError && <p className="subtle-note">{newsError}</p>}<div className="news-results">{newsData.map((article, index) => <a href={article.url} target="_blank" rel="noreferrer" key={article.url || index}><span>{article.domain || article.sourcecountry || 'NEWS SOURCE'} · {article.seendate || 'Timestamp unavailable'}</span><b>{article.title || 'Untitled article'}</b><small>{article.sourcecountry || 'Global'} · Open original source ↗</small></a>)}{!newsData.length && !newsLoading && <p className="empty-state">Search to load current news results.</p>}</div></section>;
-    if (page === 'Risk Management') return <section className="glass-panel detail-workspace"><span className="eyebrow">CAPITAL PROTECTION</span><h3>Execution guardrails</h3><div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> USDT spot-only initial live-order policy.</p><p><ShieldCheck/> Per-order notional cap enforced server-side.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>{renderOperations()}</section>;
+    if (page === 'Risk Management') return <section className="glass-panel detail-workspace">
+      <span className="eyebrow">CAPITAL PROTECTION · QUANTITATIVE RISK</span><h3>Portfolio VaR, concentration & stress testing</h3>
+      <div className="risk-list"><p><ShieldCheck/> Live trading disabled by default.</p><p><ShieldCheck/> API-token and explicit live confirmation required.</p><p><ShieldCheck/> Server-side per-order notional and market restrictions.</p><p><ShieldCheck/> No withdrawal capability exposed.</p></div>
+      <form className="news-search" onSubmit={loadPortfolioRisk}><input type="password" value={portfolioToken} onChange={e => setPortfolioToken(e.target.value)} placeholder="JPTI API token"/><button disabled={riskLoading || !portfolioToken}>{riskLoading ? 'Calculating risk…' : 'Run portfolio risk analysis'}</button></form>
+      {riskError && <p className="quote-error">{riskError}</p>}
+      {riskData && <>
+        <p className="subtle-note">Generated {new Date(riskData.generatedAt).toLocaleString()}. Quote-currency exposures are reported separately; no cross-currency aggregation is performed.</p>
+        {riskData.portfolios.map(p => <div className="glass-panel detail-workspace" key={p.quoteCurrency}>
+          <div className="section-heading"><div><span className="eyebrow">RISK BOOK · {p.quoteCurrency}</span><h4>{fmt(p.grossExposure)} {p.quoteCurrency} gross exposure</h4></div></div>
+          <div className="quote-consensus-stats"><div><span>1D VaR · 95%</span><b>{p.historical.var95Percent == null ? '—' : p.historical.var95Percent.toFixed(2) + '%'}</b></div><div><span>EXPECTED SHORTFALL · 95%</span><b>{p.historical.expectedShortfall95Percent == null ? '—' : p.historical.expectedShortfall95Percent.toFixed(2) + '%'}</b></div><div><span>1D VaR · 99%</span><b>{p.historical.var99Percent == null ? '—' : p.historical.var99Percent.toFixed(2) + '%'}</b></div><div><span>STRESS LOSS</span><b>{fmt(p.stress.estimatedLoss)} {p.quoteCurrency}</b></div></div>
+          <p className="subtle-note">Historical observations: {p.historical.observations}. Largest position: {p.concentration.largestPositionWeightPercent.toFixed(1)}%. Effective independent positions: {p.concentration.effectivePositions.toFixed(2)}. Stress assumption: {p.stress.shockPercent}% parallel shock.</p>
+          <div className="scanner-table"><div><span>EXCHANGE / SYMBOL</span><span>MARKET VALUE</span><span>WEIGHT</span></div>{p.positions.map(x => <div key={x.exchange+x.symbol}><b>{x.exchange} · {x.symbol}</b><span>{fmt(x.marketValue)} {p.quoteCurrency}</span><strong>{x.weightPercent.toFixed(2)}%</strong></div>)}</div>
+        </div>)}
+        <p className="subtle-note">{riskData.methodology} {riskData.limitations.join(' ')}</p>
+      </>}
+      <p className="subtle-note">VaR is a historical estimate, not a maximum-loss guarantee. Derivatives leverage, liquidation mechanics, funding and cross-currency FX risk are not included.</p>{renderOperations()}</section>;
     if (page === 'Trading Bots' || page === 'AI Intelligence') return <section className="glass-panel detail-workspace"><span className="eyebrow">AGENT ORCHESTRATION</span><h3>{page === 'AI Intelligence' ? 'Explainable intelligence services' : 'Trading automation control'}</h3><p>Agent execution is not represented as active until its worker, strategy, data sources and risk policy are implemented and verified. Current service readiness is shown below.</p>{renderOperations()}</section>;
     return <section className="glass-panel detail-workspace"><span className="eyebrow">RESEARCH WORKSPACE</span><h3>{page}</h3><p>This workspace is reserved for verified data and tested functionality. It will not display fabricated performance, positions or economic events.</p>{renderOperations()}</section>;
   };
