@@ -160,7 +160,7 @@ async function exchangeFillMonitor() {
       if (saved.duplicate) duplicates++; else ingested++;
       newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
     }
-    fillCursors.set(cursorKey, newest + 1);
+    fillCursors.set(cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
     return { exchange: exchangeId, symbol, fetched: trades.length, ingested, duplicates };
   }));
   const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
