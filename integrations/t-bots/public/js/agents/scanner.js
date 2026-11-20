@@ -22,6 +22,15 @@ export class ScannerAgent extends BaseAgent {
       mean_reversion: { maxAgeHours:Infinity, minLiquidityUsd:Math.max(75000,u.minLiquidityUsd), minVolume5mUsd:Math.max(10000,u.minVolume5mUsd/2), minHolders:Math.min(300,u.minHolders) }
     };
     const active = profiles[profile] || profiles.meme_new_pair;
+    if (t.marketType === 'cex') {
+      const why=[];
+      if(t.exchangeMarketActive!==true)why.push('exchange market inactive or unavailable');
+      if(!(t.quoteVolume24h>=100000))why.push('24h quote volume below $100k');
+      if(!(t.liquidityUsd>=10000))why.push('visible order-book depth below $10k');
+      if(t.spreadPct===null||t.spreadPct===undefined||t.spreadPct>0.5)why.push('spread unavailable or above 0.5%');
+      if(!(t.price>0))why.push('invalid market price');
+      return {pass:why.length===0,pending:false,reasons:why};
+    }
     if (t.security === null || t.security === undefined) return { pass: false, pending: true, reasons: ['security data pending'] };
     const sec = t.security;
     const why = [];
