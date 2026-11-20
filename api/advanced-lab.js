@@ -74,7 +74,7 @@ export function runWalkForward(candles, options = {}) {
       if (!best || objective > best.objective) best = { ...p, objective, trainingReturnPercent: score.totalReturnPercent, trainingMaxDrawdownPercent: score.maxDrawdownPercent };
     }
     const warmup = Math.max(...slowPeriods) + 1;
-    const testReturns = runEma(testing, best.fast, best.slow, feeBps).slice(warmup - 1);
+    const testReturns = runEma(testing, best.fast, best.slow, feeBps).slice(warmup);
     folds.push({ fold: folds.length + 1, trainStart: training[0][0], trainEnd: training.at(-1)[0], testStart: candles[testStart][0], testEnd: candles[Math.min(testStart + testBars - 1, candles.length - 1)][0],
       selectedParameters: { fast: best.fast, slow: best.slow }, trainingReturnPercent: best.trainingReturnPercent,
       trainingMaxDrawdownPercent: best.trainingMaxDrawdownPercent, outOfSample: { ...metrics(testReturns), returns: testReturns } });
