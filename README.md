@@ -23,6 +23,12 @@ JPTI is an extensible trading-intelligence workspace with a React/Vite interface
 - Smart Money Concepts (SMC) analysis calculated from closed OHLCV candles: three-candle Fair Value Gaps, confirmed swing-high/low liquidity sweeps, close-confirmed BOS/CHoCH structure breaks, and heuristic last-opposing-candle order-block zones.
 - Independent visibility controls for FVG, liquidity sweeps, BOS/CHoCH and order blocks, configurable swing sensitivity (2/3/5/8 bars), chart overlays and an SMC event summary.
 
+**Phase 9 — Institutional terminal and operator experience**
+- Dedicated institutional command terminal with a safe allowlisted command parser (`HELP`, `STATUS`, `REFRESH`, `OPEN`, `SYMBOL`, `WATCH`, `UNWATCH`, `RISK`); no shell, arbitrary code execution or direct order command is exposed.
+- Multi-venue public ticker watchlist across Binance, Bitget, Bybit and OKX, with local non-sensitive watchlist persistence, source/dispersion context and explicit indicative-data caveats.
+- Live service telemetry, paper-mode status, quick workspace routing and authenticated ledger-backed portfolio risk snapshot in one responsive terminal.
+- Institutional visual system: layered navy surfaces, restrained blue/cyan/emerald/violet/amber status colors, refined typography, responsive operator panels and reduced-motion support.
+
 **Phase 8 — Unified strategy intelligence and T-Bots paper-entry controls**
 - Authenticated strategy scorecards by strategy profile, calculated from persisted T-Bots paper-closed events only, including expectancy, win rate, profit factor, drawdown, sample-size quality, and venue/asset-class breakdowns.
 - Authenticated paper-entry preflight combining required strategy evidence, server-enforced evidence freshness, persisted global pause state, consecutive-loss limits, daily realized-loss guard and token-security status.
