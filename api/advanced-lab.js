@@ -46,6 +46,44 @@ function runEma(candles, fast, slow, feeBps = 10) {
   }
   return returns;
 }
+function rsiSeries(closes, period) {
+  const out = Array(closes.length).fill(null);
+  for (let i = period; i < closes.length; i++) {
+    let gains = 0, losses = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const change = closes[j] - closes[j - 1];
+      if (change > 0) gains += change; else losses -= change;
+    }
+    const avgGain = gains / period, avgLoss = losses / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return out;
+}
+function runStrategy(candles, strategy, params, feeBps = 10) {
+  if (strategy === 'ema') return runEma(candles, params.fast, params.slow, feeBps);
+  const closes = candles.map(c => Number(c[4]));
+  const rsi = strategy === 'rsi' ? rsiSeries(closes, params.period) : null;
+  let position = 0;
+  const returns = [];
+  for (let i = 1; i < closes.length; i++) {
+    const prior = i - 1;
+    let nextPosition = position;
+    if (strategy === 'rsi' && rsi[prior] != null) {
+      if (rsi[prior] <= params.oversold) nextPosition = 1;
+      else if (rsi[prior] >= params.overbought) nextPosition = 0;
+    } else if (strategy === 'donchian' && prior >= params.lookback) {
+      const window = candles.slice(prior - params.lookback, prior);
+      const upper = Math.max(...window.map(c => Number(c[2])));
+      const lower = Math.min(...window.map(c => Number(c[3])));
+      if (closes[prior] > upper) nextPosition = 1;
+      else if (closes[prior] < lower) nextPosition = 0;
+    }
+    const gross = (closes[i] / closes[i - 1] - 1) * position;
+    returns.push(gross - Math.abs(nextPosition - position) * feeBps / 10000);
+    position = nextPosition;
+  }
+  return returns;
+}
 function validateCandles(candles) {
   if (!Array.isArray(candles) || candles.length < 100 || candles.some(c => !Array.isArray(c) || !Number.isFinite(Number(c[4])) || Number(c[4]) <= 0)) {
     throw new Error('At least 100 valid OHLCV candles with positive closes are required.');
@@ -57,36 +95,48 @@ export function runWalkForward(candles, options = {}) {
   const testBars = clamp(Number(options.testBars || 100), 20, 2000);
   const stepBars = clamp(Number(options.stepBars || testBars), 20, 2000);
   const feeBps = clamp(Number(options.feeBps ?? 10), 0, 500);
-  const fastPeriods = [...new Set((options.fastPeriods || [5, 9, 12, 20]).map(Number).filter(x => Number.isInteger(x) && x >= 2 && x <= 100))];
-  const slowPeriods = [...new Set((options.slowPeriods || [21, 30, 50, 100]).map(Number).filter(x => Number.isInteger(x) && x >= 3 && x <= 200))];
-  const grid = fastPeriods.flatMap(fast => slowPeriods.filter(slow => slow > fast).map(slow => ({ fast, slow })));
-  if (!grid.length || trainBars < Math.max(...slowPeriods, 30) + 5) throw new Error('Invalid parameter grid or training window.');
+  const strategy = String(options.strategy || 'ema').toLowerCase();
+  let grid;
+  if (strategy === 'ema') {
+    const fastPeriods = [...new Set((options.fastPeriods || [5, 9, 12, 20]).map(Number).filter(x => Number.isInteger(x) && x >= 2 && x <= 100))];
+    const slowPeriods = [...new Set((options.slowPeriods || [21, 30, 50, 100]).map(Number).filter(x => Number.isInteger(x) && x >= 3 && x <= 200))];
+    grid = fastPeriods.flatMap(fast => slowPeriods.filter(slow => slow > fast).map(slow => ({ fast, slow })));
+  } else if (strategy === 'rsi') {
+    const periods = [...new Set((options.rsiPeriods || [7, 14, 21]).map(Number).filter(x => Number.isInteger(x) && x >= 3 && x <= 50))];
+    const oversold = [...new Set((options.oversoldLevels || [20, 25, 30]).map(Number).filter(x => x >= 5 && x <= 45))];
+    const overbought = [...new Set((options.overboughtLevels || [65, 70, 80]).map(Number).filter(x => x >= 55 && x <= 95))];
+    grid = periods.flatMap(period => oversold.flatMap(low => overbought.filter(high => high > low).map(high => ({ period, oversold: low, overbought: high }))));
+  } else if (strategy === 'donchian') {
+    const lookbacks = [...new Set((options.lookbacks || [10, 20, 30, 50]).map(Number).filter(x => Number.isInteger(x) && x >= 5 && x <= 100))];
+    grid = lookbacks.map(lookback => ({ lookback }));
+  } else throw new Error('Unsupported strategy. Choose ema, rsi or donchian.');
+  const maxWarmup = Math.max(30, ...grid.map(p => p.slow || p.period || p.lookback));
+  if (!grid.length || trainBars < maxWarmup + 5) throw new Error('Invalid parameter grid or training window.');
   const folds = [];
   let testStart = trainBars;
   while (testStart + testBars <= candles.length && folds.length < 50) {
     const training = candles.slice(testStart - trainBars, testStart);
-    const testing = candles.slice(testStart - Math.max(...slowPeriods) - 2, testStart + testBars);
+    const testing = candles.slice(testStart - maxWarmup - 1, testStart + testBars);
     let best = null;
     for (const p of grid) {
-      const trainReturns = runEma(training, p.fast, p.slow, feeBps);
-      const score = metrics(trainReturns);
+      const score = metrics(runStrategy(training, strategy, p, feeBps));
       const objective = score.totalReturnPercent - score.maxDrawdownPercent * 0.5;
       if (!best || objective > best.objective) best = { ...p, objective, trainingReturnPercent: score.totalReturnPercent, trainingMaxDrawdownPercent: score.maxDrawdownPercent };
     }
-    const warmup = Math.max(...slowPeriods) + 1;
-    const testReturns = runEma(testing, best.fast, best.slow, feeBps).slice(warmup);
+    const testReturns = runStrategy(testing, strategy, best, feeBps).slice(maxWarmup);
     folds.push({ fold: folds.length + 1, trainStart: training[0][0], trainEnd: training.at(-1)[0], testStart: candles[testStart][0], testEnd: candles[Math.min(testStart + testBars - 1, candles.length - 1)][0],
-      selectedParameters: { fast: best.fast, slow: best.slow }, trainingReturnPercent: best.trainingReturnPercent,
-      trainingMaxDrawdownPercent: best.trainingMaxDrawdownPercent, outOfSample: { ...metrics(testReturns), returns: testReturns } });
+      selectedParameters: Object.fromEntries(Object.entries(best).filter(([key]) => !['objective','trainingReturnPercent','trainingMaxDrawdownPercent'].includes(key))),
+      trainingReturnPercent: best.trainingReturnPercent, trainingMaxDrawdownPercent: best.trainingMaxDrawdownPercent,
+      outOfSample: { ...metrics(testReturns), returns: testReturns } });
     testStart += stepBars;
   }
   if (!folds.length) throw new Error('Not enough candles for one complete walk-forward fold. Increase history or reduce trainBars/testBars.');
   const allOos = folds.flatMap(f => f.outOfSample.returns);
   const oosMetrics = metrics(allOos);
-  return { method: 'rolling anchored-window parameter selection with strictly subsequent out-of-sample test windows',
-    strategy: 'EMA crossover long/flat baseline', config: { trainBars, testBars, stepBars, feeBps, parameterCombinations: grid.length },
+  return { method: 'rolling parameter selection on prior training windows with subsequent untouched out-of-sample test windows',
+    strategy, config: { trainBars, testBars, stepBars, feeBps, parameterCombinations: grid.length },
     folds: folds.map(f => ({ ...f, outOfSample: (({ returns, ...stats }) => stats)(f.outOfSample) })), aggregateOutOfSample: { ...oosMetrics, equityCurve: undefined },
-    caveats: ['Research baseline, not a profitability claim.', 'Fees are modeled; spread, funding, borrow, market impact, latency, partial fills and taxes are not.', 'Use venue-specific data quality checks and additional untouched holdout data before deployment.'] };
+    caveats: ['Research baselines only; parameter selection can overfit the training windows.', 'Fees are modeled; spread, funding, borrow, market impact, latency, partial fills and taxes are not.', 'Use venue-specific data quality checks and additional untouched holdout data before deployment.'] };
 }
 export function calculatePortfolioAccounting(events, marks = {}) {
   const ordered = [...events].sort((a,b) => new Date(a.occurredAt) - new Date(b.occurredAt));
