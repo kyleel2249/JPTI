@@ -125,7 +125,7 @@ export function calculatePortfolioRisk({ positions = [], returnSeries = {}, shoc
     const largest = Math.max(...weights.map(row => row.weight));
     const hhi = weights.reduce((sum,row) => sum + row.weight ** 2, 0);
     const effective = hhi > 0 ? 1 / hhi : 0;
-    const shock = Math.max(0, Math.min(100, Number(shockPercent) || 10));
+    const requestedShock = Number(shockPercent);\n    const shock = Number.isFinite(requestedShock) ? Math.max(0, Math.min(100, requestedShock)) : 10;
     return { quoteCurrency, grossExposure,
       positions:weights.map(row => ({ exchange:row.exchange, symbol:row.symbol, marketValue:row.marketValue, weightPercent:row.weight*100 })),
       concentration:{ largestPositionWeightPercent:largest*100, effectivePositions:effective },
