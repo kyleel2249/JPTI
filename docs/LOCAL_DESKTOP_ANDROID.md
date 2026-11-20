@@ -1,14 +1,11 @@
 # JPTI desktop, Android and hybrid deployment
 
-JPTI is designed to support three deployment surfaces from the same React application:
+JPTI is a local-first application with two primary runtime surfaces:
 
-1. **Windows desktop application** — Electron shell starts the Node/Express API locally and stores the event ledger in the user's private application-data directory.
-2. **Android application** — Capacitor native Android shell packages the responsive React UI. It connects to a secured HTTPS JPTI API, normally the Cloudflare Pages origin. The API destination is configurable inside Connection Settings.
-3. **Cloud web application** — Cloudflare Pages hosts the web UI and same-origin API proxy; the existing Node/Express API and PostgreSQL remain on a Node host.
+1. **Windows desktop application** — Electron starts the Node/Express API locally and stores the event ledger in the user's private application-data directory.
+2. **Android application** — Capacitor packages the React interface as a native app. It connects to the same JPTI API running on your PC over a trusted local network or private VPN. The Android package does not bundle the Node/CCXT backend.
 
-The Windows desktop app runs its API and file ledger locally. The Android package is a locally installed native app, but it does not embed the Node/CCXT server. Android therefore needs a reachable API (Cloudflare, a secured remote server, or a trusted LAN/VPN endpoint). The mobile app shell can open offline, but live exchange data, cloud ledger queries and server-side analysis need API/network connectivity.
-
-Changing the API destination does **not** automatically copy or synchronize a local ledger into the cloud database. Local and cloud ledgers remain separate until a separately designed, authenticated, conflict-safe sync service is enabled. Never assume that switching URLs has migrated transactions.
+There is no Cloudflare, hosted frontend, or hosted API dependency in this project. Windows desktop operation is fully local. Android uses the local PC API; it does not automatically synchronize a separate ledger or send exchange credentials to a cloud service.
 
 ## Windows desktop
 
@@ -80,17 +77,15 @@ The repository also runs a GitHub Actions Android build and uploads the APK as t
 
 Copy that APK to your Android device and install it (allow installation from that trusted source when Android asks). For a distributable release, use Android Studio **Build → Generate Signed Bundle / APK → APK** and protect your signing keystore and passwords. Do not share a debug APK as a production release.
 
-### Connect Android to JPTI
+### Connect Android to the local JPTI API
 
-1. Open the installed JPTI Android app.
-2. Open **Connection Settings**.
-3. Enter the HTTPS Cloudflare Pages URL, e.g. `https://your-jpti.pages.dev` (no `/api` suffix).
-4. Tap **Test connection**, then **Save connection**.
-5. Use the API token configured on the server when a private portfolio operation requests it.
+1. Start JPTI on the Windows PC and keep the PC and phone on the same trusted Wi-Fi network, or connect both through a private VPN.
+2. Configure the PC API to listen on its LAN interface: set `JPTI_API_HOST=0.0.0.0`, `JPTI_ALLOW_REMOTE_API=true`, and a strong `JPTI_API_TOKEN`. Restrict Windows Firewall access to your trusted Private network.
+3. Put a trusted HTTPS reverse proxy or private VPN in front of the PC API. Do not send API tokens over plain HTTP on an untrusted network.
+4. Open Android JPTI → **Connection Settings** and enter the PC's local-network HTTPS API origin (no `/api` suffix).
+5. Tap **Test connection**, then **Save connection**. Enter the server API token only when a private operation requests it.
 
-The Pages Function forwards API calls to the Node API and injects the private edge secret. Configure the API host's `JPTI_CORS_ORIGINS` to include the Capacitor Android WebView origin `https://localhost` (default in `.env.example`). For iOS Capacitor clients, include `capacitor://localhost` as well. The Pages Function preserves the API response CORS headers.
-
-Android cannot use `127.0.0.1` to reach your Windows PC; that address means the phone itself. For phone-to-PC local use, both devices must be on the same trusted network and the PC must expose a secured HTTPS endpoint or VPN. Do not expose the unauthenticated local desktop API directly to Wi-Fi or the public internet.
+Android cannot use `127.0.0.1` to reach your Windows PC; that address refers to the phone itself. The Android app is a local-network client, not a cloud-hosted service. The PC API remains the single source of market data, exchange connectivity and ledger operations.
 
 ## Browser / PWA install
 
@@ -107,29 +102,17 @@ The new Connection Settings workspace stores only the API base URL in browser/de
 
 Private API tokens remain in the relevant workflow's in-memory input state. For a cloud API, the server must set `JPTI_API_TOKEN`. The local desktop can authorize private read-only actions from loopback only; it does not enable live trading.
 
-## Cloud API CORS
+## Android local-network CORS
 
-For the Node API host, set:
+Configure the API's `JPTI_CORS_ORIGINS` to include the Capacitor Android WebView origin `https://localhost` (the default in `.env.example`). Do not add public origins. Use a strong `JPTI_API_TOKEN` for private API operations. No Cloudflare edge secret is required.
 
-```env
-JPTI_CORS_ORIGINS=https://localhost,capacitor://localhost
-JPTI_REQUIRE_EDGE_SECRET=true
-JPTI_EDGE_SECRET=<same secret configured in Cloudflare Pages>
-JPTI_API_TOKEN=<separate strong private token>
-JPTI_TRADING_MODE=paper
-JPTI_ENABLE_LIVE_TRADING=false
-```
-
-Add additional origins only when you have a specific trusted client. Keep the API token and edge secret different. The Android client should use the Cloudflare Pages origin rather than the direct API hostname when the trusted-edge lock is enabled.
-
-## Local data versus cloud data
+## Local data and Android access
 
 - Windows desktop default: local JSONL event ledger in the private user-data directory.
-- Cloud deployment: managed PostgreSQL database.
-- Android: mobile UI client; private data is requested from the configured API service.
+- Android: installed mobile UI client; private data and market data are requested from the local PC API over a trusted local network or VPN.
 - PWA: shell/static assets cached only.
 
-There is no automatic two-way local/cloud ledger synchronization in this phase. A future sync service must use stable event IDs, idempotent ingestion, explicit source/account identity, authenticated device registration, conflict handling, encryption in transit, and auditable import/export. Until then, choose one authoritative ledger for each trading account and do not operate the same exchange account from separate uncoordinated local and cloud schedulers.
+There is no automatic two-way device ledger synchronization in this phase. A future sync service must use stable event IDs, idempotent ingestion, explicit source/account identity, authenticated device registration, conflict handling, encryption in transit, and auditable import/export. Until then, choose one authoritative ledger for each trading account and do not operate the same exchange account from separate uncoordinated schedulers.
 
 ## Safety boundaries
 
