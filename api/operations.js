@@ -66,7 +66,7 @@ async function persistLedgerTransaction(parsed) {
   let result;
   writeQueue = writeQueue.catch(() => {}).then(async () => {
     const events = await readEvents();
-    const duplicate = events.find((event) => event.kind === 'ledger-transaction' && event.source === parsed.source && event.accountId === parsed.accountId && event.externalId === parsed.externalId);
+    const duplicate = events.find((event) => event.kind === 'ledger-transaction' && event.source === parsed.source && event.accountId === parsed.accountId && event.externalId === parsed.externalId && event.symbol === parsed.symbol);
     if (duplicate) { result = { duplicate: true, event: duplicate }; return; }
     const event = { id: randomUUID(), kind: 'ledger-transaction', ...parsed, occurredAt: parsed.occurredAt || new Date().toISOString(), ingestedAt: new Date().toISOString() };
     await mkdir(dirname(dataFile), { recursive: true });
