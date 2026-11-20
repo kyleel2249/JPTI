@@ -120,7 +120,7 @@ function App() {
     if (event) event.preventDefault();
     setNewsLoading(true); setNewsError('');
     try {
-      const response = await fetch('/api/providers/news/search?q=' + encodeURIComponent(newsQuery), { cache: 'no-store' });
+      const response = await apiFetch('/api/providers/news/search?q=' + encodeURIComponent(newsQuery), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'News search unavailable');
       setNewsData(data.articles || []);
@@ -137,7 +137,7 @@ function App() {
     setQuoteLoading(true); setQuoteError('');
     try {
       const normalizedSymbol = quoteSymbol.trim().toUpperCase();
-      const response = await fetch('/api/providers/consensus/quote/' + encodeURIComponent(normalizedSymbol), { cache: 'no-store' });
+      const response = await apiFetch('/api/providers/consensus/quote/' + encodeURIComponent(normalizedSymbol), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Cross-provider quote check failed');
       setQuoteConsensus(data);
@@ -150,7 +150,7 @@ function App() {
     setCrossVenueLoading(true); setCrossVenueError('');
     try {
       const params = new URLSearchParams({ symbol: crossVenueSymbol.trim().toUpperCase() });
-      const response = await fetch('/api/exchanges/compare/ticker?' + params.toString(), { cache: 'no-store' });
+      const response = await apiFetch('/api/exchanges/compare/ticker?' + params.toString(), { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Cross-exchange comparison failed');
       setCrossVenueData(data);
@@ -163,7 +163,7 @@ function App() {
     setForecastLoading(true); setForecastError('');
     try {
       const url = '/api/advanced/forecast/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?timeframe=' + encodeURIComponent(forecastTimeframe);
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await apiFetch(url, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Forecast unavailable');
       setForecastData(data);
@@ -177,7 +177,7 @@ function App() {
     try {
       const params = new URLSearchParams({ strategy: labStrategy, timeframe: forecastTimeframe, limit: '1000', trainBars: String(labTrainBars), testBars: String(labTestBars), stepBars: String(labTestBars), feeBps: '10' });
       const url = '/api/advanced/lab/walk-forward/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?' + params.toString();
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await apiFetch(url, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Walk-forward research failed');
       setLabData(data);
@@ -189,7 +189,7 @@ function App() {
     if (event) event.preventDefault();
     setRiskLoading(true); setRiskError('');
     try {
-      const response = await fetch('/api/advanced/portfolio/risk', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const response = await apiFetch('/api/advanced/portfolio/risk', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Portfolio risk analytics unavailable');
       setRiskData(data);
@@ -201,7 +201,7 @@ function App() {
     if (!backfillSince) { setPortfolioError('Choose a historical start date first.'); return; }
     setBackfillBusy(true); setBackfillResult(null); setPortfolioError('');
     try {
-      const response = await fetch('/api/operations/fills/backfill', {
+      const response = await apiFetch('/api/operations/fills/backfill', {
         method: 'POST',
         headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ since: new Date(backfillSince + 'T00:00:00.000Z').toISOString() })
@@ -218,7 +218,7 @@ function App() {
     if (event) event.preventDefault();
     setPortfolioLoading(true); setPortfolioError('');
     try {
-      const response = await fetch('/api/advanced/portfolio/accounting', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
+      const response = await apiFetch('/api/advanced/portfolio/accounting', { headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Portfolio accounting unavailable');
       setPortfolioData(data);
@@ -229,7 +229,7 @@ function App() {
   const loadTradePerformance = useCallback(async () => {
     setPerformanceLoading(true); setPerformanceError('');
     try {
-      const response = await fetch('/api/advanced/portfolio/performance', {
+      const response = await apiFetch('/api/advanced/portfolio/performance', {
         headers: { 'x-jpti-api-token': portfolioToken }, cache: 'no-store'
       });
       const data = await response.json();
@@ -244,7 +244,7 @@ function App() {
     setReconciliationRun(null);
     setPortfolioError('');
     try {
-      const response = await fetch('/api/operations/reconciliation/run', {
+      const response = await apiFetch('/api/operations/reconciliation/run', {
         method: 'POST',
         headers: { 'x-jpti-api-token': portfolioToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({})
