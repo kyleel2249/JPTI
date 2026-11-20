@@ -51,3 +51,17 @@ test('reports third-token fees without silently converting them', () => {
   assert.equal(report.thirdCurrencyFees.length,1);
   assert.equal(report.thirdCurrencyFees[0].currency,'BNB');
 });
+
+test('adds deterministic analyst insights for losing streaks and small samples', () => {
+  const report=calculateTradePerformance([
+    fill({quantity:3,price:100}),
+    fill({side:'sell',quantity:1,price:90,occurredAt:'2026-01-02T10:00:00.000Z'}),
+    fill({side:'sell',quantity:1,price:89,occurredAt:'2026-01-03T10:00:00.000Z'}),
+    fill({side:'sell',quantity:1,price:88,occurredAt:'2026-01-04T10:00:00.000Z'})
+  ]);
+  const currency=report.byCurrency[0];
+  assert.equal(currency.currentLossStreak,3);
+  assert.equal(currency.longestLossStreak,3);
+  assert.ok(report.analystInsights.some(x=>x.title==='Consecutive realized losses'));
+  assert.ok(report.analystInsights.some(x=>x.title==='Small performance sample'));
+});
