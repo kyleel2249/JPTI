@@ -198,7 +198,7 @@ export function startOperationsScheduler() {
     ['market-monitor', intervals.marketMonitorSeconds, marketMonitor],
     ['fill-ingestion', intervals.reconcileSeconds, exchangeFillMonitor],
     ['provider-health', intervals.providerHealthSeconds, providerMonitor],
-    ['reconciliation', intervals.reconcileSeconds, () => blockedTask('reconciliation', 'Waiting for exchange fill-history ingestion and a verified account-to-ledger reconciliation adapter.')],
+    ['reconciliation', intervals.reconcileSeconds, () => blockedTask('reconciliation', 'Waiting for authenticated account-balance snapshots, opening balances and complete external cash-flow history to reconcile the ingested fill ledger.')],
     ['investor-monitor', intervals.investorMonitorSeconds, () => blockedTask('investor-monitor', 'Waiting for configured investor/watchlists and licensed holdings or disclosure feeds.')],
     ['market-maker', intervals.marketMakerIntervalSeconds, () => blockedTask('market-maker', 'Market-making is intentionally disabled. No quoting or order-placement worker is active.')],
     ['news-monitor', intervals.newsRefreshSeconds, () => blockedTask('news-monitor', 'News polling is not yet scheduled as a durable ingestion worker; provider search endpoints remain available.')],
