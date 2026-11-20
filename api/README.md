@@ -262,6 +262,8 @@ The shared risk gate pauses new T-Bots entries after three consecutive losing cl
 
 Routes are mounted under `/api/universal`:
 - `GET /profiles` — strategy profiles and asset-class coverage.
+
+- `GET /api/universal/coverage` — public configuration/catalog coverage matrix for asset classes and providers. Reports configured sources, supported CCXT venue counts and configured watchlist sizes; it does not run provider health checks or guarantee a symbol is entitled/live.
 - `POST /strategy/evaluate` — evidence-based deterministic profile evaluation.
 - `GET /market/:exchange/:symbol?timeframe=1h` — public CEX ticker, OHLCV, 15m/1h/4h/1d trend alignment where supported, RSI, visible book depth, funding/open interest where supported and deterministic evidence council.
 - `GET /cex-watchlist` — private-token authenticated read-only active spot watchlist configured with `JPTI_TBOTS_CEX_MARKETS`.
