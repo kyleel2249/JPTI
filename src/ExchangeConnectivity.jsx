@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import LiveCandlestickChart from './LiveCandlestickChart.jsx';
+import { apiFetch } from './lib/api.js';
 
 export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
   const [health, setHealth] = useState(null);
@@ -15,7 +16,7 @@ export default function ExchangeConnectivity({ symbol, onSymbolChange }) {
     const refreshGatewayCatalog = async () => {
       try {
         const [healthResponse, catalogResponse] = await Promise.all([
-          fetch('/api/health', { cache: 'no-store' }),
+          apiFetch('/api/health', { cache: 'no-store' }),
           fetch('/api/exchanges', { cache: 'no-store' })
         ]);
         if (!healthResponse.ok || !catalogResponse.ok) throw new Error('Gateway or exchange catalog is unavailable');
