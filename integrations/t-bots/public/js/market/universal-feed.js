@@ -4,7 +4,7 @@ import { LiveFeed } from './live-feed.js';
 // It remains a paper feed: no exchange order or private trading permission is requested.
 export class UniversalFeed extends LiveFeed {
   constructor({ bridge, ...options } = {}) {
-    super(options);
+    super({ maxTracked:150, ...options });
     this.bridge = bridge;
     this.kind = 'live-universal-paper';
     this.lastCexRefresh = 0;
@@ -26,10 +26,11 @@ export class UniversalFeed extends LiveFeed {
         const id = chain + ':' + address;
         let token = this.tokens.get(id);
         if (!token) {
-          token = { id, chainId:chain, tokenAddress:address, tracked:true, hist:[], liqMax:0,
+          token = { id, chainId:chain, tokenAddress:address, source:'jpti-watchlist', tracked:true, hist:[], liqMax:0,
             security:undefined, holdHist:[], view:null, order:this.ticks };
           this.tokens.set(id, token);
         }
+        token.source = 'jpti-watchlist';
         token.order = this.ticks;
         const mapped = {
           symbol:pair.base?.symbol || '?', dex:pair.dex || 'unknown',
@@ -49,7 +50,7 @@ export class UniversalFeed extends LiveFeed {
           chain, tokenAddress:address, quoteAddress:mapped.quoteAddress, quoteSymbol:mapped.quoteSymbol,
           marketType:'dex', assetClass:'dex_token', volume1hUsd:mapped.volume1hUsd,
           volume24hUsd:mapped.volume24hUsd, buys1h:mapped.buys1h, sells1h:mapped.sells1h,
-          fetchedAt:pair.pairCreatedAt || new Date(now).toISOString()
+          fetchedAt:new Date(now).toISOString()
         });
       }
     }
