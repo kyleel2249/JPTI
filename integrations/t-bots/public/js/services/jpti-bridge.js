@@ -1,11 +1,12 @@
 // JPTI bridge: paper-only T-Bots publishes auditable agent events and consumes JPTI's coarse market-regime context.
 export class JptiBridge {
-  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; }
+  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; this.assetEvidence = new Map(); this.lastAssetEvidenceAt = 0; }
   setToken(value) { this.token = String(value || '').trim(); }
   get enabled() { return Boolean(this.token); }
   async _request(path, options = {}) {
     if (!this.enabled) return null;
-    const response = await fetch('/api/integrations/tbots/' + path, {
+    const url = path.startsWith('/') ? '/api' + path : '/api/integrations/tbots/' + path;
+    const response = await fetch(url, {
       ...options, headers: { 'content-type': 'application/json', 'x-jpti-api-token': this.token, ...(options.headers || {}) }
     });
     const body = await response.json().catch(() => ({}));
@@ -22,9 +23,26 @@ export class JptiBridge {
   async refreshRisk(force = false) {
     if (!this.enabled || Date.now() - this.lastRiskAt < 30000 && !force) return this.risk;
     this.lastRiskAt = Date.now();
-    try { this.risk = await this._request('risk'); }
+    try { this.risk = await this._request('/universal/risk'); }
     catch (error) { this.risk = { newEntriesAllowed: false, pauseReasons: ['JPTI shared risk state unavailable'], error: error.message, exitsRemainEnabled: true }; this.lastError = error.message; }
     return this.risk;
+  }
+  async refreshAssetEvidence(tokens = [], force = false) {
+    if (!this.enabled || Date.now() - this.lastAssetEvidenceAt < 30000 && !force) return this.assetEvidence;
+    this.lastAssetEvidenceAt = Date.now();
+    const assets = tokens.filter(t => t?.tokenAddress && t?.chain).slice(0, 80).map(t => ({
+      id:t.id, chain:t.chain, address:t.tokenAddress, symbol:t.symbol,
+      liquidityUsd:t.liquidityUsd, volume24hUsd:t.volume24hUsd, volume1hUsd:t.volume1hUsd,
+      change1hPct:t.change1hPct, ageMin:t.ageMin, buys:t.buys1h, sells:t.sells1h,
+      quoteAddress:t.quoteAddress, quoteSymbol:t.quoteSymbol
+    }));
+    if (!assets.length) return this.assetEvidence;
+    try {
+      const result = await this._request('/universal/asset-evidence', { method:'POST', body:JSON.stringify({assets}) });
+      this.assetEvidence = new Map((result.evidence || []).map(item => [item.id, item]));
+      this.lastAssetEvidenceError = null;
+    } catch (error) { this.lastAssetEvidenceError = error.message; }
+    return this.assetEvidence;
   }
   async searchUniverse(query) {
     if (!this.enabled || String(query || '').trim().length < 2) return null;
