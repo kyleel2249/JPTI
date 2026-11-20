@@ -106,6 +106,8 @@ The API starts a server-side operations scheduler when the server starts (unless
 - `GET /api/operations/events?limit=100` — recent persisted operational events (private ledger transaction details are excluded).
 - `GET /api/operations/ledger/events?limit=100` — private transaction history; requires `x-jpti-api-token`.
 - `GET /api/operations/ledger/summary` — transaction event counts by type; not a balance or PnL calculation.
+- `GET /api/operations/reconciliation` — authenticated latest 50 balance-reconciliation snapshots.
+- `POST /api/operations/reconciliation/run` — authenticated on-demand reconciliation against current private exchange balances; returns per-currency expected/actual totals, differences, unresolved event counts and account errors. Concurrent manual/scheduled runs share one in-flight reconciliation to avoid duplicate exchange polling.
 - `POST /api/operations/ledger/events` — authenticated append-only transaction-event ingestion.
 
 Transaction ingestion requires `x-jpti-api-token` matching the server-side `JPTI_API_TOKEN`. Example body:
@@ -125,6 +127,18 @@ Transaction ingestion requires `x-jpti-api-token` matching the server-side `JPTI
 }
 ```
 The source/account/external-ID tuple is used for duplicate detection. The local JSONL event store is written under `JPTI_DATA_DIR` (default `data/`) and excluded from Git. Back it up and protect the host filesystem. This is an initial single-process local persistence implementation, not yet a multi-user database, distributed queue or institutional reconciliation ledger.
+
+
+### On-demand balance reconciliation
+
+The Portfolio & Ledger workspace includes a **Run balance reconciliation now** action. It uses the same read-only exchange balance adapter and ledger calculation as the scheduled reconciliation worker; it does not place orders or move funds. Configure the server-side exchange read-only API credentials and, where known, opening balances:
+
+```env
+JPTI_RECONCILE_EXCHANGES=binance,bitget
+JPTI_RECONCILE_OPENING_BALANCES_JSON={"binance":{"BTC":0,"USDT":1000},"bitget":{"BTC":0,"USDT":500}}
+```
+
+The JSON keys are exchange IDs, then currency codes. Set opening balances to the account's actual starting balances at the beginning of the ledger coverage period; do not use zero unless zero is verified. If no baseline is configured, the report returns `baseline_missing` and `complete=false`. A mismatch is the exchange's current total minus (opening balance plus supported ledger movements). Unsupported or malformed cash-flow events are counted as unresolved. The calculation does not claim full reconciliation of derivatives liabilities, transfers not present in the ledger, funding/interest types without a supported direction, third-currency fee conversion, or history that the exchange API does not return. Use read-only keys; never enable withdrawals for reconciliation.
 
 ### Watchlist and interval configuration
 ```env
