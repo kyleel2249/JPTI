@@ -48,17 +48,6 @@ export default function UniversalEngine() {
     if(event)event.preventDefault();setLoading(true);setError('');
     try{const r=await fetch('/api/universal/dex/search?q='+encodeURIComponent(query),{headers:{'x-jpti-api-token':token},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'DEX search unavailable');setDex(d);}catch(e){setError(e.message);}finally{setLoading(false);}
   },[query,token]);
-  const setGlobalControl=useCallback(async(action)=>{
-    setControlBusy(true);setError('');setControlStatus('');
-    try{
-      const r=await fetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
-        body:JSON.stringify({action,reason:'Universal Engine operator control'})});
-      const d=await r.json();if(!r.ok)throw new Error(d.error||'Global control update failed');
-      setControlStatus(action==='pause_new_entries'?'Global T-Bots entry pause recorded.':'Global T-Bots entry pause cleared.');
-      await loadPrivate();
-    }catch(e){setError(e.message);}finally{setControlBusy(false);}
-  },[token,loadPrivate]);
-
   const loadPrivate=useCallback(async()=>{
     setLoading(true);setError('');
     try{
@@ -69,6 +58,17 @@ export default function UniversalEngine() {
       setRisk(a);setPerformance(b);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[token]);
+
+  const setGlobalControl=useCallback(async(action)=>{
+    setControlBusy(true);setError('');setControlStatus('');
+    try{
+      const r=await fetch('/api/universal/control',{method:'POST',headers:{'content-type':'application/json','x-jpti-api-token':token},
+        body:JSON.stringify({action,reason:'Universal Engine operator control'})});
+      const d=await r.json();if(!r.ok)throw new Error(d.error||'Global control update failed');
+      setControlStatus(action==='pause_new_entries'?'Global T-Bots entry pause recorded.':'Global T-Bots entry pause cleared.');
+      await loadPrivate();
+    }catch(e){setError(e.message);}finally{setControlBusy(false);}
+  },[token,loadPrivate]);
 
   useEffect(()=>{loadMacro();},[loadMacro]);
 
