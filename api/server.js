@@ -23,6 +23,25 @@ app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '32kb', strict: true }));
 
+// Capacitor Android uses its own WebView origin. Only explicitly configured origins
+// receive CORS permission; same-origin web and Cloudflare Pages proxy need no CORS.
+const allowedCorsOrigins = new Set(String(process.env.JPTI_CORS_ORIGINS || 'https://localhost,capacitor://localhost').split(',').map(value => value.trim()).filter(Boolean));
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && allowedCorsOrigins.has(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, x-jpti-api-token, Authorization');
+    res.set('Access-Control-Max-Age', '600');
+  }
+  if (req.method === 'OPTIONS') {
+    if (!origin || !allowedCorsOrigins.has(origin)) return res.status(403).json({ error: 'This application origin is not permitted by JPTI CORS policy.' });
+    return res.status(204).end();
+  }
+  next();
+});
+
 // Optional origin lock: when enabled, only the trusted Cloudflare Pages Function
 // proxy may reach the API. Keep JPTI_EDGE_SECRET server-side on both platforms.
 app.use('/api', (req, res, next) => {
@@ -220,6 +239,15 @@ app.post('/api/exchanges/:id/orders', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+if (process.env.JPTI_SERVE_WEB === 'true') {
+  const webDist = resolve(process.env.JPTI_WEB_DIST || 'dist');
+  app.use(express.static(webDist, { index: 'index.html' }));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/t-bots/')) return res.sendFile(resolve(webDist, 'index.html'));
+    next();
+  });
+}
+
 app.use((error, _req, res, _next) => {
   if (error instanceof z.ZodError) {
     return res.status(400).json({ error: 'Invalid request', details: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })) });
@@ -238,10 +266,19 @@ const server = app.listen(port, host, () => {
 });
 
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => {
-    server.close(async () => {
-      try { await stopOperationsScheduler(); await closeSchedulerLease(); await closeStorage(); } finally { process.exit(0); }
-    });
+let shutdownPromise;
+export function shutdownJptiServer() {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = new Promise((resolveClose, rejectClose) => {
+    server.close(error => error ? rejectClose(error) : resolveClose());
+  }).then(async () => {
+    await stopOperationsScheduler();
+    await closeSchedulerLease();
+    await closeStorage();
   });
+  return shutdownPromise;
+}
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => shutdownJptiServer().finally(() => process.exit(0)));
 }
