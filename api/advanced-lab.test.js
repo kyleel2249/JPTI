@@ -95,4 +95,8 @@ test('portfolio risk keeps quote currencies separate and calculates historical V
   assert.ok(Number.isFinite(usdt.historical.var95Percent));
   assert.equal(usdt.stress.estimatedLoss, 30);
   assert.ok(usdt.concentration.effectivePositions > 1);
+  assert.ok(Number.isFinite(usdt.historical.diagnostics.annualizedVolatilityPercent));
+  assert.ok(Number.isFinite(usdt.historical.diagnostics.maxHistoricalDrawdownPercent));
+  assert.ok(usdt.historical.diagnostics.worstDay);
+  assert.ok(usdt.historical.diagnostics.worstRolling20DayReturnPercent !== null);
 });
