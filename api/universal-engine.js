@@ -198,8 +198,10 @@ universalRouter.get('/universal/market/:exchange/:symbol',async(req,res)=>{
     const evidence={momentumPct,relativeVolume:relVol,orderBookImbalance:imbalance,fundingRate:finite(data.funding?.fundingRate),openInterest:data.openInterest||null,
       timeframeAlignment:alignment,rsi14,visibleDepthUsd,multiTimeframe:mtf};
     const council=buildEvidenceCouncil({priceChangePct:momentumPct,volumeChangePct:relVol===null?null:(relVol-1)*100,depthImbalance:imbalance,fundingRate:evidence.fundingRate,openInterestChangePct:null});
+    const riskScore=Math.round(clamp(50+(momentumPct??0)*2+(imbalance??0)*20,0,100));
+    const regime=(momentumPct!==null&&momentumPct<=-5)||(imbalance!==null&&imbalance<=-.3)?'risk_off':(momentumPct!==null&&momentumPct>=3&&imbalance!==null&&imbalance>0)?'risk_on':'neutral';
     res.set('Cache-Control','no-store');
-    res.json({exchange:exchangeId,market:data.market,timeframe,fetchedAt:new Date().toISOString(),
+    res.json({exchange:exchangeId,market:data.market,timeframe,fetchedAt:new Date().toISOString(),regime,riskScore,
       sources:{exchange:{status:'live',capabilities:{ticker:Boolean(data.ticker),candles:Boolean(data.candles),orderBook:Boolean(data.orderBook),funding:Boolean(data.funding),openInterest:Boolean(data.openInterest)}}},
       ticker:data.ticker?{last:data.ticker.last,bid:data.ticker.bid,ask:data.ticker.ask,quoteVolume:data.ticker.quoteVolume,timestamp:data.ticker.timestamp}:null,
       evidence,council,availableStrategyProfiles:Object.keys(STRATEGY_PROFILES).filter(id=>STRATEGY_PROFILES[id].assetClasses.includes(data.market.spot?'crypto_spot':data.market.swap?'crypto_perpetual':data.market.future?'crypto_future':'unknown')),
