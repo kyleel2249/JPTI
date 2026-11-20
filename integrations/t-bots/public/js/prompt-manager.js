@@ -77,6 +77,7 @@ export function splitPrompt(text) {
     AGENTS: out.AGENTS.filter((l) => l.trim()),
     RULES: out.RULES.filter((l) => l.trim()),
     OUTPUT: clean(out.OUTPUT.filter((l) => !/^start now\.?$/i.test(l.trim()))),
+    'JPTI SHARED INTELLIGENCE': clean(out['JPTI SHARED INTELLIGENCE']),
   };
 }
 
