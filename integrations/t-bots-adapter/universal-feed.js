@@ -81,7 +81,7 @@ export class UniversalFeed extends LiveFeed {
           dex:market.exchange,ageMin:Infinity,price:market.price,change1hPct:market.change1hPct??0,
           pullbackPct:high>0?(1-market.price/high)*100:0,liquidityUsd:market.liquidityUsd??0,
           volume5mUsd:market.volume5mUsd??0,volume5mAvgUsd:market.volume5mAvgUsd??0,
-          volume1hUsd:(market.volume5mUsd??0)*12,volume24hUsd:market.quoteVolume24h??0,
+          volume1hUsd:(market.volume5mUsd??0)*12,volume24hUsd:market.quoteVolume24h??0,rsi14:market.rsi14??null,
           buys1h:0,sells1h:0,buyRatio:null,holders:null,holderGrowth10mPct:null,
           smartWallets10m:null,kolBought:null,spreadPct:market.spreadPct,
           quoteVolume24h:market.quoteVolume24h,exchangeMarketActive:market.exchangeMarketActive===true,
