@@ -76,11 +76,11 @@ export function runWalkForward(candles, options = {}) {
     const testReturns = runEma(testing, best.fast, best.slow, feeBps).slice(warmup - 1);
     folds.push({ fold: folds.length + 1, trainStart: training[0][0], trainEnd: training.at(-1)[0], testStart: candles[testStart][0], testEnd: candles[Math.min(testStart + testBars - 1, candles.length - 1)][0],
       selectedParameters: { fast: best.fast, slow: best.slow }, trainingReturnPercent: best.trainingReturnPercent,
-      trainingMaxDrawdownPercent: best.trainingMaxDrawdownPercent, outOfSample: metrics(testReturns) });
+      trainingMaxDrawdownPercent: best.trainingMaxDrawdownPercent, outOfSample: { ...metrics(testReturns), returns: testReturns } });
     testStart += stepBars;
   }
   if (!folds.length) throw new Error('Not enough candles for one complete walk-forward fold. Increase history or reduce trainBars/testBars.');
-  const allOos = folds.flatMap(f => f.outOfSample.equityCurve.slice(1).map((v, i, a) => i === 0 ? v - 1 : v / a[i - 1] - 1));
+  const allOos = folds.flatMap(f => f.outOfSample.returns);
   const oosMetrics = metrics(allOos);
   return { method: 'rolling anchored-window parameter selection with strictly subsequent out-of-sample test windows',
     strategy: 'EMA crossover long/flat baseline', config: { trainBars, testBars, stepBars, feeBps, parameterCombinations: grid.length },
