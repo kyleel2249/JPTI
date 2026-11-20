@@ -21,6 +21,7 @@ const navigation = [
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Backtesting Lab', icon: BarChart3, group: 'RESEARCH' },
   { label: 'Forecast & Strategy', icon: Gauge, group: 'RESEARCH' },
+  { label: 'Walk-Forward Lab', icon: SlidersHorizontal, group: 'RESEARCH' },
   { label: 'Calendar & Sessions', icon: Globe2, group: 'RESEARCH' }
 ];
 
@@ -62,6 +63,12 @@ function App() {
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastExchange, setForecastExchange] = useState('binance');
   const [forecastTimeframe, setForecastTimeframe] = useState('1h');
+  const [labData, setLabData] = useState(null);
+  const [labError, setLabError] = useState('');
+  const [labLoading, setLabLoading] = useState(false);
+  const [labTrainBars, setLabTrainBars] = useState(500);
+  const [labTestBars, setLabTestBars] = useState(100);
+  const [streamData, setStreamData] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -143,6 +150,29 @@ function App() {
     finally { setForecastLoading(false); }
   }, [forecastExchange, symbol, forecastTimeframe]);
 
+  const runWalkForward = useCallback(async (event) => {
+    if (event) event.preventDefault();
+    setLabLoading(true); setLabError('');
+    try {
+      const url = '/api/exchanges/' + encodeURIComponent(forecastExchange) + '/ohlcv/' + encodeURIComponent(symbol) + '?timeframe=' + encodeURIComponent(forecastTimeframe) + '&limit=1000';
+      const historyResponse = await fetch(url, { cache: 'no-store' });
+      const history = await historyResponse.json();
+      if (!historyResponse.ok) throw new Error(history.error || 'Exchange history unavailable');
+      const response = await fetch('/api/advanced/lab/walk-forward', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ candles: history.candles, trainBars: Number(labTrainBars), testBars: Number(labTestBars), stepBars: Number(labTestBars), feeBps: 10 }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Walk-forward research failed');
+      setLabData(data);
+    } catch (error) { setLabError(error.message); }
+    finally { setLabLoading(false); }
+  }, [forecastExchange, forecastTimeframe, symbol, labTrainBars, labTestBars]);
+
+  useEffect(() => {
+    if (page !== 'Forecast & Strategy') { setStreamData(null); return undefined; }
+    const source = new EventSource('/api/advanced/stream/' + encodeURIComponent(forecastExchange) + '/' + encodeURIComponent(symbol) + '?intervalMs=2000');
+    source.addEventListener('intelligence', event => { try { setStreamData(JSON.parse(event.data)); } catch {} });
+    return () => source.close();
+  }, [page, forecastExchange, symbol]);
+
   const filteredNav = useMemo(() => navigation.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())), [query]);
   const jobById = useMemo(() => Object.fromEntries((operations?.jobs || []).map((job) => [job.id, job])), [operations]);
   const configuredProviders = (providers?.providers || []).filter((provider) => provider.configured).length;
@@ -163,6 +193,7 @@ function App() {
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
+    'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
     'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.'
   };
 
