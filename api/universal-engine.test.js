@@ -16,7 +16,7 @@ test('strategy evaluation is explicit about missing evidence and never issues an
   assert.equal(result.decision,'research-only; not an order instruction');
   const missing=evaluateStrategyProfile('spot_trend',{momentumPct:4});
   assert.equal(missing.status,'insufficient_or_conflicting_evidence');
-  assert.ok(missing.missingEvidence.includes('relative_volume'));
+  assert.ok(missing.missingEvidence.includes('relativeVolume'));
 });
 
 test('unified risk gate pauses on a consecutive paper loss streak', () => {
