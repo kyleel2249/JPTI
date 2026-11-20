@@ -38,6 +38,7 @@ export function calculateBalanceReconciliation({ events = [], balances = {}, ope
     if (['deposit', 'withdrawal'].includes(event.eventType) && currency && qty !== null) {
       currencies.add(currency);
       add(movements, currency, event.eventType === 'deposit' ? qty : -qty);
+      if (fee > 0) add(movements, feeCurrency || currency, -fee);
       continue;
     }
     if (event.eventType === 'fee' && feeCurrency && fee > 0) {
@@ -51,7 +52,7 @@ export function calculateBalanceReconciliation({ events = [], balances = {}, ope
       } else unresolved[event.accountId] = (unresolved[event.accountId] || 0) + 1;
     }
   }
-  for (const key of Object.keys(opening)) for (const currency of Object.keys(opening[key] || {})) currencies.add(currency.toUpperCase());
+  for (const currency of Object.keys(opening)) currencies.add(currency.toUpperCase());
   const rows = [...currencies].sort().map(currency => {
     const actual = finite(totals?.[currency]) ?? 0;
     const baseline = finite(opening[currency]) ?? null;
