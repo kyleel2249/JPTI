@@ -29,11 +29,15 @@ export class ScannerAgent extends BaseAgent {
       if(!(t.liquidityUsd>=10000))why.push('visible order-book depth below $10k');
       if(t.spreadPct===null||t.spreadPct===undefined||t.spreadPct>0.5)why.push('spread unavailable or above 0.5%');
       if(!(t.price>0))why.push('invalid market price');
+      if(profile==='mean_reversion'&&t.jptiEvidence?.rsi14==null)why.push('JPTI RSI14 unavailable for mean-reversion profile');
+      if(profile==='defi_rotation')why.push('CEX instruments do not have a verified DeFi protocol mapping');
       return {pass:why.length===0,pending:false,reasons:why};
     }
     if (t.security === null || t.security === undefined) return { pass: false, pending: true, reasons: ['security data pending'] };
     const sec = t.security;
     const why = [];
+    if(profile==='defi_rotation'&&(!t.jptiEvidence?.protocolVerified||t.jptiEvidence?.tvlChangePct==null||t.jptiEvidence?.feesChangePct==null||t.jptiEvidence?.protocolRiskScore==null))why.push('verified protocol mapping, TVL, fees and protocol-risk evidence required; monitor only until available');
+    if(profile==='mean_reversion'&&t.jptiEvidence?.rsi14==null)why.push('JPTI RSI14 unavailable for mean-reversion profile');
     if (Number.isFinite(active.maxAgeHours) && !(t.ageMin <= active.maxAgeHours * 60)) why.push(`older than ${active.maxAgeHours}h`);
     if (!(t.liquidityUsd >= active.minLiquidityUsd)) why.push('liquidity below minimum');
     if (!(t.volume5mUsd >= active.minVolume5mUsd)) why.push('5m volume below minimum');
@@ -57,6 +61,7 @@ export class ScannerAgent extends BaseAgent {
     const profile = this.cfg.scanner.assetProfile || 'meme_new_pair';
     if ((profile !== 'meme_new_pair' || t.marketType === 'cex') && Number.isFinite(t.change1hPct) && Math.abs(t.change1hPct) >= 1) out.push({ key: 'momentum', label: `1h momentum ${t.change1hPct >= 0 ? '+' : ''}${t.change1hPct.toFixed(1)}%` });
     if (t.jptiEvidence && t.jptiEvidence.score >= 45) out.push({ key: 'jpti-evidence', label: `JPTI evidence ${t.jptiEvidence.score}/100` });
+    if (profile === 'mean_reversion' && Number.isFinite(t.jptiEvidence?.rsi14) && t.jptiEvidence.rsi14 <= 30) out.push({ key: 'rsi-oversold', label: `RSI14 oversold ${t.jptiEvidence.rsi14.toFixed(1)}` });
     return out;
   }
 
