@@ -1,6 +1,6 @@
 // JPTI bridge: paper-only T-Bots publishes auditable agent events and consumes JPTI's coarse market-regime context.
 export class JptiBridge {
-  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; this.assetEvidence = new Map(); this.lastAssetEvidenceAt = 0; this.cexMarkets = null; this.lastCexMarketsAt = 0; }
+  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; this.assetEvidence = new Map(); this.lastAssetEvidenceAt = 0; this.cexMarkets = null; this.lastCexMarketsAt = 0; this.macro = null; this.lastMacroAt = 0; }
   setToken(value) { this.token = String(value || '').trim(); }
   get enabled() { return Boolean(this.token); }
   async _request(path, options = {}) {
@@ -16,9 +16,19 @@ export class JptiBridge {
   async refreshContext(force = false) {
     if (!this.enabled || Date.now() - this.lastContextAt < 60000 && !force) return this.context;
     this.lastContextAt = Date.now();
-    try { this.context = await this._request('context?exchange=binance&symbol=BTC%2FUSDT'); }
-    catch (error) { this.context = null; this.lastError = error.message; }
+    try { this.context = await this._request('/universal/market/binance/BTC%2FUSDT%3AUSDT?timeframe=1h'); }
+    catch (error) {
+      try { this.context = await this._request('context?exchange=binance&symbol=BTC%2FUSDT'); }
+      catch (fallbackError) { this.context = null; this.lastError = fallbackError.message || error.message; }
+    }
     return this.context;
+  }
+  async refreshMacro(force = false) {
+    if (!this.enabled || Date.now() - this.lastMacroAt < 300000 && !force) return this.macro;
+    this.lastMacroAt = Date.now();
+    try { this.macro = await this._request('/universal/macro'); }
+    catch (error) { this.macro = null; this.lastError = error.message; }
+    return this.macro;
   }
   async refreshRisk(force = false) {
     if (!this.enabled || Date.now() - this.lastRiskAt < 30000 && !force) return this.risk;
