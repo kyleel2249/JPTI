@@ -291,3 +291,19 @@ Unified realized PnL is computed from recorded exchange fills with weighted-aver
 
 
 - `POST /universal/control` — private-token authenticated persisted pause/resume of T-Bots new entries. JSON body: `{"action":"pause_new_entries","reason":"operator request"}` or `{"action":"resume_new_entries"}`. Existing positions keep their normal exit handling; this is not a force-close or exchange cancellation command.
+
+
+### Automated exchange balance reconciliation
+
+The scheduler now performs read-only balance snapshots for configured CCXT venues (up to 10 per process) using the exchange private fetchBalance endpoint. Set JPTI_RECONCILE_EXCHANGES=binance,bitget to restrict venues; if omitted, all configured exchange adapters are considered.
+
+Provide verified opening balances before expecting a true matched/mismatch result:
+
+```env
+JPTI_RECONCILE_EXCHANGES=binance,bitget
+JPTI_RECONCILE_OPENING_BALANCES_JSON={"binance":{"BTC":0.25,"USDT":500},"bitget":{"USDT":100}}
+```
+
+The JSON map is keyed by exchange ID, then uppercase currency. The authenticated GET /api/operations/reconciliation endpoint returns up to 50 recent snapshots. Use the x-jpti-api-token header. Each currency row shows exchange-reported total, supported ledger movement, configured opening balance, expected total and difference. If an opening baseline is absent, the system reports baseline_missing and an implied opening balance; it never assumes the baseline is zero.
+
+Supported movements include recorded spot fills (including base-, quote- and third-currency fees), deposits, withdrawals and explicitly directed cash-flow events. Transfers and other cash-flow events without a recognized metadata.direction are counted as unresolved. A snapshot is not marked complete when unresolved events or missing baselines remain. This is a reconciliation aid, not a complete statement: it does not yet normalize margin liabilities, derivative positions/funding, cross-venue transfers, third-party custody, or unrecorded activity. Use read-only exchange API keys.

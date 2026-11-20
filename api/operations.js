@@ -3,7 +3,8 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { withExchange } from './exchanges.js';
+import { withExchange, listExchangeCatalog } from './exchanges.js';
+import { calculateBalanceReconciliation } from './reconciliation.js';
 import { getOperationalIntervals, providerDirectory } from './providers.js';
 import { requirePrivateApiAuth } from './policy.js';
 
@@ -171,6 +172,42 @@ async function exchangeFillMonitor() {
     lastError: errors.length ? errors.join('; ').slice(0, 500) : null, lastSnapshot: success });
 }
 
+function configuredOpeningBalances(exchangeId) {
+  try {
+    const parsed = JSON.parse(process.env.JPTI_RECONCILE_OPENING_BALANCES_JSON || '{}');
+    return parsed?.[exchangeId] && typeof parsed[exchangeId] === 'object' ? parsed[exchangeId] : {};
+  } catch { return {}; }
+}
+
+async function balanceReconciliationMonitor() {
+  const requested = String(process.env.JPTI_RECONCILE_EXCHANGES || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  const configured = listExchangeCatalog().filter(item => item.configured).map(item => item.id);
+  const exchangeIds = (requested.length ? requested : configured).filter((id, index, all) => all.indexOf(id) === index).slice(0, 10);
+  if (!exchangeIds.length) {
+    setJob('reconciliation', { lastRunAt:new Date().toISOString(), runCount:(jobState.get('reconciliation')?.runCount || 0) + 1,
+      status:'waiting-for-credentials', detail:'Configure read-only exchange credentials and JPTI_RECONCILE_OPENING_BALANCES_JSON to run account balance reconciliation.' });
+    return;
+  }
+  const events = await getLedgerTransactions();
+  const outcomes = await Promise.allSettled(exchangeIds.map(async exchangeId => {
+    const balance = await withExchange(exchangeId, {privateAccess:true}, async ex => {
+      if (!ex.has?.fetchBalance) throw new Error('Balance endpoint unavailable on ' + exchangeId);
+      return ex.fetchBalance();
+    });
+    const reconciliation = calculateBalanceReconciliation({ events:events.filter(e => e.source === exchangeId || e.accountId === exchangeId), balances:balance, openingBalances:configuredOpeningBalances(exchangeId) });
+    const snapshot = { kind:'balance-reconciliation-snapshot', id:randomUUID(), exchange:exchangeId, occurredAt:new Date().toISOString(), ...reconciliation };
+    await persistEvent(snapshot);
+    return snapshot;
+  }));
+  const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
+  const errors = outcomes.filter(x => x.status === 'rejected').map(x => x.reason?.message || 'Balance reconciliation failed');
+  const mismatch = success.filter(x => x.status === 'mismatch').length;
+  const baseline = success.filter(x => x.status === 'baseline_required').length;
+  setJob('reconciliation', { lastRunAt:new Date().toISOString(), lastSuccessAt:success.length ? new Date().toISOString() : (jobState.get('reconciliation')?.lastSuccessAt || null),
+    runCount:(jobState.get('reconciliation')?.runCount || 0) + 1, status:errors.length ? (success.length ? 'partial' : 'degraded') : mismatch ? 'mismatch' : baseline ? 'baseline-required' : 'matched',
+    detail:success.length + ' account(s) checked; ' + mismatch + ' mismatch(es); ' + baseline + ' require opening baselines; ' + errors.length + ' failed.',
+    lastError:errors.length ? errors.join('; ').slice(0,500) : null, lastSnapshot:success });
+}
 async function providerMonitor() {
   const providers = providerDirectory();
   const configured = providers.filter((p) => p.configured).length;
@@ -198,7 +235,7 @@ export function startOperationsScheduler() {
     ['market-monitor', intervals.marketMonitorSeconds, marketMonitor],
     ['fill-ingestion', intervals.reconcileSeconds, exchangeFillMonitor],
     ['provider-health', intervals.providerHealthSeconds, providerMonitor],
-    ['reconciliation', intervals.reconcileSeconds, () => blockedTask('reconciliation', 'Waiting for authenticated account-balance snapshots, opening balances and complete external cash-flow history to reconcile the ingested fill ledger.')],
+    ['reconciliation', intervals.reconcileSeconds, balanceReconciliationMonitor],
     ['investor-monitor', intervals.investorMonitorSeconds, () => blockedTask('investor-monitor', 'Waiting for configured investor/watchlists and licensed holdings or disclosure feeds.')],
     ['market-maker', intervals.marketMakerIntervalSeconds, () => blockedTask('market-maker', 'Market-making is intentionally disabled. No quoting or order-placement worker is active.')],
     ['news-monitor', intervals.newsRefreshSeconds, () => blockedTask('news-monitor', 'News polling is not yet scheduled as a durable ingestion worker; provider search endpoints remain available.')],
@@ -237,7 +274,7 @@ operationsRouter.get('/operations/overview', (_req, res) => res.json(getOperatio
 operationsRouter.get('/operations/events', async (req, res, next) => {
   try {
     const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
-    const events = (await readEvents(limit * 2)).filter((event) => event.kind !== 'ledger-transaction').slice(-limit);
+    const events = (await readEvents(limit * 2)).filter((event) => event.kind !== 'ledger-transaction' && event.kind !== 'balance-reconciliation-snapshot').slice(-limit);
     res.json({ count: events.length, events: events.reverse() });
   } catch (error) { next(error); }
 });
@@ -250,6 +287,13 @@ operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+operationsRouter.get('/operations/reconciliation', async (req, res, next) => {
+  try {
+    requirePrivateApiAuth(req);
+    const snapshots = (await readEvents()).filter(event => event.kind === 'balance-reconciliation-snapshot').slice(-50).reverse();
+    res.json({ count:snapshots.length, snapshots, note:'Snapshots compare exchange-reported totals with configured opening balances and supported ledger movements. baseline_missing is not a zero balance.' });
+  } catch (error) { next(error); }
+});
 operationsRouter.get('/operations/ledger/events', async (req, res, next) => {
   try {
     requirePrivateApiAuth(req);
