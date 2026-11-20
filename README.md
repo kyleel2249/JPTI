@@ -296,3 +296,16 @@ For the current architecture, deploy the Vite frontend to Cloudflare Pages and r
 Exact Pages settings, API host environment variables, secret generation, deployment verification, custom domain setup and the Workers-vs-Pages decision are documented in [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOYMENT.md).
 
 **Cloudflare Pages settings:** Framework preset React (Vite); root directory `/`; build command `npm run build`; output directory `dist`; Node.js version `22`. The existing Express API is not a static Pages asset and is not deployed by the Vite build. A future Workers backend migration must separately validate CCXT, PostgreSQL, filesystem use and scheduler behavior.
+
+
+## Desktop and Android applications
+
+JPTI now includes a Windows Electron desktop shell, Capacitor Android project configuration, a PWA install manifest/offline shell, and a device-level API connection settings page. See [Local desktop and Android guide](docs/LOCAL_DESKTOP_ANDROID.md) for exact Windows commands, APK generation, app data locations, HTTPS/CORS settings and the important distinction between a local app and a local backend.
+
+- Windows source run: `npm install` then `npm run desktop:dev`.
+- Windows installer + portable executable: `npm run desktop:dist` (outputs to `release/`).
+- Android project generation: `npm run mobile:android:add` once.
+- Android sync/open: `npm run mobile:sync` then `npm run mobile:android:open`.
+- Android debug APK: `cd android; .\\gradlew.bat assembleDebug` after Capacitor sync.
+
+The desktop runs a loopback-only Node API and file ledger in Electron's private user-data directory. Android is a native installed client and connects to a secured HTTPS API; it does not bundle the Node/CCXT server. API base URL settings store only the URL, never private tokens or exchange keys. Local and cloud ledgers are not automatically synchronized in this phase.
