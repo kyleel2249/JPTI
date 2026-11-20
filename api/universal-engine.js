@@ -6,7 +6,7 @@ import { buildEvidenceCouncil } from './advanced-intelligence.js';
 import { normalizeDexPair, scoreAssetEvidence, summarizeBotMemory } from './multi-asset-intelligence.js';
 
 export const universalRouter = express.Router();
-const finite = v => Number.isFinite(Number(v)) ? Number(v) : null;
+const finite = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const stableQuotes = new Set(['USD','USDT','USDC','DAI','FDUSD','USDP','TUSD']);
 
@@ -193,6 +193,7 @@ universalRouter.get('/universal/market/:exchange/:symbol',async(req,res)=>{
       const tasks={};
       if(ex.has?.fetchTicker)tasks.ticker=ex.fetchTicker(symbol).catch(()=>null);
       if(ex.has?.fetchOHLCV && (!ex.timeframes||ex.timeframes[timeframe]))tasks.candles=ex.fetchOHLCV(symbol,timeframe,undefined,120).catch(()=>null);
+      if(ex.has?.fetchOHLCV)tasks.mtf=Promise.all(['15m','1h','4h','1d'].filter(tf=>!ex.timeframes||ex.timeframes[tf]).map(async tf=>({timeframe:tf,candles:await ex.fetchOHLCV(symbol,tf,undefined,40).catch(()=>null)})));
       if(ex.has?.fetchOrderBook)tasks.orderBook=ex.fetchOrderBook(symbol,25).catch(()=>null);
       if(market.contract && ex.has?.fetchFundingRate)tasks.funding=ex.fetchFundingRate(symbol).catch(()=>null);
       if(market.contract && ex.has?.fetchOpenInterest)tasks.openInterest=ex.fetchOpenInterest(symbol).catch(()=>null);
@@ -207,7 +208,14 @@ universalRouter.get('/universal/market/:exchange/:symbol',async(req,res)=>{
     const bids=data.orderBook?.bids||[],asks=data.orderBook?.asks||[];
     const bd=bids.slice(0,10).reduce((s,x)=>s+x[0]*x[1],0),ad=asks.slice(0,10).reduce((s,x)=>s+x[0]*x[1],0);
     const imbalance=bd+ad?(bd-ad)/(bd+ad):null;
-    const evidence={momentumPct,relativeVolume:relVol,orderBookImbalance:imbalance,fundingRate:finite(data.funding?.fundingRate),openInterest:data.openInterest||null};
+    const mtf=(data.mtf||[]).map(row=>({timeframe:row.timeframe,direction:row.candles?.length>=20&&Number(row.candles.at(-1)[4])>Number(row.candles.at(-20)[4])?1:row.candles?.length>=20&&Number(row.candles.at(-1)[4])<Number(row.candles.at(-20)[4])?-1:0}));
+    const alignment=mtf.length?mtf.reduce((s,x)=>s+x.direction,0)/mtf.length:null;
+    const gains=[],losses=[];for(let i=Math.max(1,closes.length-14);i<closes.length;i++){const d=closes[i]-closes[i-1];if(d>0)gains.push(d);else losses.push(-d);}
+    const avgGain=gains.reduce((a,b)=>a+b,0)/14,avgLoss=losses.reduce((a,b)=>a+b,0)/14;
+    const rsi14=avgLoss===0?(avgGain>0?100:50):100-100/(1+avgGain/avgLoss);
+    const visibleDepthUsd=bd+ad;
+    const evidence={momentumPct,relativeVolume:relVol,orderBookImbalance:imbalance,fundingRate:finite(data.funding?.fundingRate),openInterest:data.openInterest||null,
+      timeframeAlignment:alignment,rsi14,visibleDepthUsd,multiTimeframe:mtf};
     const council=buildEvidenceCouncil({priceChangePct:momentumPct,volumeChangePct:relVol===null?null:(relVol-1)*100,depthImbalance:imbalance,fundingRate:evidence.fundingRate,openInterestChangePct:null});
     res.set('Cache-Control','no-store');
     res.json({exchange:exchangeId,market:data.market,timeframe,fetchedAt:new Date().toISOString(),
