@@ -109,6 +109,7 @@ export class LiveFeed {
   async _refresh() {
     const byChain = new Map();
     for (const token of this.tokens.values()) {
+      if (token.chainId === 'cex') continue;
       const rows = byChain.get(token.chainId) || [];
       rows.push(token);
       byChain.set(token.chainId, rows);
@@ -182,6 +183,7 @@ export class LiveFeed {
   async _enrich() {
     let budget = 8;
     for (const token of this.tokens.values()) {
+      if (token.chainId === 'cex') continue;
       if (budget <= 0) break;
       const market = token.m;
       if (token.security !== undefined || !market) continue;
