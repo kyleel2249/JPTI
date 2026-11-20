@@ -31,7 +31,8 @@ export function renderPrompt(c) {
     'UNIVERSE',
     `- Active strategy profile: ${profile}. ${universeDescription}`,
     '- Include DexScreener-supported chains plus the JPTI configured CEX spot watchlist when the JPTI bridge is connected.',
-    `- Minimum DEX liquidity ${money(u.minLiquidityUsd)}, minimum 5m volume ${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders for DEX token screening.`
+    `- Fresh-pair age reference: the last ${u.maxAgeHours} hours; apply this age ceiling only to the meme_new_pair profile.`,
+    `- Minimum liquidity ${money(u.minLiquidityUsd)}, minimum 5m volume ${money(u.minVolume5mUsd)}, at least ${u.minHolders} holders for DEX token screening.`
   );
   const skips = [];
   if (u.skipFrozenMint) skips.push('a frozen mint');
@@ -53,7 +54,7 @@ export function renderPrompt(c) {
   const [first, ...rest] = e.ladder;
   const ladder = [`sell ${first.sellPct}% at ${first.x}x`, ...rest.map((x) => `${x.sellPct}% at ${x.x}x`)].join(', ');
   L.push(
-    `4. EXECUTOR - paper-only simulated fills; never sign a wallet transaction or submit a live exchange order. Max slippage ${e.maxSlippagePct}%, split entries in ${e.splitParts} parts. Take-profit ladder: ${ladder}, let ${e.runnerPct}% run with a ${e.trailingStopPct}% trailing stop. Hard stop -${e.hardStopPct}%, time stop ${e.timeStopMin} min, exit instantly if dev sells or LP is pulled.`
+    `4. EXECUTOR - max slippage ${e.maxSlippagePct}%, split entries in ${e.splitParts} parts. Paper-only simulated fills; never sign a wallet transaction or submit a live exchange order. Take-profit ladder: ${ladder}, let ${e.runnerPct}% run with a ${e.trailingStopPct}% trailing stop. Hard stop -${e.hardStopPct}%, time stop ${e.timeStopMin} min, exit instantly if dev sells or LP is pulled.`
   );
   L.push('5. LOGGER - write every ENTER / EXIT / FILTERED line with the reason, asset class, venue, size, fill price and PnL.');
   L.push('6. EQUITY - update balance and the equity curve on every close.', '', 'RULES');
