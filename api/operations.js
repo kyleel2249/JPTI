@@ -17,7 +17,7 @@ const startedAt = new Date().toISOString();
 
 export const eventSchema = z.object({
   source: z.string().min(2).max(48),
-  eventType: z.enum(['fill', 'deposit', 'withdrawal', 'fee', 'transfer', 'adjustment', 'funding', 'interest', 'borrow', 'rebate']),
+  eventType: z.enum(['fill', 'deposit', 'withdrawal', 'fee', 'transfer', 'adjustment', 'funding', 'interest', 'borrow', 'rebate', 'bot_signal', 'bot_decision', 'bot_trade', 'bot_filter', 'bot_session']),
   externalId: z.string().min(3).max(128),
   accountId: z.string().min(2).max(96),
   symbol: z.string().max(48).optional(),

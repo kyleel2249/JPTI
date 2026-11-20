@@ -226,3 +226,18 @@ The authenticated `GET /api/advanced/portfolio/risk` response now includes addit
 - A coverage warning when fewer than 20 aligned observations are available.
 
 These statistics use current-notional weights and aligned daily close-to-close returns from the available exchange candles. They are backward-looking estimates; the zero-rate Sharpe, 365-day annualization, survivorship/coverage limitations, missing histories, and lack of FX conversion can materially affect interpretation. They do not model leverage, derivatives liquidation, intraday gaps, funding, fees or liquidity shocks. They are not forecasts or a guarantee of maximum loss.
+
+
+## T-Bots integration and shared intelligence bridge
+
+The original T-Bots application is preserved under `integrations/t-bots/` and served at `/t-bots/`. It retains the six cooperating agents and all original strategy/risk configuration. T-Bots' original executor is a simulator; its live DEX feed never sends wallet transactions.
+
+Authenticated bridge routes (use `x-jpti-api-token`):
+- `GET /api/integrations/tbots/status` — integration mode and safety boundary.
+- `GET /api/integrations/tbots/context?exchange=binance&symbol=BTC%2FUSDT` — JPTI market-regime context from hourly candles, top-10 order-book imbalance and funding where supported.
+- `POST /api/integrations/tbots/events` — idempotent bot telemetry append into the shared JPTI ledger. Supported event types: `bot_signal`, `bot_decision`, `bot_trade`, `bot_filter`, `bot_session`. Use a stable `externalId`.
+- `GET /api/integrations/tbots/memory?limit=50` — recent T-Bots events from the shared ledger.
+
+The embedded browser client publishes paper entries/exits, closed-trade summaries, filters and system decisions. It periodically reads JPTI BTC market context. A fresh `risk_off` score below 35 blocks new T-Bots entries only; the existing exit manager continues to operate. This is a coarse cross-market risk gate, not token-level analysis. Risk context uses a simple heuristic and should be treated as a conservative advisory filter, not a predictive model. Memory is a shared event journal, not an LLM memory or shared mutable strategy state.
+
+Run the T-Bots terminal at `http://localhost:8787/t-bots/` while the JPTI API is running. Paste the local `JPTI_API_TOKEN` into the T-Bots compose screen to connect. Do not expose this token in a public deployment or commit it. The integration remains paper-only; no Solana wallet signing or swap execution is implemented.

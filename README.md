@@ -200,3 +200,12 @@ JPTI_DATA_DIR=data
 ```
 
 MM interval is a target cadence only; the market-making worker remains disabled. Reconciliation and investor monitoring report waiting states until real account-fill ingestion and investor/watchlist sources are connected. Do not expose the local API directly to the internet; production deployment requires managed database storage, authentication, TLS, secret management, audit retention and operational monitoring.
+
+
+## T-Bots multi-agent subsystem integration
+
+JPTI embeds the complete source of [T-Bots](https://github.com/kyleel2249/T-Bots) under `integrations/t-bots/`, preserving its original six-agent paper-trading engine, prompt parser/manager, DEX and simulation feeds, UI, Firebase/Worker adapters, tests and deployment files. The embedded terminal is served at `/t-bots/` by the JPTI API. The upstream repository remains independent; this import is a pinned source snapshot, not an automatic live mirror. When T-Bots changes, review and sync its new commit into this directory.
+
+The optional JPTI bridge shares auditable bot events through the JPTI append-only ledger and supplies a BTC/USDT market-regime context from JPTI's exchange gateway. Enter the local `JPTI_API_TOKEN` in the T-Bots compose screen to enable it. In live-data mode, a fresh JPTI `risk_off` regime blocks new T-Bots paper entries; existing paper positions continue to be managed by the original T-Bots exit rules. A missing or stale context does not invent a risk state and leaves the original T-Bots rules in control.
+
+**Execution remains paper-only.** T-Bots' live mode means live DEX data, not wallet execution. The bridge does not sign Solana transactions, custody keys, submit swaps, or route JPTI exchange orders. JPTI's independent live-order gateway remains disabled by default. Bot memory events are telemetry, not fills or realized account PnL.
