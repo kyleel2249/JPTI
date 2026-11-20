@@ -201,6 +201,32 @@ The current implementation now includes rolling walk-forward validation for an E
 Public market-data routes are read-only. Authenticated fill synchronization and ledger ingestion append normalized records to the local journal; portfolio accounting reads that journal and current exchange balances. Existing live-order controls remain separate and disabled by default. Keep API credentials server-side.
 
 
+
+### Advanced historical fill synchronization
+
+The fill-ingestion worker uses bounded pagination rather than a single fixed 100-trade request. It imports up to `JPTI_FILL_SYNC_MAX_PAGES` pages per market/run, records fetched/unique/normalized/inserted/duplicate counts, and reports when the page cap leaves history incomplete. The next scheduled pass resumes from the persisted cursor with a configurable overlap to recover late-arriving fills. Ledger uniqueness constraints make overlapping imports replay-safe.
+
+Configuration (all optional):
+
+- `JPTI_FILL_SYNC_LOOKBACK_DAYS=7` — initial history window when a market has no saved cursor.
+- `JPTI_FILL_SYNC_PAGE_SIZE=250` — requested trades per exchange page (clamped to 10–1000).
+- `JPTI_FILL_SYNC_MAX_PAGES=20` — maximum pages per market/run (clamped to 1–100).
+- `JPTI_FILL_SYNC_OVERLAP_MINUTES=3` — look-back overlap on each sync to catch delayed fills.
+
+An authenticated manual backfill endpoint is available:
+
+```http
+POST /api/operations/fills/backfill
+x-jpti-api-token: <JPTI_API_TOKEN>
+Content-Type: application/json
+
+{"since":"2026-01-01T00:00:00.000Z","until":"2026-01-31T23:59:59.999Z","pageSize":250,"maxPages":20}
+```
+
+The request uses the configured `JPTI_FILL_SYNC_MARKETS` list unless a `markets` array is supplied (format: `exchange:symbol`). A single request is limited to 20 markets and a 10-year date range. Backfill uses its own cursor namespace and does not move the scheduled-sync cursor. If the response reports `pageLimitReached`, run another backfill for the remaining time range or increase the bounded page limit. Repeated imports are safe because ledger events are deduplicated by exchange/account/trade ID/market.
+
+Exchange adapters differ: some impose their own history limits, omit older records, or cannot provide a stable cursor for trades sharing the same millisecond timestamp. The overlap and dedupe strategy reduces missed/duplicate imports but cannot guarantee completeness where the exchange API itself does not expose complete history. Unsupported records and provider failures are reported rather than silently treated as imported. Use read-only keys only.
+
 ## Walk-forward research, automatic fill ingestion and portfolio accounting
 
 The advanced laboratory is exposed through `api/advanced-lab.js`:
