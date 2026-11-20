@@ -30,6 +30,7 @@ export class ScannerAgent extends BaseAgent {
       if(t.spreadPct===null||t.spreadPct===undefined||t.spreadPct>0.5)why.push('spread unavailable or above 0.5%');
       if(!(t.price>0))why.push('invalid market price');
       if(profile==='mean_reversion'&&t.jptiEvidence?.rsi14==null)why.push('JPTI RSI14 unavailable for mean-reversion profile');
+      if(profile==='defi_rotation')why.push('CEX instruments do not have a verified DeFi protocol mapping');
       return {pass:why.length===0,pending:false,reasons:why};
     }
     if (t.security === null || t.security === undefined) return { pass: false, pending: true, reasons: ['security data pending'] };
