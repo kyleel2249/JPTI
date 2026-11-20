@@ -111,7 +111,6 @@ export class JptiBridge {
   }
   async preflightEntry({ token, profileId = 'meme_new_pair', securityPassed = false } = {}) {
     if (!this.enabled) return { allowed:false, reasons:['JPTI bridge is not configured'] };
-    const id=String(token?.id||token?.symbol||'unknown');
     // Always consult the authoritative JPTI gate for every new entry.
     // Cached approvals could outlive a newly engaged kill switch or risk pause.
     const relativeVolume=Number(token?.volume5mAvgUsd)>0?Number(token.volume5mUsd)/Number(token.volume5mAvgUsd):null;
@@ -132,9 +131,6 @@ export class JptiBridge {
     };
     try {
       const result=await this._request('/universal/entry-preflight',{method:'POST',body:JSON.stringify(payload)});
-      this.entryPreflightCache=this.entryPreflightCache||new Map();
-      this.entryPreflightCache.set(key,{at:Date.now(),result});
-      if(this.entryPreflightCache.size>500)this.entryPreflightCache.delete(this.entryPreflightCache.keys().next().value);
       return result;
     } catch(error) {
       this.lastError=error.message;

@@ -313,7 +313,7 @@ test('live feed: DexScreener and RugCheck mapping, fail-closed enrichment', asyn
 });
 
 
-test('JPTI bridge sends fresh token evidence to the paper preflight and caches its response', async () => {
+test('JPTI bridge sends fresh token evidence and rechecks governance on every entry', async () => {
   const originalFetch=globalThis.fetch;
   let calls=0;
   let payload=null;
@@ -331,7 +331,7 @@ test('JPTI bridge sends fresh token evidence to the paper preflight and caches i
     const second=await bridge.preflightEntry({token,profileId:'meme_new_pair',securityPassed:true});
     assert.equal(first.allowed,true);
     assert.equal(second.allowed,true);
-    assert.equal(calls,1);
+    assert.equal(calls,2);
     assert.equal(payload.profileId,'meme_new_pair');
     assert.equal(payload.securityStatus,'passed');
     assert.equal(payload.evidence.relativeVolume,2);
