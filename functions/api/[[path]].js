@@ -17,9 +17,8 @@ export async function onRequest(context) {
   }
   const incoming = new URL(request.url);
   const target = new URL(incoming.pathname + incoming.search, origin);
-  const headers = new Headers(request.headers);
-  headers.set('x-jpti-edge-secret', edgeSecret);
-  const forwarded = new Request(target.toString(), { method: request.method, headers, body: ['GET','HEAD'].includes(request.method) ? undefined : request.body, redirect: 'manual' });
+  const forwarded = new Request(target.toString(), request);
+  forwarded.headers.set('x-jpti-edge-secret', edgeSecret);
   const response = await fetch(forwarded);
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'no-store');
