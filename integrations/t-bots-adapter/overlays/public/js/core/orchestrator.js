@@ -50,6 +50,7 @@ export class Orchestrator {
     this.sharedMacro = null;
     this.sharedAssetEvidence = new Map();
     this.sharedEvidenceRequired = false;
+    this.entryPreflight = null;
     this.lastSample = 0;
     this.ctx = { canSell: (id) => (this.feed.canSell ? this.feed.canSell(id) : true) };
     bus.on('trade:enter', (e) => (this.banner = `ENTERED · LOGGED $${e.symbol}`));
@@ -164,6 +165,19 @@ export class Orchestrator {
       return;
     }
     this.ledger.step(task, 'RUG CHECK', 'pass');
+    if (this.entryPreflight) {
+      let preflight = null;
+      try { preflight = await this.entryPreflight(reviewToken); }
+      catch (error) { preflight = { allowed: false, reasons: ['JPTI preflight error: ' + error.message] }; }
+      if (!preflight?.allowed) {
+        const reasons = (preflight?.reasons || ['JPTI paper-entry preflight unavailable']).join('; ');
+        this.ledger.step(task, 'JPTI PREFLIGHT', 'blocked', reasons);
+        this.ledger.done(task, 'skipped', reasons);
+        this._filtered(token, 'JPTI paper-entry preflight blocked this candidate: ' + reasons, 'jpti-preflight');
+        return;
+      }
+      this.ledger.step(task, 'JPTI PREFLIGHT', 'pass', 'fresh strategy evidence and unified risk checks passed; paper only');
+    }
     const globalMarketMove = Number(this.sharedMacro?.crypto?.marketCapChange24hPercent);
     if (Number.isFinite(globalMarketMove) && globalMarketMove <= -8) {
       this.ledger.done(task, 'skipped', 'global crypto market capitalization fell at least 8% over 24h');
@@ -231,6 +245,7 @@ export class Orchestrator {
     this.bus.emit('session:end', r);
   }
 
+  setEntryPreflight(callback) { this.entryPreflight = typeof callback === 'function' ? callback : null; }
   setSharedContext(context) { this.sharedContext = context && Date.now() - Date.parse(context.fetchedAt) <= 120000 ? context : null; }
   setSharedMacro(macro) { this.sharedMacro = macro && Date.now() - Date.parse(macro.generatedAt) <= 900000 ? macro : null; }
   setSharedRisk(risk) { this.sharedRisk = risk && risk.newEntriesAllowed === true && !risk.error ? risk : risk ? { ...risk, newEntriesAllowed: false } : null; }
