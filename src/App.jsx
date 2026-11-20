@@ -470,8 +470,8 @@ function App() {
            {performanceData.bySession.map((row,index)=><div key={row.session+row.quoteCurrency+index}><b>{row.session}</b><span>{row.quoteCurrency}</span><span>{row.exits}</span><span>{row.wins} / {row.losses}</span><strong className={row.netRealizedPnl>=0?'up':'down'}>{fmt(row.netRealizedPnl)}</strong></div>)}
          </div>
          <h4>Daily realized PnL calendar data</h4>
-         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span><span>DAILY REALIZED PNL</span></div>
-           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong><span>{fmt(day.pnl)} {currency.quoteCurrency}</span></div>))}
+         <div className="scanner-table"><div><span>DATE</span><span>QUOTE</span><span>REALIZED PNL</span></div>
+           {performanceData.byCurrency.flatMap(currency=>currency.daily.map(day=><div key={currency.quoteCurrency+day.date}><b>{day.date}</b><span>{currency.quoteCurrency}</span><strong className={day.pnl>=0?'up':'down'}>{fmt(day.pnl)}</strong></div>))}
          </div>
          <div className="risk-list">{performanceData.dataQuality.warnings.map((warning,index)=><p key={index}><ShieldCheck/>{warning}</p>)}</div>
          <p className="subtle-note">{performanceData.methodology} {performanceData.limitations.join(' ')}</p>
