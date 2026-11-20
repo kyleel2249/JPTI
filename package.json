@@ -53,7 +53,6 @@
       "dist/**/*",
       "api/**/*",
       "integrations/t-bots/public/**/*",
-      "node_modules/**/*",
       "desktop/main.cjs",
       "package.json"
     ],
