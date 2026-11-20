@@ -101,30 +101,42 @@ export function evaluateStrategyProfile(profileId, evidence = {}) {
 function fillsCount(events) { return events.filter(e=>e.eventType==='fill').length; }
 
 export function calculateExchangeRealized(events, now = Date.now()) {
-  const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={};
+  const inventory=new Map(),realizedByQuote={},dailyByQuote={},feeTotals={},unmatchedSellQuantity={};
   const fills=events.filter(e=>e.eventType==='fill'&&e.symbol&&!String(e.symbol).includes(':')&&e.side&&finite(e.quantity)>0&&finite(e.price)>0)
-    .sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+    .sort((a,b)=>(Date.parse(a.occurredAt)||0)-(Date.parse(b.occurredAt)||0));
   for(const e of fills){
     const key=e.source+':'+e.accountId+':'+e.symbol;
     const [base,quote]=String(e.symbol).split('/');
     if(!base||!quote)continue;
-    const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,symbol:e.symbol};
+    const row=inventory.get(key)||{quantity:0,cost:0,base,quote,exchange:e.source,accountId:e.accountId,symbol:e.symbol};
     const qty=Number(e.quantity),price=Number(e.price),fee=finite(e.fee)||0;
     if(e.feeCurrency)feeTotals[e.feeCurrency]=(feeTotals[e.feeCurrency]||0)+fee;
     let realized=0;
-    if(e.side==='buy'){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=qty;}
-    else{
-      const matched=Math.min(qty,row.quantity),avg=row.quantity>0?row.cost/row.quantity:0;
-      realized=(price-avg)*matched;row.quantity-=matched;row.cost=Math.max(0,row.cost-avg*matched);
+    if(e.side==='buy'){
+      const acquired=qty-(e.feeCurrency===base?fee:0);
+      if(acquired>0){row.cost+=qty*price+(e.feeCurrency===quote?fee:0);row.quantity+=acquired;}
+      else unmatchedSellQuantity[quote]=(unmatchedSellQuantity[quote]||0)+qty;
+    } else {
+      const baseFee=e.feeCurrency===base?fee:0;
+      const requestedOut=qty+baseFee;
+      const averageCost=row.quantity>0?row.cost/row.quantity:0;
+      const matched=Math.min(requestedOut,row.quantity);
+      const matchedFee=Math.min(baseFee,matched);
+      const matchedSale=Math.min(qty,Math.max(0,matched-matchedFee));
+      realized=matchedSale*price-averageCost*matched;
+      if(e.feeCurrency===quote)realized-=fee*(qty>0?matchedSale/qty:0);
+      if(matched+1e-12<requestedOut)unmatchedSellQuantity[quote]=(unmatchedSellQuantity[quote]||0)+(requestedOut-matched);
+      row.quantity-=matched;row.cost=Math.max(0,row.cost-averageCost*matched);
       if(row.quantity<1e-12){row.quantity=0;row.cost=0;}
-      if(e.feeCurrency===quote)realized-=fee;
       realizedByQuote[quote]=(realizedByQuote[quote]||0)+realized;
-      if(Date.parse(e.occurredAt)>=now-86400000)dailyByQuote[quote]=(dailyByQuote[quote]||0)+realized;
+      const occurredAt=Date.parse(e.occurredAt);
+      if(Number.isFinite(occurredAt)&&occurredAt>=now-86400000)dailyByQuote[quote]=(dailyByQuote[quote]||0)+realized;
     }
     inventory.set(key,row);
   }
-  return {realizedByQuote,dailyByQuote,feeTotals,openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
-    caveat:'Weighted-average cost on recorded spot fills only. Missing opening inventory, transfers, funding, taxes and fees paid in third tokens prevent a complete account PnL statement.'};
+  return {realizedByQuote,dailyByQuote,feeTotals,unmatchedSellQuantity,
+    openInventory:[...inventory.values()].filter(x=>x.quantity>0).map(x=>({...x,averageCost:x.cost/x.quantity})),
+    caveat:'Weighted-average cost on recorded spot fills only. Base-denominated fees reduce acquired/disposed inventory; quote-denominated fees affect cost/proceeds. Missing opening inventory, transfers, funding, taxes and third-token fee conversion prevent a complete account PnL statement.'};
 }
 
 function riskSetting(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER, integer = false } = {}) {
