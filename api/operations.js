@@ -274,7 +274,7 @@ operationsRouter.get('/operations/overview', (_req, res) => res.json(getOperatio
 operationsRouter.get('/operations/events', async (req, res, next) => {
   try {
     const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit || '100', 10) || 100));
-    const events = (await readEvents(limit * 2)).filter((event) => event.kind !== 'ledger-transaction').slice(-limit);
+    const events = (await readEvents(limit * 2)).filter((event) => event.kind !== 'ledger-transaction' && event.kind !== 'balance-reconciliation-snapshot').slice(-limit);
     res.json({ count: events.length, events: events.reverse() });
   } catch (error) { next(error); }
 });
