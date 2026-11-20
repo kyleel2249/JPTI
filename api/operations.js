@@ -7,6 +7,7 @@ import { withExchange, listExchangeCatalog } from './exchanges.js';
 import { calculateBalanceReconciliation } from './reconciliation.js';
 import { getOperationalIntervals, providerDirectory } from './providers.js';
 import { requirePrivateApiAuth } from './policy.js';
+import { fetchPaginatedTrades, fillSyncConfig, normalizeExchangeTrade, parseFillWatchlist } from './fill-sync.js';
 
 export const operationsRouter = express.Router();
 const jobState = new Map();
@@ -108,50 +109,40 @@ async function marketMonitor() {
   });
 }
 
-async function exchangeFillMonitor() {
-  const watchlist = String(process.env.JPTI_FILL_SYNC_MARKETS || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 20);
-  if (!watchlist.length) {
-    setJob('fill-ingestion', { lastRunAt: new Date().toISOString(), runCount: (jobState.get('fill-ingestion')?.runCount || 0) + 1,
-      status: 'waiting-for-watchlist', detail: 'Set JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT to enable private fill-history polling.' });
-    return;
-  }
-  const outcomes = await Promise.allSettled(watchlist.map(async entry => {
-    const split = entry.indexOf(':');
-    if (split < 1) throw new Error('Invalid fill watchlist entry: ' + entry);
-    const exchangeId = entry.slice(0, split).toLowerCase(), symbol = entry.slice(split + 1).toUpperCase();
-    const cursorKey = exchangeId + ':' + symbol;
-    const since = await getSyncCursor(cursorKey, Date.now() - 24 * 60 * 60 * 1000);
-    const trades = await withExchange(exchangeId, { privateAccess: true }, async ex => {
-      if (!ex.has?.fetchMyTrades) throw new Error('fetchMyTrades unavailable on ' + exchangeId);
-      if (!ex.markets[symbol]) throw new Error('Unknown fill-watchlist market ' + symbol);
-      return ex.fetchMyTrades(symbol, since, 100);
+async function syncFillMarket({ exchangeId, symbol, since, until = Date.now(), cursorKey, pageSize, maxPages, overlapMs = 0 }) {
+  const startAt = Math.max(0, Number(since) - overlapMs);
+  const result = await withExchange(exchangeId, { privateAccess: true }, async ex => {
+    if (!ex.has?.fetchMyTrades) throw new Error('fetchMyTrades unavailable on ' + exchangeId);
+    if (!ex.markets[symbol]) throw new Error('Unknown fill-watchlist market ' + symbol);
+    return fetchPaginatedTrades({ since: startAt, until, pageSize, maxPages,
+      fetchPage: (pageSince, limit) => ex.fetchMyTrades(symbol, pageSince, limit),
+      onProgress: progress => setJob('fill-ingestion', { status:'syncing', detail:exchangeId+' '+symbol+': page '+progress.pages+'/'+maxPages+', '+progress.uniqueTrades+' unique trade(s) fetched.', progress:{exchange:exchangeId,symbol,...progress} })
     });
-    let newest = since;
-    const ledgerEvents = [];
-    for (const trade of trades) {
-      if (!trade.id || !trade.symbol || !['buy','sell'].includes(trade.side) || !(trade.amount > 0) || !(trade.price > 0)) continue;
-      const [base, quote] = trade.symbol.split('/');
-      const fee = trade.fee || {};
-      const parsed = eventSchema.parse({ source: exchangeId, eventType: 'fill', externalId: String(trade.id),
-        accountId: exchangeId, symbol: trade.symbol, side: trade.side, quantity: Number(trade.amount), price: Number(trade.price),
-        fee: Number(fee.cost || 0), feeCurrency: fee.currency || quote,
-        occurredAt: new Date(Number(trade.timestamp) || Date.parse(trade.datetime) || Date.now()).toISOString(),
-        metadata: { base, quote, orderId: String(trade.order || ''), tradeId: String(trade.id) } });
-      ledgerEvents.push({ id: randomUUID(), kind: 'ledger-transaction', ...parsed, ingestedAt: new Date().toISOString() });
-      newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
-    }
-    const commit = await commitLedgerBatchAndCursor(ledgerEvents, cursorKey, trades.length ? newest + 1 : Date.now() - 60_000);
-    return { exchange: exchangeId, symbol, fetched: trades.length, ingested: commit.inserted, duplicates: commit.duplicates,
-      outboxEnqueued: commit.outboxEnqueued, transactional: commit.transactional };
-  }));
-  const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
-  const errors = outcomes.filter(x => x.status === 'rejected').map(x => x.reason?.message || 'Fill sync failed');
-  setJob('fill-ingestion', { lastRunAt: new Date().toISOString(), lastSuccessAt: success.length ? new Date().toISOString() : (jobState.get('fill-ingestion')?.lastSuccessAt || null),
-    runCount: (jobState.get('fill-ingestion')?.runCount || 0) + 1, status: errors.length ? (success.length ? 'partial' : 'degraded') : 'live',
-    detail: success.reduce((n,x) => n + x.ingested, 0) + ' new fill(s) ingested across ' + success.length + ' market(s); ' + errors.length + ' errors.',
-    lastError: errors.length ? errors.join('; ').slice(0, 500) : null, lastSnapshot: success });
+  });
+  const ledgerEvents = result.trades.map(trade => normalizeExchangeTrade(exchangeId, trade, eventSchema, randomUUID)).filter(Boolean);
+  const nextCursor = Math.max(startAt, result.newestTimestamp) + 1;
+  const commit = await commitLedgerBatchAndCursor(ledgerEvents, cursorKey, nextCursor);
+  return { exchange:exchangeId, symbol, requestedSince:startAt, requestedUntil:until, pages:result.pages, fetched:result.rawFetched, uniqueTrades:result.uniqueTrades, normalized:ledgerEvents.length, ingested:commit.inserted, duplicates:commit.duplicates, invalidOrUnsupported:result.uniqueTrades-ledgerEvents.length, pageLimitReached:result.pageLimitReached, exhausted:result.exhausted, nextCursor, outboxEnqueued:commit.outboxEnqueued, transactional:commit.transactional };
 }
 
+async function exchangeFillMonitor() {
+  const config = fillSyncConfig();
+  let watchlist;
+  try { watchlist = parseFillWatchlist(process.env.JPTI_FILL_SYNC_MARKETS || ''); }
+  catch (error) { setJob('fill-ingestion',{lastRunAt:new Date().toISOString(),runCount:(jobState.get('fill-ingestion')?.runCount||0)+1,status:'configuration-error',detail:error.message,lastError:error.message}); return; }
+  if (!watchlist.length) { setJob('fill-ingestion',{lastRunAt:new Date().toISOString(),runCount:(jobState.get('fill-ingestion')?.runCount||0)+1,status:'waiting-for-watchlist',detail:'Set JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT to enable private fill-history polling.'}); return; }
+  const outcomes = await Promise.allSettled(watchlist.map(async ({exchange,symbol}) => {
+    const cursorKey=exchange+':'+symbol;
+    const since=await getSyncCursor(cursorKey,Date.now()-config.lookbackDays*86_400_000);
+    return syncFillMarket({exchangeId:exchange,symbol,since,cursorKey,until:Date.now(),pageSize:config.pageSize,maxPages:config.maxPages,overlapMs:config.overlapMs});
+  }));
+  const success=outcomes.filter(x=>x.status==='fulfilled').map(x=>x.value);
+  const errors=outcomes.filter(x=>x.status==='rejected').map(x=>x.reason?.message||'Fill sync failed');
+  const fetched=success.reduce((n,x)=>n+x.fetched,0), ingested=success.reduce((n,x)=>n+x.ingested,0), capped=success.filter(x=>x.pageLimitReached).length;
+  const snapshot={generatedAt:new Date().toISOString(),markets:success,errors,fetched,ingested,cappedMarkets:capped};
+  await persistEvent({id:randomUUID(),kind:'fill-sync-run',...snapshot});
+  setJob('fill-ingestion',{lastRunAt:new Date().toISOString(),lastSuccessAt:success.length?new Date().toISOString():(jobState.get('fill-ingestion')?.lastSuccessAt||null),runCount:(jobState.get('fill-ingestion')?.runCount||0)+1,status:errors.length?(success.length?'partial':'degraded'):capped?'backfill-incomplete':'live',detail:ingested+' new fill(s) ingested from '+fetched+' fetched trade(s) across '+success.length+' market(s); '+capped+' market(s) reached the page cap; '+errors.length+' errors.',lastError:errors.length?errors.join('; ').slice(0,500):null,lastSnapshot:snapshot,progress:null});
+}
 function configuredOpeningBalances(exchangeId) {
   try {
     const parsed = JSON.parse(process.env.JPTI_RECONCILE_OPENING_BALANCES_JSON || '{}');
@@ -351,6 +342,34 @@ operationsRouter.get('/operations/ledger/summary', async (_req, res, next) => {
 });
 
 
+const fillBackfillSchema = z.object({
+  since: z.union([z.string().datetime(), z.number().finite()]),
+  until: z.union([z.string().datetime(), z.number().finite()]).optional(),
+  markets: z.array(z.string().min(3).max(96)).max(20).optional(),
+  pageSize: z.number().int().min(10).max(1000).optional(),
+  maxPages: z.number().int().min(1).max(100).optional()
+});
+
+operationsRouter.post('/operations/fills/backfill', async (req,res) => {
+  try { requirePrivateApiAuth(req); } catch(error) { return res.status(error.status||401).json({error:error.message}); }
+  const parsed=fillBackfillSchema.safeParse(req.body||{});
+  if(!parsed.success) return res.status(400).json({error:'Invalid backfill request.',details:parsed.error.flatten()});
+  try {
+    const config=fillSyncConfig();
+    const since=typeof parsed.data.since==='number'?parsed.data.since:Date.parse(parsed.data.since);
+    const until=parsed.data.until==null?Date.now():(typeof parsed.data.until==='number'?parsed.data.until:Date.parse(parsed.data.until));
+    if(!Number.isFinite(since)||!Number.isFinite(until)||until<=since) return res.status(400).json({error:'Backfill until must be later than since.'});
+    if(until-since>3650*86_400_000) return res.status(400).json({error:'A single backfill request cannot exceed 10 years.'});
+    const configured=parseFillWatchlist(process.env.JPTI_FILL_SYNC_MARKETS||'');
+    const selected=parsed.data.markets?.length?parsed.data.markets.map(value=>{const split=value.indexOf(':');if(split<1||split===value.length-1)throw new Error('Invalid market: '+value);return {exchange:value.slice(0,split).toLowerCase(),symbol:value.slice(split+1).toUpperCase()};}):configured;
+    if(!selected.length) return res.status(409).json({error:'Configure JPTI_FILL_SYNC_MARKETS or supply markets in the request.'});
+    const outcomes=await Promise.allSettled(selected.map(({exchange,symbol})=>syncFillMarket({exchangeId:exchange,symbol,since,until,cursorKey:'backfill:'+exchange+':'+symbol+':'+since,pageSize:parsed.data.pageSize||config.pageSize,maxPages:parsed.data.maxPages||config.maxPages,overlapMs:config.overlapMs})));
+    const markets=outcomes.filter(x=>x.status==='fulfilled').map(x=>x.value), errors=outcomes.filter(x=>x.status==='rejected').map(x=>x.reason?.message||'Backfill failed');
+    const summary={generatedAt:new Date().toISOString(),requestedSince:new Date(since).toISOString(),requestedUntil:new Date(until).toISOString(),markets,errors,fetched:markets.reduce((n,x)=>n+x.fetched,0),ingested:markets.reduce((n,x)=>n+x.ingested,0),duplicates:markets.reduce((n,x)=>n+x.duplicates,0),cappedMarkets:markets.filter(x=>x.pageLimitReached).length};
+    await persistEvent({id:randomUUID(),kind:'fill-backfill-run',...summary});
+    res.status(errors.length?207:200).set('Cache-Control','no-store').json(summary);
+  } catch(error) { res.status(400).json({error:error.message||'Historical fill backfill failed.'}); }
+});
 operationsRouter.post('/operations/reconciliation/run', async (req, res) => {
   try { requirePrivateApiAuth(req); } catch (error) { return res.status(error.status || 401).json({ error: error.message }); }
   try {
