@@ -128,6 +128,49 @@ async function marketMonitor() {
   });
 }
 
+const fillCursors = new Map();
+async function exchangeFillMonitor() {
+  const watchlist = String(process.env.JPTI_FILL_SYNC_MARKETS || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 20);
+  if (!watchlist.length) {
+    setJob('fill-ingestion', { lastRunAt: new Date().toISOString(), runCount: (jobState.get('fill-ingestion')?.runCount || 0) + 1,
+      status: 'waiting-for-watchlist', detail: 'Set JPTI_FILL_SYNC_MARKETS=binance:BTC/USDT,bitget:ETH/USDT to enable private fill-history polling.' });
+    return;
+  }
+  const outcomes = await Promise.allSettled(watchlist.map(async entry => {
+    const split = entry.indexOf(':');
+    if (split < 1) throw new Error('Invalid fill watchlist entry: ' + entry);
+    const exchangeId = entry.slice(0, split).toLowerCase(), symbol = entry.slice(split + 1).toUpperCase();
+    const cursorKey = exchangeId + ':' + symbol;
+    const since = fillCursors.get(cursorKey) || Date.now() - 24 * 60 * 60 * 1000;
+    const trades = await withExchange(exchangeId, { privateAccess: true }, async ex => {
+      if (!ex.has?.fetchMyTrades) throw new Error('fetchMyTrades unavailable on ' + exchangeId);
+      if (!ex.markets[symbol]) throw new Error('Unknown fill-watchlist market ' + symbol);
+      return ex.fetchMyTrades(symbol, since, 100);
+    });
+    let newest = since, ingested = 0, duplicates = 0;
+    for (const trade of trades) {
+      if (!trade.id || !trade.symbol || !['buy','sell'].includes(trade.side) || !(trade.amount > 0) || !(trade.price > 0)) continue;
+      const [base, quote] = trade.symbol.split('/');
+      const fee = trade.fee || {};
+      const saved = await persistLedgerTransaction(eventSchema.parse({ source: exchangeId, eventType: 'fill', externalId: String(trade.id),
+        accountId: exchangeId, symbol: trade.symbol, side: trade.side, quantity: Number(trade.amount), price: Number(trade.price),
+        fee: Number(fee.cost || 0), feeCurrency: fee.currency || quote,
+        occurredAt: trade.datetime || new Date(trade.timestamp || Date.now()).toISOString(),
+        metadata: { base, quote, orderId: String(trade.order || ''), tradeId: String(trade.id) } }));
+      if (saved.duplicate) duplicates++; else ingested++;
+      newest = Math.max(newest, Number(trade.timestamp || Date.parse(trade.datetime) || newest));
+    }
+    fillCursors.set(cursorKey, newest + 1);
+    return { exchange: exchangeId, symbol, fetched: trades.length, ingested, duplicates };
+  }));
+  const success = outcomes.filter(x => x.status === 'fulfilled').map(x => x.value);
+  const errors = outcomes.filter(x => x.status === 'rejected').map(x => x.reason?.message || 'Fill sync failed');
+  setJob('fill-ingestion', { lastRunAt: new Date().toISOString(), lastSuccessAt: success.length ? new Date().toISOString() : (jobState.get('fill-ingestion')?.lastSuccessAt || null),
+    runCount: (jobState.get('fill-ingestion')?.runCount || 0) + 1, status: errors.length ? (success.length ? 'partial' : 'degraded') : 'live',
+    detail: success.reduce((n,x) => n + x.ingested, 0) + ' new fill(s) ingested across ' + success.length + ' market(s); ' + errors.length + ' errors.',
+    lastError: errors.length ? errors.join('; ').slice(0, 500) : null, lastSnapshot: success });
+}
+
 async function providerMonitor() {
   const providers = providerDirectory();
   const configured = providers.filter((p) => p.configured).length;
@@ -153,6 +196,7 @@ export function startOperationsScheduler() {
   const intervals = getOperationalIntervals();
   const jobs = [
     ['market-monitor', intervals.marketMonitorSeconds, marketMonitor],
+    ['fill-ingestion', intervals.reconcileSeconds, exchangeFillMonitor],
     ['provider-health', intervals.providerHealthSeconds, providerMonitor],
     ['reconciliation', intervals.reconcileSeconds, () => blockedTask('reconciliation', 'Waiting for exchange fill-history ingestion and a verified account-to-ledger reconciliation adapter.')],
     ['investor-monitor', intervals.investorMonitorSeconds, () => blockedTask('investor-monitor', 'Waiting for configured investor/watchlists and licensed holdings or disclosure feeds.')],
@@ -172,6 +216,7 @@ export function getOperationsSnapshot() {
   const intervals = getOperationalIntervals();
   const definitions = [
     ['market-monitor', intervals.marketMonitorSeconds, 'Market monitoring'],
+    ['fill-ingestion', intervals.reconcileSeconds, 'Exchange fill ingestion'],
     ['provider-health', intervals.providerHealthSeconds, 'Provider registry health'],
     ['reconciliation', intervals.reconcileSeconds, 'Portfolio reconciliation'],
     ['investor-monitor', intervals.investorMonitorSeconds, 'Investor monitoring'],
