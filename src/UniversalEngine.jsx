@@ -33,7 +33,7 @@ export default function UniversalEngine() {
       const d=await r.json();if(!r.ok)throw new Error(d.error||'Market evidence unavailable');
       setMarket(d);
       const ev=d.evidence||{};
-      const payload={profileId,evidence:{momentumPct:ev.momentumPct,relativeVolume:ev.relativeVolume,timeframeAlignment:ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:ev.fundingRate,rsi14:ev.rsi14,liquidityUsd:extraEvidence.liquidityUsd??ev.visibleDepthUsd,...extraEvidence}};
+      const payload={profileId,evidence:{...extraEvidence,momentumPct:extraEvidence.momentumPct??ev.momentumPct,relativeVolume:extraEvidence.relativeVolume??ev.relativeVolume,timeframeAlignment:extraEvidence.timeframeAlignment??ev.timeframeAlignment,orderBookImbalance:ev.orderBookImbalance,fundingRate:extraEvidence.fundingRate??ev.fundingRate,rsi14:extraEvidence.rsi14??ev.rsi14,liquidityUsd:extraEvidence.liquidityUsd??ev.visibleDepthUsd}};
       const evalRes=await fetch('/api/universal/strategy/evaluate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
       const result=await evalRes.json();if(evalRes.ok)setEvaluation(result);
     }catch(e){setError(e.message);}finally{setLoading(false);}
@@ -78,6 +78,13 @@ export default function UniversalEngine() {
       <button onClick={loadMarket} disabled={loading}>{loading?'Evaluating…':'Load market evidence'}</button>
     </div>
     {selected&&<p className="subtle-note">{selected.description||selected.horizon}. Supported asset classes: {(selected.assetClasses||[]).join(', ')}. Timeframes: {(selected.timeframes||[]).join(', ')}.</p>}
+    <div className="news-search">
+      <input type="number" step="0.1" placeholder="Manual momentum %" value={extraEvidence.momentumPct??''} onChange={e=>setExtraEvidence(v=>({...v,momentumPct:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" step="0.1" placeholder="Manual relative volume x" value={extraEvidence.relativeVolume??''} onChange={e=>setExtraEvidence(v=>({...v,relativeVolume:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" min="-1" max="1" step="0.1" placeholder="MTF alignment -1 to +1" value={extraEvidence.timeframeAlignment??''} onChange={e=>setExtraEvidence(v=>({...v,timeframeAlignment:e.target.value===''?null:Number(e.target.value)}))}/>
+      <input type="number" placeholder="Verified liquidity / visible depth USD" value={extraEvidence.liquidityUsd??''} onChange={e=>setExtraEvidence(v=>({...v,liquidityUsd:e.target.value===''?null:Number(e.target.value)}))}/>
+    </div>
+    <p className="subtle-note">Manual evidence overrides should be backed by a named provider, timestamp and verified instrument identity. They are not independently authenticated by this form.</p>
     {profileId==='defi_rotation'&&<div className="news-search">
       <input type="number" step="0.1" placeholder="Verified protocol TVL change %" value={extraEvidence.tvlChangePct??''} onChange={e=>setExtraEvidence(v=>({...v,tvlChangePct:e.target.value===''?null:Number(e.target.value)}))}/>
       <input type="number" step="0.1" placeholder="Verified protocol fees change %" value={extraEvidence.feesChangePct??''} onChange={e=>setExtraEvidence(v=>({...v,feesChangePct:e.target.value===''?null:Number(e.target.value)}))}/>
