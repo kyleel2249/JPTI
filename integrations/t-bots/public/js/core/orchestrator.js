@@ -46,6 +46,7 @@ export class Orchestrator {
     this.recap = null;
     this.banner = 'ready';
     this.sharedContext = null;
+    this.sharedRisk = null;
     this.lastSample = 0;
     this.ctx = { canSell: (id) => (this.feed.canSell ? this.feed.canSell(id) : true) };
     bus.on('trade:enter', (e) => (this.banner = `ENTERED · LOGGED $${e.symbol}`));
@@ -155,6 +156,12 @@ export class Orchestrator {
       this._filtered(token, 'JPTI shared risk gate: BTC market regime risk-off; new Solana entries blocked. Existing exits remain active.', 'jpti-risk-off');
       return;
     }
+    if (this.sharedRisk?.newEntriesAllowed === false) {
+      const reasons = (this.sharedRisk.pauseReasons || ['JPTI shared risk guard unavailable']).join('; ');
+      this.ledger.done(task, 'skipped', reasons);
+      this._filtered(token, `JPTI shared portfolio guard: ${reasons}. Existing exits remain active.`, 'jpti-shared-risk');
+      return;
+    }
     if (this.paused) return this.ledger.step(task, 'ORCHESTRATOR', 'waiting', 'entries paused');
 
     const r = this.cfg.rules;
@@ -194,6 +201,7 @@ export class Orchestrator {
   }
 
   setSharedContext(context) { this.sharedContext = context && Date.now() - Date.parse(context.fetchedAt) <= 120000 ? context : null; }
+  setSharedRisk(risk) { this.sharedRisk = risk && risk.newEntriesAllowed === true && !risk.error ? risk : risk ? { ...risk, newEntriesAllowed: false } : null; }
 
   snapshot() {
     const eq = this.equity;
@@ -208,6 +216,7 @@ export class Orchestrator {
       paused: this.paused,
       pauseReason: this.pauseReason,
       sharedContext: this.sharedContext ? { regime: this.sharedContext.regime, riskScore: this.sharedContext.riskScore, fetchedAt: this.sharedContext.fetchedAt } : null,
+      sharedRisk: this.sharedRisk ? { newEntriesAllowed: this.sharedRisk.newEntriesAllowed, pauseReasons: this.sharedRisk.pauseReasons || [], drawdownPct: this.sharedRisk.drawdownPct ?? null } : null,
       banner: this.banner,
       balance: eq.balance,
       cash: eq.cash,
