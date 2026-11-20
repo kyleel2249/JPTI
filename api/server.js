@@ -42,18 +42,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Optional origin lock: when enabled, only the trusted Cloudflare Pages Function
-// proxy may reach the API. Keep JPTI_EDGE_SECRET server-side on both platforms.
-app.use('/api', (req, res, next) => {
-  if (process.env.JPTI_REQUIRE_EDGE_SECRET !== 'true') return next();
-  const expected = String(process.env.JPTI_EDGE_SECRET || '');
-  const supplied = String(req.get('x-jpti-edge-secret') || '');
-  if (expected.length < 32 || supplied !== expected) {
-    return res.status(403).json({ error: 'API origin access is restricted to the configured trusted edge proxy.' });
-  }
-  next();
-});
-
 // A small per-process throttle protects local development endpoints from accidental request loops.
 const windows = new Map();
 app.use('/api', (req, res, next) => {
