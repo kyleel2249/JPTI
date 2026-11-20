@@ -297,3 +297,10 @@ Outbox consumers must be idempotent: delivery is at-least-once, not exactly-once
 The Portfolio & Ledger workspace includes an authenticated performance report at `GET /api/advanced/portfolio/performance`. It calculates realized PnL by quote currency, closed sell-execution win rate, profit factor, expectancy, average win/loss, realized-equity drawdown, daily realized PnL, and attribution by strategy, market, exchange and coarse UTC session. Strategy attribution uses `metadata.strategyId`, `metadata.strategy` or `metadata.botId`; otherwise the fill is explicitly unattributed.
 
 The report uses weighted-average cost per exchange/account/market. It does not call a sell a completed round trip: each matched sell execution is one exit observation. Unmatched sells are counted and warned about, third-currency fees are itemized without invented FX conversion, and quote currencies are never combined. This is realized ledger performance, not total account return or tax reporting. Open-position mark-to-market and derivatives funding remain outside this fill-only report.
+
+
+## Phase 8 — Shared JPTI / T-Bots intelligence feedback
+
+The local T-Bots integration now includes a bounded browser-local event outbox, sequential retry delivery, stable run-scoped event IDs, and equity telemetry for shared paper-risk analysis. JPTI can pause new T-Bots paper entries when the shared paper-equity drawdown limit is breached. T-Bots rejects stale or unavailable JPTI risk snapshots for new entries while continuing to manage existing exits.
+
+See [Phase 8 shared intelligence documentation](docs/PHASE_8_SHARED_INTELLIGENCE.md). Configure `JPTI_TBOTS_MAX_DRAWDOWN_PCT=10` in the local API environment to set the shared paper drawdown guard. Live trading remains disabled.
