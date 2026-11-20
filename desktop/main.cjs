@@ -47,6 +47,7 @@ app.whenReady().then(async () => {
     process.env.JPTI_STORAGE_BACKEND = 'file';
     process.env.JPTI_DATA_DIR = path.join(app.getPath('userData'), 'data');
     process.env.JPTI_WEB_DIST = path.join(root, 'dist');
+    process.env.JPTI_TBOTS_PUBLIC_DIR = path.join(root, 'integrations', 't-bots', 'public');
     process.env.JPTI_SERVE_WEB = 'true';
     process.env.JPTI_TRADING_MODE = 'paper';
     process.env.JPTI_ENABLE_LIVE_TRADING = 'false';
