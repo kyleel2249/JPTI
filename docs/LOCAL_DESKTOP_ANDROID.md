@@ -96,15 +96,15 @@ The same responsive UI includes a web manifest and service worker. On supported 
 The new Connection Settings workspace stores only the API base URL in browser/device local storage. It never stores the private API token or exchange credentials.
 
 - Blank API base: use the current origin. On Electron desktop this is the embedded local API.
-- Cloudflare Pages HTTPS URL: use the hosted API through the Pages Function.
+- Local PC API HTTPS URL: use the API address of the PC on your trusted network or private VPN.
 - Other remote endpoints: HTTPS is required by the client URL validator.
 - `localhost` HTTP is allowed for local development only.
 
-Private API tokens remain in the relevant workflow's in-memory input state. For a cloud API, the server must set `JPTI_API_TOKEN`. The local desktop can authorize private read-only actions from loopback only; it does not enable live trading.
+Private API tokens remain in the relevant workflow's in-memory input state. For Android-to-PC access, the local API must set `JPTI_API_TOKEN`. The local desktop can authorize private read-only actions from loopback only; it does not enable live trading.
 
 ## Android local-network CORS
 
-Configure the API's `JPTI_CORS_ORIGINS` to include the Capacitor Android WebView origin `https://localhost` (the default in `.env.example`). Do not add public origins. Use a strong `JPTI_API_TOKEN` for private API operations. No Cloudflare edge secret is required.
+Configure the API's `JPTI_CORS_ORIGINS` to include the Capacitor Android WebView origin `https://localhost` (the default in `.env.example`). Do not add public origins. Use a strong `JPTI_API_TOKEN` for private API operations. No external edge service or edge secret is required.
 
 ## Local data and Android access
 
