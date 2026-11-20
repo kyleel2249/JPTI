@@ -188,16 +188,22 @@ export class LiveFeed {
           const lockEnds = lpRows.map(row => num(row?.locked_detail?.[0]?.end_time)).filter(Boolean);
           const lockDays = locked && lockEnds.length ? Math.max(0, (Math.max(...lockEnds) * 1000 - this.now()) / 86400000) : 0;
           const holderPercents = holders.slice(0, 10).map(row => num(row.percent)).filter(v => v !== null);
+          const mintable = item.is_mintable;
+          const blacklisted = item.is_blacklisted === '1';
+          const honeypot = item.is_honeypot === '1' || item.cannot_sell_all === '1' || blacklisted;
+          const sellTax = num(item.sell_tax);
+          const buyTax = num(item.buy_tax);
           token.security = {
             holders: num(item.holder_count),
-            frozenMint: false,
-            mintAuthorityOpen: item.is_mintable === '1',
+            // Treat unknown mintability as unsafe; proxy/hidden-owner/blacklist flags are conservative risk blocks.
+            frozenMint: blacklisted || item.hidden_owner === '1' || item.is_proxy === '1',
+            mintAuthorityOpen: mintable !== '0',
             lpUnlocked: !locked,
             devPct: num(item.creator_percent) === null ? null : Number(item.creator_percent) * 100,
             top10Pct: holderPercents.length ? holderPercents.reduce((sum, v) => sum + v * 100, 0) : null,
             bundledLaunch: false,
             lpLockedDays: lockDays,
-            honeypot: item.is_honeypot === '1' || item.is_blacklisted === '1',
+            honeypot: honeypot || sellTax === null || sellTax > 0.10 || buyTax === null || buyTax > 0.10,
             source: 'GoPlus token security'
           };
         }
