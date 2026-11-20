@@ -1,6 +1,6 @@
 // JPTI bridge: paper-only T-Bots publishes auditable agent events and consumes JPTI's coarse market-regime context.
 export class JptiBridge {
-  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; this.assetEvidence = new Map(); this.lastAssetEvidenceAt = 0; }
+  constructor() { this.token = ''; this.lastContextAt = 0; this.context = null; this.lastMemory = null; this.risk = null; this.lastRiskAt = 0; this.assetEvidence = new Map(); this.lastAssetEvidenceAt = 0; this.cexMarkets = null; this.lastCexMarketsAt = 0; }
   setToken(value) { this.token = String(value || '').trim(); }
   get enabled() { return Boolean(this.token); }
   async _request(path, options = {}) {
@@ -26,6 +26,13 @@ export class JptiBridge {
     try { this.risk = await this._request('/universal/risk'); }
     catch (error) { this.risk = { newEntriesAllowed: false, pauseReasons: ['JPTI shared risk state unavailable'], error: error.message, exitsRemainEnabled: true }; this.lastError = error.message; }
     return this.risk;
+  }
+  async refreshCexMarkets(force = false) {
+    if (!this.enabled || Date.now() - this.lastCexMarketsAt < 12000 && !force) return this.cexMarkets;
+    this.lastCexMarketsAt = Date.now();
+    try { this.cexMarkets = await this._request('/universal/cex-watchlist'); }
+    catch (error) { this.cexMarkets = { markets: [], status:'unavailable', error:error.message }; this.lastError = error.message; }
+    return this.cexMarkets;
   }
   async refreshAssetEvidence(tokens = [], force = false) {
     if (!this.enabled || Date.now() - this.lastAssetEvidenceAt < 30000 && !force) return this.assetEvidence;
