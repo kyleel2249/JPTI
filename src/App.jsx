@@ -5,6 +5,7 @@ import UniversalEngine from './UniversalEngine.jsx';
 import ConnectionSettings from './ConnectionSettings.jsx';
 import InstitutionalTerminal from './InstitutionalTerminal.jsx';
 import InstitutionalGovernance from './InstitutionalGovernance.jsx';
+import FuturesIntelligence from './FuturesIntelligence.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -18,6 +19,7 @@ const navigation = [
   { label: 'Institutional Terminal', icon: Command, group: 'COMMAND' },
   { label: 'Spot & Markets', icon: CandlestickChart, group: 'MARKETS' },
   { label: 'Futures', icon: Activity, group: 'MARKETS' },
+  { label: 'Futures Intelligence', icon: Radio, group: 'MARKETS' },
   { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
   { label: 'Market Scanner', icon: Search, group: 'INTELLIGENCE' },
   { label: 'Financial & On-chain', icon: Blocks, group: 'INTELLIGENCE' },
@@ -279,6 +281,7 @@ function App() {
     'Institutional Terminal': 'A precision command surface for live market intelligence, watchlists and disciplined operator workflows.',
     'Spot & Markets': 'Live multi-exchange market data and technical analysis.',
     'Futures': 'Derivatives market discovery. Contract availability depends on exchange support.',
+    'Futures Intelligence': 'Cross-exchange futures pricing, order-book depth, funding and paper arbitrage research.',
     'AI Intelligence': 'Signal evidence, market context and explainable analysis.',
     'Market Scanner': 'Configure market watchlists for scheduled live ticker monitoring.',
     'Financial & On-chain': 'Macro, digital-asset, provider and wallet intelligence.',
@@ -398,6 +401,7 @@ function App() {
     if (page === 'Connection Settings') return <ConnectionSettings/>;
     if (page === 'Institutional Terminal') return <InstitutionalTerminal currentSymbol={symbol} onSymbolChange={setSymbol} onNavigate={activeNav}/>;
     if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
+    if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
