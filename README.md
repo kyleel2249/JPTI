@@ -335,7 +335,7 @@ The Portfolio Allocation workspace calculates long-only covariance-aware equal-r
 
 ## Phases 15–21 — Streaming, risk, strategy governance and operational readiness
 
-- **Phase 15 — Market stream gateway:** bounded Server-Sent Events with public CCXT REST ticker polling, per-client cleanup, freshness flags and a live monitor. It is not represented as native exchange WebSocket streaming.
+- **Phase 15 — Market stream gateway:** bounded Server-Sent Events with native public spot ticker WebSockets for Binance, Bybit, OKX and Bitget, CCXT REST fallback, per-client cleanup, freshness flags and a live monitor. Full order-book delta streaming is not included.
 - **Phase 16 — Portfolio stress:** historical VaR, expected shortfall, drawdown and explicit scenario shocks with quote-currency and aligned-return validation.
 - **Phase 17 — Pre-trade risk:** fail-closed checks for equity, daily loss, quote freshness, stop placement, risk budget, order notional, gross exposure and symbol concentration. Passing is paper-intent eligibility only.
 - **Phase 18 — Strategy registry:** immutable semantic versions, SHA-256 fingerprints, persisted versions and evidence-based paper promotion review.
