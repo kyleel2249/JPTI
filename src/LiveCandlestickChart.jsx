@@ -125,7 +125,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange,
   const [crosshair, setCrosshair] = useState(null);
 
   useEffect(() => { if (initialTimeframe && initialTimeframe !== timeframe) setTimeframe(initialTimeframe); }, [initialTimeframe]);
-  useEffect(() => { if (onTimeframeChange) onTimeframeChange(timeframe); }, [timeframe, onTimeframe]);
+  useEffect(() => { if (onTimeframeChange) onTimeframeChange(timeframe); }, [timeframe, onTimeframeChange]);
 
   useEffect(() => {
     let active = true;
