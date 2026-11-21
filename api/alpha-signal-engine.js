@@ -91,6 +91,11 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   const quote=input.quote||{},quotePrice=Number(quote.last),quoteTime=Date.parse(String(quote.timestamp||''));
   const quoteAgeMs=Number.isFinite(quoteTime)?now-quoteTime:null,quoteValid=Number.isFinite(quotePrice)&&quotePrice>0&&quoteAgeMs!==null&&quoteAgeMs>=-5000&&quoteAgeMs<=15000;
   const candleAgeMs=now-(last.timestamp+tf);
+  const entry=quoteValid?quotePrice:last.close,side=evidence.direction,stopDistance=evidence.indicators.atr14*config.atrStopMultiple;
+  const stopPrice=side==='buy'?entry-stopDistance:side==='sell'?entry+stopDistance:null;
+  const riskDistance=stopPrice===null?null:Math.abs(entry-stopPrice);
+  const tp1=side==='buy'?entry+riskDistance*config.targetOneR:side==='sell'?entry-riskDistance*config.targetOneR:null;
+  const tp2=side==='buy'?entry+riskDistance*config.targetTwoR:side==='sell'?entry-riskDistance*config.targetTwoR:null;
   const qualityChecks=[
     {id:'completed_history',passed:candles.length>=80,detail:'At least 80 completed candles were used; the active candle was excluded.'},
     {id:'candle_freshness',passed:candleAgeMs>=0&&candleAgeMs<=tf*2,detail:'The last completed OHLCV candle must be no more than two timeframe intervals old.'},
@@ -102,11 +107,6 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
     {id:'volatility_guard',passed:evidence.marketRegime!=='high_volatility',detail:'High-volatility regimes are blocked by the default safety policy.'},
     {id:'valid_stop_geometry',passed:stopPrice>0&&riskDistance>0&&tp1>0&&tp2>0,detail:'ATR-based stop and target levels must all be positive and geometrically valid.'}
   ];
-  const entry=quoteValid?quotePrice:last.close,side=evidence.direction,stopDistance=evidence.indicators.atr14*config.atrStopMultiple;
-  const stopPrice=side==='buy'?entry-stopDistance:side==='sell'?entry+stopDistance:null;
-  const riskDistance=stopPrice===null?null:Math.abs(entry-stopPrice);
-  const tp1=side==='buy'?entry+riskDistance*config.targetOneR:side==='sell'?entry-riskDistance*config.targetOneR:null;
-  const tp2=side==='buy'?entry+riskDistance*config.targetTwoR:side==='sell'?entry-riskDistance*config.targetTwoR:null;
   const equity=Number(account.equity),maxNotional=Number(limits.maxOrderNotional);
   const riskBudget=Number.isFinite(equity)&&equity>0?equity*config.riskPercent/100:null;
   const rawQty=riskDistance>0&&riskBudget!==null?riskBudget/riskDistance:null;
