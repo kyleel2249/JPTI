@@ -1,1 +1,52 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta name="theme-color" content="#080d18"/><meta name="mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-capable" content="yes"/><link rel="manifest" href="/manifest.webmanifest"/><link rel="icon" href="/jpti-icon.svg" type="image/svg+xml"/><title>JPTI — Jopearl Trading Intelligence</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080d18" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/jpti-icon.svg" type="image/svg+xml" />
+    <title>JPTI — Jopearl Trading Intelligence</title>
+    <style>
+      html,body{margin:0;min-height:100%;background:#080d18;color:#e8edf6;font:14px system-ui,sans-serif}
+      #startup-status{box-sizing:border-box;max-width:620px;margin:12vh auto;padding:28px;border:1px solid #26364d;border-radius:14px;background:#101b2b}
+      #startup-status h1{margin:0 0 10px;font-size:20px}#startup-status p{color:#a8b8cc;line-height:1.6}
+      #startup-status code{color:#8ee3e8;overflow-wrap:anywhere}#startup-error{display:none;white-space:pre-wrap;color:#ffb7a9;font-size:12px}
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <section id="startup-status" role="status" aria-live="polite">
+        <h1>JPTI is starting</h1>
+        <p>The trading workspace is loading. If this message remains visible, the frontend bundle did not start correctly.</p>
+        <p>Check that the Vite development server is running and that the browser can load <code>/src/main.jsx</code>.</p>
+        <pre id="startup-error"></pre>
+      </section>
+    </div>
+    <script>
+      (() => {
+        const showStartupError = (message) => {
+          const status = document.getElementById('startup-status');
+          const details = document.getElementById('startup-error');
+          if (!status || !details) return;
+          status.querySelector('h1').textContent = 'JPTI could not load';
+          details.style.display = 'block';
+          details.textContent = String(message || 'Unknown frontend startup error');
+        };
+        window.addEventListener('error', (event) => {
+          if (event.target && event.target !== window) {
+            showStartupError('Failed to load resource: ' + (event.target.src || event.target.href || event.target.tagName));
+          } else {
+            showStartupError(event.message || 'A JavaScript error occurred before the interface mounted.');
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', (event) => {
+          showStartupError('Unhandled startup rejection: ' + (event.reason?.stack || event.reason?.message || event.reason));
+        });
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
