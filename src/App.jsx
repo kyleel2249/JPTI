@@ -12,6 +12,7 @@ import PortfolioAllocation from './PortfolioAllocation.jsx';
 import MarketStream from './MarketStream.jsx';
 import Phase15To21Workspaces from './Phase15To21Workspaces.jsx';
 import AlphaSignalEngine from './AlphaSignalEngine.jsx';
+import InstitutionalMarketIntelligence from './InstitutionalMarketIntelligence.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -29,6 +30,7 @@ const navigation = [
   { label: 'Market Stream', icon: Radio, group: 'MARKETS' },
   { label: 'Asset Intelligence', icon: Network, group: 'MARKETS' },
   { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
+  { label: 'Institutional Market Intelligence', icon: Network, group: 'INTELLIGENCE' },
   { label: 'Market Scanner', icon: Search, group: 'INTELLIGENCE' },
   { label: 'Financial & On-chain', icon: Blocks, group: 'INTELLIGENCE' },
   { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
@@ -423,6 +425,7 @@ function App() {
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
     if (page === 'Market Stream') return <MarketStream/>;
     if (page === 'Alpha Signal Engine') return <AlphaSignalEngine/>;
+    if (page === 'Institutional Market Intelligence') return <InstitutionalMarketIntelligence exchange={forecastExchange} symbol={symbol} onSymbolChange={setSymbol} timeframe={forecastTimeframe} onTimeframeChange={setForecastTimeframe}/>;
     if (['Portfolio Stress','Pre-trade Gate','Strategy Registry','Market Replay','System Diagnostics','Production Readiness'].includes(page)) return <Phase15To21Workspaces key={page} page={page}/>;
     if (page === 'Asset Intelligence') return <AssetIntelligence/>;
     if (page === 'AI Intelligence') return <ResearchCouncil/>;
