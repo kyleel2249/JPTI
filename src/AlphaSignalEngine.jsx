@@ -28,7 +28,7 @@ export default function AlphaSignalEngine(){
  const run=useCallback(async()=>{
   setBusy(true);setError('');setReplay(null);
   try{let exposures;try{exposures=JSON.parse(exposuresJson);}catch{throw new Error('Existing exposure inventory must be valid JSON. Enter [] only after confirming that the account has no open positions.');}if(!Array.isArray(exposures))throw new Error('Existing exposure inventory must be a JSON array.');if(!inventoryConfirmed)throw new Error('Confirm that the exposure inventory includes every current open position before requesting paper eligibility.');const market=await getMarketData();const payload={...market,exchange,timeframe,account:{equity:Number(equity),dailyPnl:Number(dailyPnl),exposures},
-   limits:{maxDailyLoss:Math.max(1,Math.abs(Number(dailyPnl))+Number(equity)*.025),maxOrderNotional:Number(maxNotional),maxGrossExposure:Math.max(Number(maxNotional),Number(equity)*.5),maxRiskPercent:Number(riskPercent),maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000},
+   limits:{maxDailyLoss:Math.max(1,Number(equity)*.025),maxOrderNotional:Number(maxNotional),maxGrossExposure:Math.max(Number(maxNotional),Number(equity)*.5),maxRiskPercent:Number(riskPercent),maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000},
    config:{riskPercent:Number(riskPercent),minimumConfidence:62,minimumAgreement:.5,atrStopMultiple:1.5,targetOneR:1,targetTwoR:2}};
    const response=await apiFetch('/api/alpha/evaluate',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
    const data=await response.json();if(!response.ok)throw new Error(data.error||'Alpha analysis failed.');setResult(data);await loadLedger();

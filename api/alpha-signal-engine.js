@@ -48,7 +48,7 @@ function atr(candles,period=14) {
 }
 function buildEvidence(candles) {
   const closes=candles.map(c=>c.close),volumes=candles.map(c=>c.volume),last=closes.length-1;
-  const fast=ema(closes,9),slow=ema(closes,21),macdLine=ema(closes,12).map((v,i)=>v-ema(closes,26)[i]),macdSignal=ema(macdLine,9),rsiValues=rsi(closes,14);
+  const fast=ema(closes,9),slow=ema(closes,21),ema12=ema(closes,12),ema26=ema(closes,26),macdLine=ema12.map((v,i)=>v-ema26[i]),macdSignal=ema(macdLine,9),rsiValues=rsi(closes,14);
   const recent=candles.slice(-21,-1),priorHigh=Math.max(...recent.map(c=>c.high)),priorLow=Math.min(...recent.map(c=>c.low));
   const volumeBase=mean(volumes.slice(-21,-1)),volumeRatio=volumeBase>0?volumes[last]/volumeBase:null;
   const closes20=closes.slice(-20),mean20=mean(closes20),sd20=stddev(closes20),zScore=sd20>0?(closes[last]-mean20)/sd20:0;
