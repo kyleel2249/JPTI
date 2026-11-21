@@ -1,12 +1,12 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import LiveCandlestickChart from './LiveCandlestickChart.jsx';
+import LiveCandlestickChart from './LiveCandlestickChart.jsx';\nimport RangeForecastEngine from './RangeForecastEngine.jsx';
 import analyzeIMI from './institutional-market-intelligence.js';
 import './InstitutionalMarketIntelligence.css';
 import {apiFetch} from './lib/api.js';
 const fmt=v=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:5});
 const views=['Overview','Structure','Liquidity','Flow','Derivatives','Whales','Macro','Cross-market','Sentiment','Accumulation / Distribution','Opportunity Radar','History'];
-export default function InstitutionalMarketIntelligence({exchange='binance',symbol='BTC/USDT',onSymbolChange=()=>{},timeframe='1h',onTimeframeChange=()=>{}}){
- const [candles,setCandles]=useState([]),[context,setContext]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[view,setView]=useState('Overview'),[history,setHistory]=useState([]);
+export default function InstitutionalMarketIntelligence({exchange='bitget',symbol='BTC/USDT',onSymbolChange=()=>{},timeframe='1h',onTimeframeChange=()=>{}}){
+ const [forecastLevels,setForecastLevels]=useState([]),[candles,setCandles]=useState([]),[context,setContext]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[view,setView]=useState('Overview'),[history,setHistory]=useState([]);
  const load=useCallback(async()=>{setLoading(true);try{const market=symbol.replace('/','-'),[c,ctx]=await Promise.all([apiFetch('/api/exchanges/'+exchange+'/ohlcv/'+encodeURIComponent(market)+'?timeframe='+encodeURIComponent(timeframe)+'&limit=200',{cache:'no-store'}),apiFetch('/api/intelligence/market/'+exchange+'/'+encodeURIComponent(market)+'/context?timeframe='+encodeURIComponent(timeframe),{cache:'no-store'})]);const [cd,xd]=await Promise.all([c.json(),ctx.json()]);if(!c.ok)throw new Error(cd.error||'Live candle feed unavailable');const rows=cd.candles||[];setCandles(rows);setContext(ctx.ok?xd:null);setError('');}catch(e){setError(e.message);}finally{setLoading(false);}},[exchange,symbol,timeframe]);
  useEffect(()=>{load();const timer=setInterval(load,20000);return()=>clearInterval(timer);},[load]);
  const snap=useMemo(()=>analyzeIMI(candles,symbol,timeframe,context),[candles,symbol,timeframe,context]);
@@ -22,7 +22,7 @@ export default function InstitutionalMarketIntelligence({exchange='binance',symb
  return <div className="imi-unavailable"><b>{view}</b><span>{d?.status||'partial'}</span><p>{d?.reason||d?.method||d?.disclaimer||'No connected source data available. This panel will not fabricate readings.'}</p></div>;};
  return <div className="imi-workspace"><header className="imi-hero"><div><span>JPTI / SHARED INTELLIGENCE LAYER</span><h2>Institutional Market Intelligence</h2><p>Evidence-first context linked to the live candle stream. Technical proxies and unavailable feeds are separated.</p></div><div className="imi-status">{snap.status==='ready'?'ANALYZING LIVE CANDLES':loading?'SYNCING':'INSUFFICIENT DATA'}<small>{snap.generatedAt?new Date(snap.generatedAt).toLocaleTimeString():'Awaiting snapshot'}</small></div></header>
  {error&&<div className="imi-warning">{error}</div>}
- <div className="imi-chart"><LiveCandlestickChart exchange={exchange} symbol={symbol} onSymbolChange={onSymbolChange} initialTimeframe={timeframe} onTimeframeChange={onTimeframeChange} alphaLevels={snap.levels||[]}/></div>
+ <div className="imi-chart"><LiveCandlestickChart exchange={exchange} symbol={symbol} onSymbolChange={onSymbolChange} initialTimeframe={timeframe} onTimeframeChange={onTimeframeChange} alphaLevels={[...(snap.levels||[]),...forecastLevels]}/></div>
  <div className="imi-toolbar"><div><b>{symbol} · {timeframe}</b><small>{snap.status==='ready'?quality.validCandles+' valid candles · '+scores.confidence+' confidence score':'Data quality: insufficient'}</small></div><button onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh intelligence'}</button></div>
  <nav className="imi-tabs">{views.map(v=><button key={v} className={view===v?'active':''} onClick={()=>setView(v)}>{v}</button>)}</nav><section className="imi-panel">{tabsContent()}</section>
  <div className="imi-data-foot"><b>Data discipline</b><p>{quality.notes?.join(' ')||'Data sources and confidence will be reported alongside each observation.'}</p><p>Provider context: {context?'context endpoint responded':'not available'} · Derivatives, macro, whale and sentiment feeds are unavailable until validated data sources are connected.</p></div>
