@@ -8,13 +8,7 @@ export default function PortfolioAllocation(){
   <p>Calculate long-only equal-risk-contribution weights from aligned historical return observations. Keep each calculation within one quote currency; no FX conversions or order placement are performed.</p>
   <div className="news-search"><input type="password" value={token} onChange={e=>setToken(e.target.value)} placeholder="JPTI API token"/><button onClick={calculate} disabled={busy||!token||!payload.trim()}>{busy?'Calculating…':'Calculate and persist allocation'}</button></div>
   <label className="eyebrow">ALLOCATION INPUT JSON</label>
-  <textarea rows={12} value={payload} onChange={e=>setPayload(e.target.value)} spellCheck={false} placeholder={'{
-  "periodsPerYear": 252,
-  "assets": [
-    {"symbol":"BTC/USDT","quoteCurrency":"USDT","returns":[...],"minWeight":0,"maxWeight":0.6},
-    {"symbol":"ETH/USDT","quoteCurrency":"USDT","returns":[...],"minWeight":0,"maxWeight":0.6}
-  ]
-}'}/>
+  <textarea rows={12} value={payload} onChange={e=>setPayload(e.target.value)} spellCheck={false} placeholder={JSON.stringify({periodsPerYear:252,assets:[{symbol:'BTC/USDT',quoteCurrency:'USDT',returns:[]},{symbol:'ETH/USDT',quoteCurrency:'USDT',returns:[]}]},null,2)}>
   {error&&<p className="quote-error">{error}</p>}
   {result&&<>
    <div className="quote-consensus-stats"><div><span>QUOTE CURRENCY</span><b>{result.quoteCurrency}</b></div><div><span>ANNUALIZED VOLATILITY</span><b>{result.annualizedVolatilityPercent.toFixed(2)}%</b></div><div><span>DIVERSIFICATION RATIO</span><b>{result.diversificationRatio.toFixed(3)}</b></div><div><span>EFFECTIVE POSITIONS</span><b>{result.concentration.effectivePositions.toFixed(2)}</b></div></div>
