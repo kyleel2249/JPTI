@@ -95,7 +95,7 @@ export default function LiveCandlestickChart({ exchange, symbol, onSymbolChange,
   const [candles, setCandles] = useState([]);
   const [marketSymbols, setMarketSymbols] = useState(SYMBOLS);
   const [supportedTimeframes, setSupportedTimeframes] = useState(null);
-  const [marketType, setMarketType] = useState('spot');
+  const [marketType, setMarketType] = useState('futures');
   const [marketSearch, setMarketSearch] = useState('');
   const [marketCounts, setMarketCounts] = useState(null);
   const [drawMode, setDrawMode] = useState('off');
