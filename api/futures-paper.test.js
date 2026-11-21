@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculatePaperPosition, foldPaperEvents, normalizePaperPositionInput } from './futures-paper.js';
 
-const contract = { base: 'BTC', quote: 'USDT', settle: 'USDT', linear: true, inverse: false, contractSize: 0.001 };
+const contract = { base: 'BTC', quote: 'USDT', settle: 'USDT', linear: true, inverse: false, swap: true, future: false, contractSize: 0.001 };
 const input = (overrides = {}) => ({
   symbol: 'BTC/USDT:USDT', quantityBase: 0.01, feeBps: 6,
   buy: { exchange: 'binance', symbol: 'BTC/USDT:USDT', contract, entryPrice: 100000 },
@@ -21,6 +21,7 @@ test('rejects same-venue, mismatched settlement and inverse contracts', () => {
   assert.throws(() => normalizePaperPositionInput(input({ sell: { ...input().sell, exchange: 'binance' } })), /different exchanges/);
   assert.throws(() => normalizePaperPositionInput(input({ sell: { ...input().sell, contract: { ...contract, settle: 'BTC' } } })), /settlement currency/);
   assert.throws(() => normalizePaperPositionInput(input({ sell: { ...input().sell, contract: { ...contract, linear: false, inverse: true } } })), /linear contracts only/);
+  assert.throws(() => normalizePaperPositionInput(input({ sell: { ...input().sell, contract: { ...contract, swap: false, future: true, expiry: '2027-01-01T00:00:00.000Z' } } })), /same perpetual or dated contract type/);
 });
 
 test('computes paired linear PnL after estimated entry and exit fees', () => {
