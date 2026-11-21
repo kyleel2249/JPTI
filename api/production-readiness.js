@@ -13,7 +13,7 @@ export function evaluateProductionReadiness({env=process.env,storage=getStorageS
  const checks=[
   {id:'api_binding',passed:!remote||(env.JPTI_ALLOW_REMOTE_API==='true'&&token.length>=32),severity:'critical',detail:'Remote binding requires explicit enablement and a strong API token.'},
   {id:'api_token',passed:token.length>=32,severity:'critical',detail:'API token must contain at least 32 characters.'},
-  {id:'durable_storage',passed:backend==='postgres'&&Boolean(env.DATABASE_URL)&&storage.initialized===true,severity:'critical',detail:'Initialized PostgreSQL storage is required for multi-instance production operation.'},
+  {id:'durable_storage',passed:backend==='postgres'&&Boolean(env.DATABASE_URL)&&storage.initialized===true&&storage.durable===true,severity:'critical',detail:'Initialized PostgreSQL storage is required for multi-instance production operation.'},
   {id:'distributed_scheduler',passed:scheduler.initialized===true&&scheduler.coordination==='postgres-distributed',severity:'critical',detail:'PostgreSQL scheduler lease coordination must be initialized.'},
   {id:'cors_origins',passed:origins.length>0&&!origins.includes('*')&&origins.every(x=>x.startsWith('https://')||x==='capacitor://localhost'),severity:'high',detail:'CORS must use explicit HTTPS or Capacitor origins; wildcard origins are forbidden.'},
   {id:'order_notional_cap',passed:positive(env.JPTI_MAX_ORDER_NOTIONAL_USDT)!==null&&positive(env.JPTI_MAX_ORDER_NOTIONAL_USDT)<=10000,severity:'critical',detail:'A positive per-order notional cap no greater than 10,000 USDT is required.'},
