@@ -423,3 +423,10 @@ Private authenticated endpoints:
 - `GET /api/council/history?limit=25` — reads recent persisted council evaluations from the append-only event store.
 
 The council blocks directional consensus when evidence is stale/missing or fewer than three directional specialists can evaluate. Its permissions are hard-coded research-only: paperEntryEligible=false, liveExecutionAuthorized=false and ordersCreated=0. This phase uses deterministic, explainable specialist logic; it does not claim to invoke external LLMs or train a machine-learning model. See the AI Intelligence workspace for evidence submission and history.
+
+
+## Phase 14 — Portfolio construction and risk parity
+
+- `POST /api/portfolio/allocation/risk-parity` — authenticated long-only covariance-aware equal-risk-contribution allocation. The request contains 2–20 assets with unique symbols, one common explicit quote currency, and at least 30 aligned finite return observations per asset. Optional `minWeight`/`maxWeight` constraints are applied through bounded-simplex projection.
+- The result includes per-asset weights and risk contributions, portfolio volatility, diversification ratio and concentration. Each calculation is persisted as a portfolio-allocation recommendation event.
+- No order is submitted and execution authorization remains false. Returns are assumed to share one sampling interval; annualization depends on the supplied `periodsPerYear`. Shorting, leverage, FX conversion, transaction costs, liquidity constraints and market impact are excluded.
