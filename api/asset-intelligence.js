@@ -7,6 +7,7 @@ const VALID_CLASSES = new Set(['all','crypto_spot','crypto_perpetual','crypto_fu
 const finite = value => value === null || value === undefined || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 const positive = value => { const n=finite(value); return n !== null && n > 0 ? n : null; };
 const timestampMs = value => { const numeric=finite(value); if(numeric!==null)return numeric; const parsed=Date.parse(String(value||'')); return Number.isFinite(parsed)?parsed:null; };
+const safeExpiry = value => { if(value===null||value===undefined||value==='')return null; const date=new Date(value); return Number.isFinite(date.getTime())?date.toISOString():null; };
 
 export function normalizeAssetMarket(exchangeId, market) {
   const classification = classifyMarket(market);
@@ -18,7 +19,7 @@ export function normalizeAssetMarket(exchangeId, market) {
     assetClass, marginEnabled:classification.categories.includes('margin'), instrumentType: market.option ? 'option' : market.swap ? 'perpetual_swap' : market.future ? 'dated_future' : market.spot ? 'spot' : classification.type,
     active: market.active !== false, contract: market.contract === true,
     linear: market.linear === true, inverse: market.inverse === true,
-    contractSize: positive(market.contractSize), expiry: market.expiry ? new Date(market.expiry).toISOString() : null,
+    contractSize: positive(market.contractSize), expiry: safeExpiry(market.expiry),
     precision: market.precision || null, limits: market.limits || null,
     maker: market.maker ?? null, taker: market.taker ?? null,
     source: 'CCXT exchange market metadata', observedAt: new Date().toISOString()
@@ -75,7 +76,7 @@ assetIntelligenceRouter.get('/universe',async(req,res)=>{
  if(!VALID_CLASSES.has(assetClass))return res.status(400).json({error:'Unsupported assetClass filter.'});
  const search=String(req.query.search||'').trim().toUpperCase().slice(0,40);
  const limit=Math.max(1,Math.min(500,Number.parseInt(req.query.limit||'200',10)||200));
- const results=await mapLimit(exchanges,4,id=>withExchange(id,async exchange=>{
+ const results=await mapLimit(exchanges,4,id=>withExchange(id,{privateAccess:false},async exchange=>{
   const rows=Object.values(exchange.markets||{}).filter(m=>m.active!==false).map(m=>normalizeAssetMarket(id,m))
    .filter(m=>(assetClass==='all'||m.assetClass===assetClass||(assetClass==='margin'&&m.marginEnabled))&&(!search||[m.symbol,m.base,m.quote,m.settle].some(v=>String(v||'').toUpperCase().includes(search))));
   return {exchange:id,status:'ok',marketCount:rows.length,markets:rows};
