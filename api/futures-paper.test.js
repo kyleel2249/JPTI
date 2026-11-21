@@ -39,6 +39,6 @@ test('event folding preserves marks and terminal close state', () => {
   const closed = { kind: 'futures-paper-event', eventType: 'position_closed', positionId: 'p1', occurredAt: '2026-01-01T00:02:00.000Z', payload: { calculation: { netPnlUsd: 1 } } };
   const [position] = foldPaperEvents([opened, marked, closed]);
   assert.equal(position.status, 'closed');
-  assert.equal(position.lastMark.calculation, undefined);
+  assert.equal(position.lastMark.netPnlUsd, 1);
   assert.equal(position.close.calculation.netPnlUsd, 1);
 });
