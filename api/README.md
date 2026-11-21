@@ -406,3 +406,11 @@ The futures paper lifecycle is an event-sourced, persistent simulation layer. It
 Write and read endpoints use the existing private API authorization policy. The paper-entry kill switch is checked before a new position is opened. Per-leg notional is capped by `JPTI_FUTURES_PAPER_MAX_NOTIONAL_USD` (default 1,000 USD). Events are stored using the configured JPTI event store, so file storage is local and PostgreSQL storage is durable when configured.
 
 **Model limitations:** the first lifecycle supports linear contracts only and rejects inverse contracts. PnL is based on base quantity and exchange-reported contract size, with estimated entry/exit taker fees. Funding, slippage, market impact, partial fills, margin, liquidation and exchange-specific fee tiers are not included. Marks and exits are user-supplied observations, not authenticated live fill records. This is a research/paper ledger, not an arbitrage guarantee or live execution system.
+
+
+## Phase 12 — Universal asset intelligence and evidence quality
+
+- `GET /api/assets/universe?exchanges=binance,bybit,okx,bitget&assetClass=all&search=BTC&limit=200` — discover active CCXT instruments and normalize spot, perpetual, dated futures, options and margin metadata into a common schema. At most eight venues are queried per request with bounded concurrency; the default venue set is Binance, Bybit, OKX and Bitget.
+- `POST /api/assets/quote-consensus` — assess up to 30 timestamped provider observations. The quality gate rejects invalid prices, missing timestamps/currencies, future timestamps and stale observations; a median anchor flags outliers and refuses to combine different currencies.
+
+The Asset Intelligence workspace exposes the normalized venue universe and reports provider failures and result truncation. Exchange catalog metadata is not proof of account entitlement, liquidity, legal availability or execution support. The quote-consensus helper is a research reference and does not replace executable bid/ask depth checks. Non-CCXT asset classes remain dependent on their provider-specific endpoints and credentials.
