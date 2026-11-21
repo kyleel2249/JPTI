@@ -36,6 +36,8 @@ It is **not a calibrated probability, win-rate estimate, or expected return**. M
 - Requires a positive quote timestamped within 15 seconds (with a small 5-second clock-skew allowance).
 - Computes SHA-256 fingerprints for candle history, quote observation and canonical configuration. The signal ID is deterministic for the same market, candle set, quote and configuration.
 - The signal evidence contains model outputs, indicator values, market regime, input hashes, engine version and an explicit no-lookahead statement.
+- Persisted signal and replay events include the normalized candle series and the exact quote/configuration/risk assumptions needed to reproduce the evaluation. Signal fingerprints include the account/risk snapshot as well as market and quote data.
+- `GET /api/alpha/history?includeSnapshot=true` and `GET /api/alpha/replays?includeSnapshot=true` recover full stored source snapshots; default responses omit bulky candle arrays while retaining hashes and metrics.
 
 ## Trade levels and sizing
 
@@ -107,7 +109,8 @@ All routes require the JPTI private API authentication policy.
 |---|---|---|
 | POST | `/api/alpha/evaluate` | Evaluate one market signal and persist its evidence |
 | POST | `/api/alpha/replay` | Run and persist deterministic historical replay |
-| GET | `/api/alpha/history` | Retrieve recent signal evaluations |
+| GET | `/api/alpha/history` | Retrieve recent signal evaluations (optional full source snapshots) |
+| GET | `/api/alpha/replays` | Retrieve replay reports (optional full source snapshots) |
 | POST | `/api/alpha/paper/intent` | Create an eligible paper-only intent |
 | POST | `/api/alpha/paper/mark` | Mark a paper position from a fresh quote and simulate stop/TP2 exit |
 | POST | `/api/alpha/paper/close` | Manually record a paper exit |
