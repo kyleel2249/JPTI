@@ -435,8 +435,8 @@ The council blocks directional consensus when evidence is stale/missing or fewer
 ## Phase 15 — Market stream transport gateway
 
 - `GET /api/stream/status` — reports transport type, active client count and capacity.
-- `GET /api/stream/market?exchange=binance&symbol=BTC/USDT&intervalMs=5000` — bounded Server-Sent Events quote stream using a public CCXT REST ticker poller. Default capacity is 25 clients; interval is 3–60 seconds; per-client exchange instances close when the response disconnects.
-- This is explicitly REST-polling over SSE. It is not an exchange-native WebSocket feed and does not stream full order-book deltas.
+- `GET /api/stream/market?exchange=binance&symbol=BTC/USDT&intervalMs=5000` — bounded Server-Sent Events quote stream. Native public spot ticker WebSocket adapters are used for Binance, Bybit, OKX and Bitget; unsupported venues or unavailable native sockets fall back to CCXT REST polling. Default capacity is 25 clients; REST fallback interval is 3–60 seconds; per-client exchange and socket resources close when the response disconnects.
+- This streams ticker observations, not full order-book delta depth. Native WebSocket health is monitored and the REST fallback is fail-safe for quote continuity.
 
 ## Phase 16 — Portfolio stress and historical risk
 
