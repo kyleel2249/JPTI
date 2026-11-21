@@ -62,7 +62,7 @@ export default function FuturesIntelligence(){
   </div>
   <p className="subtle-note">CCXT catalog: {catalog?.supportedExchangeCount??'—'} supported adapters; {catalog?.derivativeDataCapableCount??'—'} expose relevant public data capabilities. This is not proof that all listed pairs are tradable or liquid on every venue.</p>
   {(data?.safety?.warnings||[]).map(w=><p className="subtle-note" key={w}>• {w}</p>)}
-  <FuturesPaperDesk comparison={data} symbol={symbol}/>
+  <FuturesPaperDesk comparison={data} symbol={symbol} kind={kind}/>
  </section>;
 }
 function Status({status}){return <span className={'status-pill '+(status==='ok'?'good':status==='partial'?'warn':'bad')}><i/>{status}</span>}
