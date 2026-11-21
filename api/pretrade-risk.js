@@ -19,6 +19,8 @@ export function evaluatePretradeRisk(input={},now=Date.now()){
  const notional=qty&&price?qty*price:null;
  check('per_order_notional',notional!==null&&maxNotional!==null&&notional<=maxNotional,'Order notional must remain within a configured positive cap.');
  const exposures=Array.isArray(account.exposures)?account.exposures:[];
+ const exposureDataValid=Array.isArray(account.exposures)&&exposures.every(x=>String(x?.symbol||'').trim()&&positive(x?.marketValue)!==null);
+ check('account_exposures',exposureDataValid,'Existing exposure inventory must be explicitly supplied with a symbol and positive market value for every position.');
  const gross=exposures.reduce((sum,x)=>sum+(positive(x.marketValue)||0),0)+(notional||0);
  check('gross_exposure',maxGross!==null&&gross<=maxGross,'Existing plus proposed gross exposure must remain within the configured cap.');
  const stopValid=side==='buy'?stop<price:stop>price;
