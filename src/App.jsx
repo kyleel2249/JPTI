@@ -6,6 +6,11 @@ import ConnectionSettings from './ConnectionSettings.jsx';
 import InstitutionalTerminal from './InstitutionalTerminal.jsx';
 import InstitutionalGovernance from './InstitutionalGovernance.jsx';
 import FuturesIntelligence from './FuturesIntelligence.jsx';
+import AssetIntelligence from './AssetIntelligence.jsx';
+import ResearchCouncil from './ResearchCouncil.jsx';
+import PortfolioAllocation from './PortfolioAllocation.jsx';
+import MarketStream from './MarketStream.jsx';
+import Phase15To21Workspaces from './Phase15To21Workspaces.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -20,12 +25,21 @@ const navigation = [
   { label: 'Spot & Markets', icon: CandlestickChart, group: 'MARKETS' },
   { label: 'Futures', icon: Activity, group: 'MARKETS' },
   { label: 'Futures Intelligence', icon: Radio, group: 'MARKETS' },
+  { label: 'Market Stream', icon: Radio, group: 'MARKETS' },
+  { label: 'Asset Intelligence', icon: Network, group: 'MARKETS' },
   { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
   { label: 'Market Scanner', icon: Search, group: 'INTELLIGENCE' },
   { label: 'Financial & On-chain', icon: Blocks, group: 'INTELLIGENCE' },
   { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
   { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
+  { label: 'Portfolio Allocation', icon: Gauge, group: 'OPERATIONS' },
+  { label: 'Portfolio Stress', icon: Gauge, group: 'OPERATIONS' },
+  { label: 'Pre-trade Gate', icon: ShieldCheck, group: 'OPERATIONS' },
+  { label: 'Strategy Registry', icon: Blocks, group: 'RESEARCH' },
+  { label: 'Market Replay', icon: Activity, group: 'RESEARCH' },
+  { label: 'System Diagnostics', icon: Cpu, group: 'SYSTEM' },
+  { label: 'Production Readiness', icon: ShieldCheck, group: 'SYSTEM' },
   { label: 'Institutional Governance', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Universal Engine', icon: Network, group: 'RESEARCH' },
@@ -282,12 +296,14 @@ function App() {
     'Spot & Markets': 'Live multi-exchange market data and technical analysis.',
     'Futures': 'Derivatives market discovery. Contract availability depends on exchange support.',
     'Futures Intelligence': 'Cross-exchange futures pricing, order-book depth, funding and paper arbitrage research.',
+    'Asset Intelligence': 'Normalized spot, perpetual, dated-futures, options and margin instrument discovery across supported venues.',
     'AI Intelligence': 'Signal evidence, market context and explainable analysis.',
     'Market Scanner': 'Configure market watchlists for scheduled live ticker monitoring.',
     'Financial & On-chain': 'Macro, digital-asset, provider and wallet intelligence.',
     'News & Events': 'News discovery and event context from connected sources.',
     'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
+    'Portfolio Allocation': 'Covariance-aware long-only risk budgeting and constrained portfolio weights.',
     'Institutional Governance': 'Strategy scorecards, T-Bots paper-entry authorization, execution feedback and fail-closed safety controls.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
@@ -402,6 +418,11 @@ function App() {
     if (page === 'Institutional Terminal') return <InstitutionalTerminal currentSymbol={symbol} onSymbolChange={setSymbol} onNavigate={activeNav}/>;
     if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
+    if (page === 'Market Stream') return <MarketStream/>;
+    if (['Portfolio Stress','Pre-trade Gate','Strategy Registry','Market Replay','System Diagnostics','Production Readiness'].includes(page)) return <Phase15To21Workspaces key={page} page={page}/>;
+    if (page === 'Asset Intelligence') return <AssetIntelligence/>;
+    if (page === 'AI Intelligence') return <ResearchCouncil/>;
+    if (page === 'Portfolio Allocation') return <PortfolioAllocation/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;

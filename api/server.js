@@ -13,18 +13,28 @@ import { assertLiveTradingAllowed, orderSchema, requirePrivateApiAuth } from './
 import { buildCrossVenueComparison } from './market-intelligence.js';
 import { futuresRouter } from './futures-intelligence.js';
 import { futuresPaperRouter } from './futures-paper.js';
+import { assetIntelligenceRouter } from './asset-intelligence.js';
+import { researchCouncilRouter } from './research-council.js';
+import { allocationRouter } from './portfolio-allocation.js';
 import { advancedRouter } from './advanced-intelligence.js';
 import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
 import { universalRouter } from './universal-engine.js';
 import { portfolioRouter } from './portfolio-intelligence.js';
+import { marketStreamRouter } from './market-stream.js';
+import { portfolioStressRouter } from './portfolio-stress.js';
+import { pretradeRouter } from './pretrade-risk.js';
+import { strategyRegistryRouter } from './strategy-registry.js';
+import { marketReplayRouter } from './market-replay.js';
+import { observabilityRouter, observabilityMiddleware } from './observability.js';
+import { productionReadinessRouter } from './production-readiness.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
 const host = process.env.JPTI_API_HOST || '127.0.0.1';
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(express.json({ limit: '32kb', strict: true }));
+app.use(express.json({ limit: '4mb', strict: true }));
 
 // Capacitor Android uses its own WebView origin. Only explicitly configured origins
 // receive CORS permission; same-origin local web clients need no CORS.
@@ -62,7 +72,15 @@ if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLO
   throw new Error('Remote API binding requires JPTI_ALLOW_REMOTE_API=true and a strong JPTI_API_TOKEN. Keep localhost binding for development.');
 }
 
+app.use('/api', observabilityMiddleware);
+app.use('/api/observability', observabilityRouter);
+app.use('/api/governance', productionReadinessRouter);
 app.use('/api/intelligence', intelligenceRouter);
+app.use('/api/stream', marketStreamRouter);
+app.use('/api/portfolio', portfolioStressRouter);
+app.use('/api/risk', pretradeRouter);
+app.use('/api/strategies', strategyRegistryRouter);
+app.use('/api/research', marketReplayRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
@@ -72,6 +90,9 @@ app.use('/api', tbotsRouter);
 app.use('/api', universalRouter);
 app.use('/api/futures', futuresRouter);
 app.use('/api/futures', futuresPaperRouter);
+app.use('/api/assets', assetIntelligenceRouter);
+app.use('/api/council', researchCouncilRouter);
+app.use('/api/portfolio', allocationRouter);
 // T-Bots is preserved as an independently versioned paper-trading subsystem.
 app.use('/t-bots', express.static(resolve(process.env.JPTI_TBOTS_PUBLIC_DIR || 'integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
 

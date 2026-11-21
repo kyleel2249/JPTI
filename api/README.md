@@ -406,3 +406,65 @@ The futures paper lifecycle is an event-sourced, persistent simulation layer. It
 Write and read endpoints use the existing private API authorization policy. The paper-entry kill switch is checked before a new position is opened. Per-leg notional is capped by `JPTI_FUTURES_PAPER_MAX_NOTIONAL_USD` (default 1,000 USD). Events are stored using the configured JPTI event store, so file storage is local and PostgreSQL storage is durable when configured.
 
 **Model limitations:** the first lifecycle supports linear contracts only and rejects inverse contracts. PnL is based on base quantity and exchange-reported contract size, with estimated entry/exit taker fees. Funding, slippage, market impact, partial fills, margin, liquidation and exchange-specific fee tiers are not included. Marks and exits are user-supplied observations, not authenticated live fill records. This is a research/paper ledger, not an arbitrage guarantee or live execution system.
+
+
+## Phase 12 — Universal asset intelligence and evidence quality
+
+- `GET /api/assets/universe?exchanges=binance,bybit,okx,bitget&assetClass=all&search=BTC&limit=200` — discover active CCXT instruments and normalize spot, perpetual, dated futures, options and margin metadata into a common schema. At most eight venues are queried per request with bounded concurrency; the default venue set is Binance, Bybit, OKX and Bitget.
+- `POST /api/assets/quote-consensus` — assess up to 30 timestamped provider observations. The quality gate rejects invalid prices, missing timestamps/currencies, future timestamps and stale observations; a median anchor flags outliers and refuses to combine different currencies.
+
+The Asset Intelligence workspace exposes the normalized venue universe and reports provider failures and result truncation. Exchange catalog metadata is not proof of account entitlement, liquidity, legal availability or execution support. The quote-consensus helper is a research reference and does not replace executable bid/ask depth checks. Non-CCXT asset classes remain dependent on their provider-specific endpoints and credentials.
+
+
+## Phase 13 — Explainable multi-agent research council
+
+Private authenticated endpoints:
+- `POST /api/council/evaluate` — evaluates timestamped instrument evidence through six deterministic specialist engines (trend, participation, microstructure, derivatives positioning, macro regime, liquidity/volatility risk), then reports weighted consensus, agreement, dissent, missing evidence and freshness.
+- `GET /api/council/history?limit=25` — reads recent persisted council evaluations from the append-only event store.
+
+The council blocks directional consensus when evidence is stale/missing or fewer than three directional specialists can evaluate. Its permissions are hard-coded research-only: paperEntryEligible=false, liveExecutionAuthorized=false and ordersCreated=0. This phase uses deterministic, explainable specialist logic; it does not claim to invoke external LLMs or train a machine-learning model. See the AI Intelligence workspace for evidence submission and history.
+
+
+## Phase 14 — Portfolio construction and risk parity
+
+- `POST /api/portfolio/allocation/risk-parity` — authenticated long-only covariance-aware equal-risk-contribution allocation. The request contains 2–20 assets with unique symbols, one common explicit quote currency, and at least 30 aligned finite return observations per asset. Optional `minWeight`/`maxWeight` constraints are applied through bounded-simplex projection.
+- The result includes per-asset weights and risk contributions, portfolio volatility, diversification ratio and concentration. Each calculation is persisted as a portfolio-allocation recommendation event.
+- No order is submitted and execution authorization remains false. Returns are assumed to share one sampling interval; annualization depends on the supplied `periodsPerYear`. Shorting, leverage, FX conversion, transaction costs, liquidity constraints and market impact are excluded.
+
+
+## Phase 15 — Market stream transport gateway
+
+- `GET /api/stream/status` — reports transport type, active client count and capacity.
+- `GET /api/stream/market?exchange=binance&symbol=BTC/USDT&intervalMs=5000` — bounded Server-Sent Events quote stream. Native public spot ticker WebSocket adapters are used for Binance, Bybit, OKX and Bitget; unsupported venues or unavailable native sockets fall back to CCXT REST polling. Default capacity is 25 clients; REST fallback interval is 3–60 seconds; per-client exchange and socket resources close when the response disconnects.
+- This streams ticker observations, not full order-book delta depth. Native WebSocket health is monitored and the REST fallback is fail-safe for quote continuity.
+
+## Phase 16 — Portfolio stress and historical risk
+
+- `POST /api/portfolio/risk/stress` — authenticated historical VaR/expected shortfall, max drawdown and deterministic scenario shocks from aligned simple-return observations. One explicit quote currency is required; each asset must have at least 30 aligned observations. The result is persisted as an audit event.
+- Historical risk is descriptive and cannot model derivatives margin/liquidation, funding, FX conversion or liquidity impact.
+
+## Phase 17 — Fail-closed pre-trade risk preflight
+
+- `POST /api/risk/preflight` — authenticated assessment of account equity, daily realized PnL, a fresh timestamped quote, position size, protective stop, order notional, gross exposure, symbol concentration and risk budget. The caller must explicitly provide an existing-exposure array (an empty array is valid); missing or malformed exposure inventory blocks the intent.
+- A passing result only marks a paper intent eligible. It does not reserve capital, verify the account balance with an exchange, or create an exchange order. Live execution remains unauthorized.
+
+## Phase 18 — Immutable strategy registry and paper promotion review
+
+- `POST /api/strategies/registry` — publish an immutable semantic-versioned strategy definition with asset classes, timeframes, rules, risk policy and SHA-256 checksum. Duplicate strategy/version pairs are rejected.
+- `GET /api/strategies/registry` — list persisted immutable versions.
+- `POST /api/strategies/promotion-review` — review minimum sample size, profit factor, drawdown, positive out-of-sample return, walk-forward consistency, data quality and risk-control evidence. A pass is a paper-trial candidate only; live promotion is always false.
+
+## Phase 19 — Deterministic market replay
+
+- `POST /api/research/replay` — authenticated replay of 60–20,000 chronological OHLCV candles using `ema_cross` or `breakout`, next-candle-open fills, fixed fee/slippage assumptions, long-only position sizing, equity/drawdown, trades and chronological 70/30 reporting split.
+- The JSON body parser is bounded at 4 MB. The replay does not optimize parameters, guarantee fills, or model intrabar queue position, partial fills, funding, margin or liquidation.
+
+## Phase 20 — Operational observability
+
+- `GET /api/observability/diagnostics` — authenticated request counts, 5xx counts, route latency aggregates, event-loop delay, process memory, uptime, storage and scheduler state, configured exchange count and non-secret readiness checks.
+- Telemetry stores only bounded route/method aggregates; it does not capture request bodies, API keys or order payloads.
+
+## Phase 21 — Production readiness gate
+
+- `GET /api/governance/readiness` — authenticated read-only assessment of API binding, API token strength, durable PostgreSQL storage, distributed scheduler, CORS allowlist, order-notional cap, exchange credential configuration and explicit operator acknowledgement.
+- Passing the configuration checks only means the listed gates are configured. The endpoint never authorizes live execution, changes environment flags or submits orders. Security review, venue permission review, legal/regulatory assessment and operator approval remain separate requirements.

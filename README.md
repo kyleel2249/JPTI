@@ -316,3 +316,31 @@ The report uses weighted-average cost per exchange/account/market. It does not c
 The local T-Bots integration now includes a bounded browser-local event outbox, sequential retry delivery, stable run-scoped event IDs, and equity telemetry for shared paper-risk analysis. JPTI can pause new T-Bots paper entries when the shared paper-equity drawdown limit is breached. T-Bots rejects stale or unavailable JPTI risk snapshots for new entries while continuing to manage existing exits.
 
 See [Phase 8 shared intelligence documentation](docs/PHASE_8_SHARED_INTELLIGENCE.md). Configure `JPTI_TBOTS_MAX_DRAWDOWN_PCT=10` in the local API environment to set the shared paper drawdown guard. Live trading remains disabled.
+
+
+## Phase 12 — Universal asset intelligence
+
+JPTI adds a normalized cross-venue instrument universe for crypto spot, perpetual swaps, dated futures, options and margin markets. The Asset Intelligence workspace queries a bounded selection of CCXT venues and exposes instrument structure, settlement, contract size, expiry and metadata status. The quote-quality service validates timestamps, currency consistency and stale observations before calculating a median-based provider consensus with explicit outlier flags. This is metadata and research intelligence; it does not imply live data entitlement or execution support for every asset class. See [API documentation](api/README.md).
+
+
+## Phase 13 — Explainable multi-agent research council
+
+The AI Intelligence workspace now includes six specialist research engines covering trend, participation, microstructure, derivatives positioning, macro regime and liquidity/volatility risk. Timestamp and source-quality checks are applied before consensus; missing or stale evidence suppresses directional conclusions. Evaluations are persisted in the append-only event journal and can be reviewed. The current specialists are deterministic and explainable, not external LLM agents. They cannot authorize paper entries or live orders. See [API documentation](api/README.md).
+
+
+## Phase 14 — Portfolio construction and risk parity
+
+The Portfolio Allocation workspace calculates long-only covariance-aware equal-risk-contribution weights from timestamp-aligned historical return series. It enforces one quote currency per calculation, unique instruments, finite aligned observations and explicit minimum/maximum weights. Allocation recommendations are persisted for audit and do not create orders. Historical covariance is not a forecast. See [API documentation](api/README.md).
+
+
+## Phases 15–21 — Streaming, risk, strategy governance and operational readiness
+
+- **Phase 15 — Market stream gateway:** bounded Server-Sent Events with native public spot ticker WebSockets for Binance, Bybit, OKX and Bitget, CCXT REST fallback, per-client cleanup, freshness flags and a live monitor. Full order-book delta streaming is not included.
+- **Phase 16 — Portfolio stress:** historical VaR, expected shortfall, drawdown and explicit scenario shocks with quote-currency and aligned-return validation.
+- **Phase 17 — Pre-trade risk:** fail-closed checks for equity, daily loss, quote freshness, stop placement, risk budget, order notional, gross exposure and symbol concentration. Passing is paper-intent eligibility only.
+- **Phase 18 — Strategy registry:** immutable semantic versions, SHA-256 fingerprints, persisted versions and evidence-based paper promotion review.
+- **Phase 19 — Market replay:** chronological OHLCV replay with next-candle-open fills, fee/slippage assumptions, drawdown and chronological reporting split.
+- **Phase 20 — Observability:** route request/error/latency aggregates, event-loop delay, memory, uptime, storage, scheduler and exchange catalog diagnostics.
+- **Phase 21 — Production readiness:** read-only checks for durable storage, distributed scheduler, strong secrets, CORS, risk caps and operator acknowledgement. It never unlocks live trading or creates orders.
+
+All seven phases expose API and dashboard surfaces and include focused automated tests. Their limitations and exact request contracts are documented in [API documentation](api/README.md). Native venue WebSockets, full exchange execution, cross-currency risk, derivatives liquidation modeling, and regulatory certification are not claimed by this delivery.
