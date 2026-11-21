@@ -445,8 +445,8 @@ The council blocks directional consensus when evidence is stale/missing or fewer
 
 ## Phase 17 — Fail-closed pre-trade risk preflight
 
-- `POST /api/risk/preflight` — authenticated assessment of account equity, daily PnL, fresh timestamped quote, position size, protective stop, order notional, gross exposure, symbol concentration and risk budget. Missing required evidence blocks the intent.
-- A passing result only marks a paper intent eligible. No exchange order is created and live execution remains unauthorized.
+- `POST /api/risk/preflight` — authenticated assessment of account equity, daily realized PnL, a fresh timestamped quote, position size, protective stop, order notional, gross exposure, symbol concentration and risk budget. The caller must explicitly provide an existing-exposure array (an empty array is valid); missing or malformed exposure inventory blocks the intent.
+- A passing result only marks a paper intent eligible. It does not reserve capital, verify the account balance with an exchange, or create an exchange order. Live execution remains unauthorized.
 
 ## Phase 18 — Immutable strategy registry and paper promotion review
 
