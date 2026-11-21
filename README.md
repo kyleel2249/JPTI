@@ -321,3 +321,8 @@ See [Phase 8 shared intelligence documentation](docs/PHASE_8_SHARED_INTELLIGENCE
 ## Phase 12 — Universal asset intelligence
 
 JPTI adds a normalized cross-venue instrument universe for crypto spot, perpetual swaps, dated futures, options and margin markets. The Asset Intelligence workspace queries a bounded selection of CCXT venues and exposes instrument structure, settlement, contract size, expiry and metadata status. The quote-quality service validates timestamps, currency consistency and stale observations before calculating a median-based provider consensus with explicit outlier flags. This is metadata and research intelligence; it does not imply live data entitlement or execution support for every asset class. See [API documentation](api/README.md).
+
+
+## Phase 13 — Explainable multi-agent research council
+
+The AI Intelligence workspace now includes six specialist research engines covering trend, participation, microstructure, derivatives positioning, macro regime and liquidity/volatility risk. Timestamp and source-quality checks are applied before consensus; missing or stale evidence suppresses directional conclusions. Evaluations are persisted in the append-only event journal and can be reviewed. The current specialists are deterministic and explainable, not external LLM agents. They cannot authorize paper entries or live orders. See [API documentation](api/README.md).
