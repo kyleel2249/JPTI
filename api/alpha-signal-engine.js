@@ -99,7 +99,8 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   const qualityChecks=[
     {id:'completed_history',passed:candles.length>=80,detail:'At least 80 completed candles were used; the active candle was excluded.'},
     {id:'candle_freshness',passed:candleAgeMs>=0&&candleAgeMs<=tf*2,detail:'The last completed OHLCV candle must be no more than two timeframe intervals old.'},
-    {id:'account_quote_currency',passed:String(account.currency||'').trim().toUpperCase()===quoteCurrency,detail:'Account equity and all supplied exposure market values must be normalized to the instrument quote currency ('+quoteCurrency+').'},
+    {id:'account_quote_currency',passed:String(account.currency||'').trim().toUpperCase()===quoteCurrency,detail:'Account equity must use the instrument quote currency ('+quoteCurrency+').' },
+    {id:'exposure_quote_currency',passed:Array.isArray(account.exposures)&&account.exposures.every(x=>String(x?.currency||'').trim().toUpperCase()===quoteCurrency),detail:'Every existing exposure must declare marketValue normalized to the same quote currency ('+quoteCurrency+').' },
     {id:'quote_freshness',passed:quoteValid,detail:'A positive exchange quote timestamped within 15 seconds is required.'},
     {id:'signal_direction',passed:evidence.direction!=='neutral',detail:'The ensemble must produce a directional BUY or SELL consensus.'},
     {id:'confidence_threshold',passed:evidence.confidence>=config.minimumConfidence,detail:'Heuristic confidence must meet the configured minimum.'},
