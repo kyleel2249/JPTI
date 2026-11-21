@@ -140,7 +140,7 @@ function tradeMetrics(trades) {
 export function runAlphaReplay(input={}, now=Date.now()) {
   const timeframe=input.timeframe||'1h',tf=timeframeMs(timeframe);if(!tf)throw new Error('Unsupported replay timeframe.');
   const symbol=String(input.symbol||'').trim().toUpperCase(),exchange=String(input.exchange||'').trim().toLowerCase();
-  if(symbol&&!/^[A-Z0-9._-]{2,20}\\/[A-Z0-9._-]{2,20}$/.test(symbol))throw new Error('Replay symbol must use BASE/QUOTE format.');
+  if(symbol&&(symbol.split('/').length!==2||symbol.split('/').some(part=>! /^[A-Z0-9._-]{2,20}$/.test(part))))throw new Error('Replay symbol must use BASE/QUOTE format.');
   const candles=normalizeAlphaCandles(input.candles,timeframe,now),config=canonicalConfig(input.config),feeBps=input.feeBps==null?10:Number(input.feeBps),slippageBps=input.slippageBps==null?5:Number(input.slippageBps),initialCapital=input.initialCapital==null?10000:Number(input.initialCapital);
   if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>100)throw new Error('Fee and slippage assumptions must be between 0 and 100 basis points.');
   if(!Number.isFinite(initialCapital)||initialCapital<=0)throw new Error('Initial capital must be positive.');
