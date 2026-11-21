@@ -326,3 +326,8 @@ JPTI adds a normalized cross-venue instrument universe for crypto spot, perpetua
 ## Phase 13 — Explainable multi-agent research council
 
 The AI Intelligence workspace now includes six specialist research engines covering trend, participation, microstructure, derivatives positioning, macro regime and liquidity/volatility risk. Timestamp and source-quality checks are applied before consensus; missing or stale evidence suppresses directional conclusions. Evaluations are persisted in the append-only event journal and can be reviewed. The current specialists are deterministic and explainable, not external LLM agents. They cannot authorize paper entries or live orders. See [API documentation](api/README.md).
+
+
+## Phase 14 — Portfolio construction and risk parity
+
+The Portfolio Allocation workspace calculates long-only covariance-aware equal-risk-contribution weights from timestamp-aligned historical return series. It enforces one quote currency per calculation, unique instruments, finite aligned observations and explicit minimum/maximum weights. Allocation recommendations are persisted for audit and do not create orders. Historical covariance is not a forecast. See [API documentation](api/README.md).
