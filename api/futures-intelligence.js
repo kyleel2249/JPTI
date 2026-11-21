@@ -75,7 +75,7 @@ async function fetchVenue(id, parsed, kind, depth, requestedBase) {
       return { exchange:id, status:last || bid || ask ? 'ok':'partial', symbol:market.symbol,
         contract:{ id:market.id, base:market.base, quote:market.quote, settle:market.settle || null,
           swap:market.swap === true, future:market.future === true, linear:market.linear === true,
-          inverse:market.inverse === true, contractSize:market.contractSize || null,
+          inverse:market.inverse === true, contractSize:market.contractSize || null, expiry:market.expiry ? new Date(market.expiry).toISOString() : null,
           precision:market.precision || null, limits:market.limits || null },
         prices:{ last, mark, index, bid, ask, tickerTimestamp:ticker.timestamp ? new Date(ticker.timestamp).toISOString():null },
         book, funding:{ rate:fundingRate, intervalHours:positive(funding.interval) ? Number(funding.interval) : (typeof funding.interval === 'string' && /^\\d+(?:\\.\\d+)?h$/i.test(funding.interval) ? Number.parseFloat(funding.interval) : null),
