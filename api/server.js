@@ -25,6 +25,7 @@ import { marketStreamRouter } from './market-stream.js';
 import { portfolioStressRouter } from './portfolio-stress.js';
 import { pretradeRouter } from './pretrade-risk.js';
 import { strategyRegistryRouter } from './strategy-registry.js';
+import { marketReplayRouter } from './market-replay.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
@@ -74,6 +75,7 @@ app.use('/api/stream', marketStreamRouter);
 app.use('/api/portfolio', portfolioStressRouter);
 app.use('/api/risk', pretradeRouter);
 app.use('/api/strategies', strategyRegistryRouter);
+app.use('/api/research', marketReplayRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
