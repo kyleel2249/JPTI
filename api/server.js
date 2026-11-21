@@ -28,6 +28,7 @@ import { strategyRegistryRouter } from './strategy-registry.js';
 import { marketReplayRouter } from './market-replay.js';
 import { observabilityRouter, observabilityMiddleware } from './observability.js';
 import { productionReadinessRouter } from './production-readiness.js';
+import { alphaSignalRouter } from './alpha-signal-engine.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
@@ -75,6 +76,7 @@ if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLO
 app.use('/api', observabilityMiddleware);
 app.use('/api/observability', observabilityRouter);
 app.use('/api/governance', productionReadinessRouter);
+app.use('/api/alpha', alphaSignalRouter);
 app.use('/api/intelligence', intelligenceRouter);
 app.use('/api/stream', marketStreamRouter);
 app.use('/api/portfolio', portfolioStressRouter);
