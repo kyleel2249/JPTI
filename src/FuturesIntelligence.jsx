@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {apiFetch} from './lib/api.js';
 
-const DEFAULT_VENUES='binance,bybit,okx,bitget,gateio,mexc,kucoin';
+const DEFAULT_VENUES='all';
 const number=value=>value==null||!Number.isFinite(Number(value))?'—':Number(value).toLocaleString(undefined,{maximumFractionDigits:8});
 const pct=value=>value==null?'—':Number(value).toFixed(3)+'%';
 export default function FuturesIntelligence(){
@@ -11,15 +11,15 @@ export default function FuturesIntelligence(){
   setBusy(true);setError('');
   try{
    const params=new URLSearchParams({symbol,kind,exchanges:venues,depth:'20',amount,takerFeeBps:fee});
-   const [comparison,fundingResponse]=await Promise.all([apiFetch('/api/futures/compare?'+params,{cache:'no-store'}),apiFetch('/api/futures/funding?'+new URLSearchParams({symbol,exchanges:venues}),{cache:'no-store'})]);
-   const [a,b]=await Promise.all([comparison.json(),fundingResponse.json()]);
+   const comparison=await apiFetch('/api/futures/compare?'+params,{cache:'no-store'});
+   const a=await comparison.json();
    if(!comparison.ok)throw new Error(a.error||'Futures comparison failed');
-   setData(a);setFunding(b);setUpdated(new Date());
+   setData(a);setFunding({funding:(a.venues||[]).filter(v=>v.status==='ok').map(v=>({exchange:v.exchange,symbol:v.symbol,rate:v.funding?.rate,intervalHours:v.funding?.intervalHours,nextFundingAt:v.funding?.nextFundingAt}))});setUpdated(new Date());
   }catch(e){setError(e.message);}finally{setBusy(false);}
  },[symbol,kind,venues,amount,fee]);
  useEffect(()=>{apiFetch('/api/futures/catalog',{cache:'no-store'}).then(r=>r.json()).then(setCatalog).catch(()=>setCatalog(null));},[]);
  useEffect(()=>{load();},[load]);
- useEffect(()=>{if(!auto)return;const timer=setInterval(load,15000);return()=>clearInterval(timer);},[auto,load]);
+ useEffect(()=>{if(!auto)return;const timer=setInterval(load,venues.trim().toLowerCase()==='all'?60000:15000);return()=>clearInterval(timer);},[auto,load]);
  return <section className="glass-panel detail-workspace">
   <span className="eyebrow">PHASE 11 · MULTI-VENUE DERIVATIVES DATA</span><h3>Universal Futures Cross-Exchange Intelligence</h3>
   <p>Compare compatible perpetual and dated futures contracts across the supported CCXT exchange catalog. Public market data and paper research only; no live futures orders are submitted.</p>
