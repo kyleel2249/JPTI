@@ -14,6 +14,7 @@ import { buildCrossVenueComparison } from './market-intelligence.js';
 import { futuresRouter } from './futures-intelligence.js';
 import { futuresPaperRouter } from './futures-paper.js';
 import { assetIntelligenceRouter } from './asset-intelligence.js';
+import { researchCouncilRouter } from './research-council.js';
 import { advancedRouter } from './advanced-intelligence.js';
 import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
@@ -74,6 +75,7 @@ app.use('/api', universalRouter);
 app.use('/api/futures', futuresRouter);
 app.use('/api/futures', futuresPaperRouter);
 app.use('/api/assets', assetIntelligenceRouter);
+app.use('/api/council', researchCouncilRouter);
 // T-Bots is preserved as an independently versioned paper-trading subsystem.
 app.use('/t-bots', express.static(resolve(process.env.JPTI_TBOTS_PUBLIC_DIR || 'integrations/t-bots/public'), { fallthrough: true, index: 'index.html' }));
 
