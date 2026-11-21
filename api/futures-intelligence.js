@@ -168,6 +168,9 @@ futuresRouter.get('/compare', async (req,res) => {
   if (!['perpetual','dated','any'].includes(kind)) return res.status(400).json({error:'kind must be perpetual, dated or any.'});
   const depth = Math.min(100,Math.max(5,Number.parseInt(req.query.depth||'20',10)||20));
   const requestedBase = positive(req.query.amount);
+  if (req.query.amount !== undefined && requestedBase === null) return res.status(400).json({error:'amount must be a positive base-asset quantity.'});
+  const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);
+  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});
   const rawExchanges=String(req.query.exchanges || 'binance,bybit,okx,bitget,gateio,mexc,kucoin').trim().toLowerCase();
   const knownIds=listExchangeCatalog().map(x=>x.id);
   const requested=rawExchanges==='all'?knownIds:rawExchanges.split(',').map(x=>x.trim()).filter(Boolean);
@@ -176,12 +179,10 @@ futuresRouter.get('/compare', async (req,res) => {
   const unsupported=exchangeIds.filter(id=>!known.has(id));
   if (!exchangeIds.length) return res.status(400).json({error:'Select at least one exchange.'});
   if (unsupported.length) return res.status(400).json({error:'Unsupported exchange IDs.',unsupported});
-  const key=[parsed.base,parsed.quote,parsed.settleHint,kind,depth,requestedBase,exchangeIds.join(',')].join('|');
+  const key=[parsed.base,parsed.quote,parsed.settleHint,kind,depth,requestedBase,requestedFee,exchangeIds.join(',')].join('|');
   const hit=cache.get(key);
   if(hit&&Date.now()-hit.at<Number(process.env.JPTI_FUTURES_CACHE_MS||2000)) return res.json({...hit.payload,cache:'hit'});
   const venues=await mapLimit(exchangeIds,8,id=>fetchVenue(id,parsed,kind,depth,requestedBase));
-  const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);
-  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});
   const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:requestedFee});
   payload.results=venues.map(v=>({exchange:v.exchange,status:v.status,reason:v.reason||null}));
   payload.cache='miss'; payload.cacheTtlMs=Number(process.env.JPTI_FUTURES_CACHE_MS||2000);
