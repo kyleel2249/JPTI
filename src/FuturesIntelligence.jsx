@@ -1,5 +1,6 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {apiFetch} from './lib/api.js';
+import FuturesPaperDesk from './FuturesPaperDesk.jsx';
 
 const DEFAULT_VENUES='all';
 const number=value=>value==null||!Number.isFinite(Number(value))?'—':Number(value).toLocaleString(undefined,{maximumFractionDigits:8});
@@ -61,6 +62,7 @@ export default function FuturesIntelligence(){
   </div>
   <p className="subtle-note">CCXT catalog: {catalog?.supportedExchangeCount??'—'} supported adapters; {catalog?.derivativeDataCapableCount??'—'} expose relevant public data capabilities. This is not proof that all listed pairs are tradable or liquid on every venue.</p>
   {(data?.safety?.warnings||[]).map(w=><p className="subtle-note" key={w}>• {w}</p>)}
+  <FuturesPaperDesk comparison={data} symbol={symbol}/>
  </section>;
 }
 function Status({status}){return <span className={'status-pill '+(status==='ok'?'good':status==='partial'?'warn':'bad')}><i/>{status}</span>}
