@@ -9,6 +9,7 @@ import FuturesIntelligence from './FuturesIntelligence.jsx';
 import AssetIntelligence from './AssetIntelligence.jsx';
 import ResearchCouncil from './ResearchCouncil.jsx';
 import PortfolioAllocation from './PortfolioAllocation.jsx';
+import MarketStream from './MarketStream.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -23,6 +24,7 @@ const navigation = [
   { label: 'Spot & Markets', icon: CandlestickChart, group: 'MARKETS' },
   { label: 'Futures', icon: Activity, group: 'MARKETS' },
   { label: 'Futures Intelligence', icon: Radio, group: 'MARKETS' },
+  { label: 'Market Stream', icon: Radio, group: 'MARKETS' },
   { label: 'Asset Intelligence', icon: Network, group: 'MARKETS' },
   { label: 'AI Intelligence', icon: BrainCircuit, group: 'INTELLIGENCE' },
   { label: 'Market Scanner', icon: Search, group: 'INTELLIGENCE' },
@@ -409,6 +411,7 @@ function App() {
     if (page === 'Institutional Terminal') return <InstitutionalTerminal currentSymbol={symbol} onSymbolChange={setSymbol} onNavigate={activeNav}/>;
     if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
+    if (page === 'Market Stream') return <MarketStream/>;
     if (page === 'Asset Intelligence') return <AssetIntelligence/>;
     if (page === 'AI Intelligence') return <ResearchCouncil/>;
     if (page === 'Portfolio Allocation') return <PortfolioAllocation/>;
