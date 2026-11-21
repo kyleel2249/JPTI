@@ -90,7 +90,7 @@ function App() {
   const [forecastData, setForecastData] = useState(null);
   const [forecastError, setForecastError] = useState('');
   const [forecastLoading, setForecastLoading] = useState(false);
-  const [forecastExchange, setForecastExchange] = useState('binance');
+  const [forecastExchange, setForecastExchange] = useState('bitget');
   const [forecastTimeframe, setForecastTimeframe] = useState('1h');
   const [labData, setLabData] = useState(null);
   const [labStrategy, setLabStrategy] = useState('ema');
