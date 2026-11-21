@@ -86,12 +86,15 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   if(!/^[A-Z0-9._-]{2,20}\/[A-Z0-9._-]{2,20}$/.test(symbol)) throw new Error('Use a normalized BASE/QUOTE symbol such as BTC/USDT.');
   if(!/^[a-z0-9_-]{2,30}$/.test(exchange)) throw new Error('A valid exchange identifier is required.');
   const tf=timeframeMs(timeframe);if(!tf)throw new Error('Unsupported timeframe.');
-  const candles=normalizeAlphaCandles(input.candles,timeframe,now),last=candles.at(-1),config=canonicalConfig(input.config);
+  const candles=normalizeAlphaCandles(input.candles,timeframe,now),last=candles.at(-1),config=canonicalConfig(input.config),account=input.account||{},limits=input.limits||{},quoteCurrency=symbol.split('/')[1];
   const marketHash=sha(candles),configHash=sha(config),evidence=buildEvidence(candles);
   const quote=input.quote||{},quotePrice=Number(quote.last),quoteTime=Date.parse(String(quote.timestamp||''));
   const quoteAgeMs=Number.isFinite(quoteTime)?now-quoteTime:null,quoteValid=Number.isFinite(quotePrice)&&quotePrice>0&&quoteAgeMs!==null&&quoteAgeMs>=-5000&&quoteAgeMs<=15000;
+  const candleAgeMs=now-(last.timestamp+tf);
   const qualityChecks=[
     {id:'completed_history',passed:candles.length>=80,detail:'At least 80 completed candles were used; the active candle was excluded.'},
+    {id:'candle_freshness',passed:candleAgeMs>=0&&candleAgeMs<=tf*2,detail:'The last completed OHLCV candle must be no more than two timeframe intervals old.'},
+    {id:'account_quote_currency',passed:String(account.currency||'').trim().toUpperCase()===quoteCurrency,detail:'Account equity and all supplied exposure market values must be normalized to the instrument quote currency ('+quoteCurrency+').'},
     {id:'quote_freshness',passed:quoteValid,detail:'A positive exchange quote timestamped within 15 seconds is required.'},
     {id:'signal_direction',passed:evidence.direction!=='neutral',detail:'The ensemble must produce a directional BUY or SELL consensus.'},
     {id:'confidence_threshold',passed:evidence.confidence>=config.minimumConfidence,detail:'Heuristic confidence must meet the configured minimum.'},
@@ -103,7 +106,7 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   const riskDistance=stopPrice===null?null:Math.abs(entry-stopPrice);
   const tp1=side==='buy'?entry+riskDistance*config.targetOneR:side==='sell'?entry-riskDistance*config.targetOneR:null;
   const tp2=side==='buy'?entry+riskDistance*config.targetTwoR:side==='sell'?entry-riskDistance*config.targetTwoR:null;
-  const account=input.account||{},limits=input.limits||{},equity=Number(account.equity),maxNotional=Number(limits.maxOrderNotional);
+  const equity=Number(account.equity),maxNotional=Number(limits.maxOrderNotional);
   const riskBudget=Number.isFinite(equity)&&equity>0?equity*config.riskPercent/100:null;
   const rawQty=riskDistance>0&&riskBudget!==null?riskBudget/riskDistance:null;
   const quantity=rawQty!==null&&Number.isFinite(maxNotional)&&maxNotional>0?Math.min(rawQty,maxNotional/entry):null;
@@ -114,14 +117,15 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   const riskChecks=pretrade?.checks||[{id:'risk_inputs',passed:false,detail:'A valid directional setup, fresh quote, account equity and positive order-notional cap are required before risk preflight.'}];
   const qualityPassed=qualityChecks.every(c=>c.passed),riskPassed=Boolean(pretrade?.permissions?.paperIntentEligible);
   const eligible=qualityPassed&&riskPassed;
-  const fingerprint=sha([ALPHA_ENGINE_VERSION,symbol,exchange,timeframe,last.timestamp,marketHash,configHash].join('|'));
+  const quoteHash=sha({last:quotePrice,timestamp:quoteTime});
+  const fingerprint=sha([ALPHA_ENGINE_VERSION,symbol,exchange,timeframe,last.timestamp,marketHash,quoteHash,configHash].join('|'));
   const signalId='alpha_'+fingerprint.slice(0,32);
   return {signalId,engine:'JPTI Alpha Signal Engine',engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),
-    market:{exchange,symbol,timeframe,lastCompletedCandleAt:new Date(last.timestamp).toISOString(),completedCandles:candles.length,referencePrice:round(entry),quoteAgeMs},
+    market:{exchange,symbol,timeframe,quoteCurrency,lastCompletedCandleAt:new Date(last.timestamp).toISOString(),candleAgeMs,completedCandles:candles.length,referencePrice:round(entry),quoteAgeMs},
     direction:side,confidence:evidence.confidence,confidenceType:'heuristic_consensus_not_probability',ensembleScore:evidence.score,modelAgreement:evidence.directionalAgreement,
     marketRegime:evidence.marketRegime,levels:{entry:round(entry),stopLoss:stopPrice===null?null:round(stopPrice),takeProfitOne:tp1===null?null:round(tp1),takeProfitTwo:tp2===null?null:round(tp2),riskRewardOne:config.targetOneR,riskRewardTwo:config.targetTwoR,atrStopMultiple:config.atrStopMultiple},
     sizing:{riskPercent:config.riskPercent,riskBudget:riskBudget===null?null:round(riskBudget),quantity:quantity===null?null:round(quantity),notional:quantity===null?null:round(quantity*entry),method:'risk budget divided by ATR stop distance, capped by configured per-order notional'},
-    evidence:{...evidence,marketDataSha256:marketHash,configurationSha256:configHash,signalFingerprint:fingerprint,usedOnlyCompletedCandles:true,lookaheadBias:'none_in_signal_calculation'},
+    evidence:{...evidence,marketDataSha256:marketHash,quoteSha256:quoteHash,configurationSha256:configHash,signalFingerprint:fingerprint,usedOnlyCompletedCandles:true,lookaheadBias:'none_in_signal_calculation'},
     qualityChecks,riskChecks,pretradeRisk:pretrade,decision:eligible?'paper_intent_eligible':'blocked',
     permissions:{paperIntentEligible:eligible,liveExecutionAuthorized:false,exchangeOrdersCreated:0},
     limitations:['Confidence is a deterministic consensus heuristic, not a statistically calibrated probability.','The five specialist models are deterministic technical rules, not autonomous LLM agents.','Signal evaluation uses completed OHLCV candles and a separately timestamped exchange quote.','Paper eligibility is not a live-order authorization or a profitability guarantee.']};
@@ -133,8 +137,9 @@ function tradeMetrics(trades) {
 }
 export function runAlphaReplay(input={}, now=Date.now()) {
   const timeframe=input.timeframe||'1h',tf=timeframeMs(timeframe);if(!tf)throw new Error('Unsupported replay timeframe.');
-  const candles=normalizeAlphaCandles(input.candles,timeframe,now),config=canonicalConfig(input.config),feeBps=clamp(Number(input.feeBps)||10,0,100),slippageBps=clamp(Number(input.slippageBps)||5,0,100),initialCapital=Number(input.initialCapital)||10000;
-  if(initialCapital<=0)throw new Error('Initial capital must be positive.');
+  const candles=normalizeAlphaCandles(input.candles,timeframe,now),config=canonicalConfig(input.config),feeBps=input.feeBps==null?10:Number(input.feeBps),slippageBps=input.slippageBps==null?5:Number(input.slippageBps),initialCapital=input.initialCapital==null?10000:Number(input.initialCapital);
+  if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>100)throw new Error('Fee and slippage assumptions must be between 0 and 100 basis points.');
+  if(!Number.isFinite(initialCapital)||initialCapital<=0)throw new Error('Initial capital must be positive.');
   const trades=[],split=Math.floor(candles.length*.7);let capital=initialCapital,activeUntil=0;
   for(let i=79;i<candles.length-1;i++){
     if(i<activeUntil)continue;
@@ -190,6 +195,7 @@ alphaSignalRouter.post('/paper/intent',protectedRoute(async(req,res)=>{
  const intents=await readStoredEvents(10000,'alpha-paper-intent');
  const existing=intents.find(e=>e.payload?.signalId===signalId);
  if(existing){res.json({...existing.payload,duplicate:true,liveExecutionAuthorized:false});return;}
+ if(Date.now()-Date.parse(signal.generatedAt)>60000)throw new Error('Signal has expired for paper entry. Generate a fresh assessment before creating a paper intent.');
  const intent={tradeId:randomUUID(),signalId,createdAt:new Date().toISOString(),status:'open',market:signal.market,direction:signal.direction,entry:signal.levels.entry,stopLoss:signal.levels.stopLoss,takeProfitOne:signal.levels.takeProfitOne,takeProfitTwo:signal.levels.takeProfitTwo,quantity:signal.sizing.quantity,notional:signal.sizing.notional,confidence:signal.confidence,engineVersion:signal.engineVersion,signalFingerprint:signal.evidence.signalFingerprint,liveExecutionAuthorized:false,exchangeOrdersCreated:0};
  await persistEvent('alpha-paper-intent','jpti-alpha-paper','paper_intent_opened',intent.tradeId,intent,intent.createdAt);
  res.status(201).json({...intent,persisted:true});
@@ -201,7 +207,8 @@ alphaSignalRouter.post('/paper/close',protectedRoute(async(req,res)=>{
  if(!intent)throw new Error('Paper trade was not found.');
  const closes=await readStoredEvents(10000,'alpha-paper-close');
  if(closes.some(e=>e.payload?.tradeId===tradeId))throw new Error('Paper trade is already closed.');
- const direction=intent.direction==='buy'?1:-1,gross=(exitPrice-intent.entry)*intent.quantity*direction,fees=Number(req.body?.fees)||0,pnl=gross-fees;
+ const fees=req.body?.fees==null?0:Number(req.body.fees);if(!Number.isFinite(fees)||fees<0||fees>intent.entry*intent.quantity*.1)throw new Error('Paper exit fees must be non-negative and no greater than 10% of entry notional.');
+ const direction=intent.direction==='buy'?1:-1,gross=(exitPrice-intent.entry)*intent.quantity*direction,pnl=gross-fees;
  const close={tradeId,signalId:intent.signalId,closedAt:new Date().toISOString(),exitPrice:round(exitPrice),fees:round(fees),grossPnl:round(gross,6),netPnl:round(pnl,6),returnPercent:round(pnl/(intent.entry*intent.quantity)*100,4),reason:String(req.body?.reason||'operator_close').slice(0,80),liveExecutionAuthorized:false,exchangeOrdersCreated:0};
  await persistEvent('alpha-paper-close','jpti-alpha-paper','paper_trade_closed',tradeId,close,close.closedAt);
  res.json({...close,persisted:true});

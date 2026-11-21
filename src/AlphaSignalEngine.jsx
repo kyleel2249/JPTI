@@ -27,7 +27,7 @@ export default function AlphaSignalEngine(){
  },[exchange,symbol,timeframe]);
  const run=useCallback(async()=>{
   setBusy(true);setError('');setReplay(null);
-  try{let exposures;try{exposures=JSON.parse(exposuresJson);}catch{throw new Error('Existing exposure inventory must be valid JSON. Enter [] only after confirming that the account has no open positions.');}if(!Array.isArray(exposures))throw new Error('Existing exposure inventory must be a JSON array.');if(!inventoryConfirmed)throw new Error('Confirm that the exposure inventory includes every current open position before requesting paper eligibility.');const market=await getMarketData();const payload={...market,exchange,timeframe,account:{equity:Number(equity),dailyPnl:Number(dailyPnl),exposures},
+  try{let exposures;try{exposures=JSON.parse(exposuresJson);}catch{throw new Error('Existing exposure inventory must be valid JSON. Enter [] only after confirming that the account has no open positions.');}if(!Array.isArray(exposures))throw new Error('Existing exposure inventory must be a JSON array.');if(!inventoryConfirmed)throw new Error('Confirm that the exposure inventory includes every current open position before requesting paper eligibility.');const market=await getMarketData();const payload={...market,exchange,timeframe,account:{equity:Number(equity),currency:symbol.split('/')[1],dailyPnl:Number(dailyPnl),exposures},
    limits:{maxDailyLoss:Math.max(1,Number(equity)*.025),maxOrderNotional:Number(maxNotional),maxGrossExposure:Math.max(Number(maxNotional),Number(equity)*.5),maxRiskPercent:Number(riskPercent),maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000},
    config:{riskPercent:Number(riskPercent),minimumConfidence:62,minimumAgreement:.5,atrStopMultiple:1.5,targetOneR:1,targetTwoR:2}};
    const response=await apiFetch('/api/alpha/evaluate',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -51,7 +51,7 @@ export default function AlphaSignalEngine(){
     <label>Exchange<select value={exchange} onChange={e=>setExchange(e.target.value)}>{options.exchange.map(x=><option key={x}>{x}</option>)}</select></label>
     <label>Market symbol<input value={symbol} onChange={e=>setSymbol(e.target.value.toUpperCase())} placeholder="BTC/USDT"/></label>
     <label>Timeframe<select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{options.timeframe.map(x=><option key={x}>{x}</option>)}</select></label>
-    <label>Account equity<input type="number" min="1" value={equity} onChange={e=>setEquity(e.target.value)}/></label>
+    <label>Account equity (quote currency)<input type="number" min="1" value={equity} onChange={e=>setEquity(e.target.value)}/></label>
     <label>Daily realized PnL<input type="number" value={dailyPnl} onChange={e=>setDailyPnl(e.target.value)}/></label>
     <label>Risk per trade (%)<input type="number" min="0.1" max="2" step="0.1" value={riskPercent} onChange={e=>setRiskPercent(e.target.value)}/></label>
     <label>Max order notional<input type="number" min="1" value={maxNotional} onChange={e=>setMaxNotional(e.target.value)}/></label>

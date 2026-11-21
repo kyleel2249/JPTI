@@ -7,7 +7,7 @@ function candles(count=240,mode='up'){
 }
 const account={equity:10000,dailyPnl:0,exposures:[]};
 const limits={maxDailyLoss:250,maxOrderNotional:2000,maxGrossExposure:5000,maxRiskPercent:1,maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000};
-function input(mode='up'){const c=candles(240,mode),last=c.at(-1);return{symbol:'BTC/USDT',exchange:'binance',timeframe:'1h',candles:c,quote:{last:last.close,timestamp:new Date(last.timestamp+tf).toISOString()},account,limits,config:{minimumConfidence:55,minimumAgreement:.4}};}
+function input(mode='up'){const c=candles(240,mode),last=c.at(-1);return{symbol:'BTC/USDT',exchange:'binance',timeframe:'1h',candles:c,account:{...account,currency:'USDT'},quote:{last:last.close,timestamp:new Date(last.timestamp+tf).toISOString()},account,limits,config:{minimumConfidence:55,minimumAgreement:.4}};}
 test('normalizes only completed, chronological candles and rejects malformed history',()=>{
  const c=candles();assert.equal(normalizeAlphaCandles(c,'1h',c.at(-1).timestamp+tf).length,c.length);
  assert.equal(normalizeAlphaCandles(c,'1h',c.at(-1).timestamp+tf-1).length,c.length-1);
@@ -17,13 +17,14 @@ test('normalizes only completed, chronological candles and rejects malformed his
 test('produces a deterministic, explainable signal fingerprint for identical data and settings',()=>{
  const a=input(),x=evaluateAlphaSignal(a,start+240*tf+5000),y=evaluateAlphaSignal(a,start+240*tf+5000);
  assert.equal(x.signalId,y.signalId);assert.equal(x.evidence.marketDataSha256,y.evidence.marketDataSha256);
- assert.equal(x.evidence.models.length,5);assert.equal(x.evidence.usedOnlyCompletedCandles,true);
+ assert.equal(x.evidence.models.length,5);assert.equal(x.evidence.usedOnlyCompletedCandles,true);assert.equal(x.market.quoteCurrency,'USDT');assert.equal(x.evidence.quoteSha256,y.evidence.quoteSha256);
  assert.equal(x.confidenceType,'heuristic_consensus_not_probability');assert.equal(x.permissions.liveExecutionAuthorized,false);
 });
 test('blocks missing or stale quotes and does not mark them paper eligible',()=>{
  const a=input();a.quote.timestamp=new Date(start).toISOString();const r=evaluateAlphaSignal(a,start+241*tf);
  assert.equal(r.qualityChecks.find(x=>x.id==='quote_freshness').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
 });
+test('fails closed when account quote currency is missing or mismatched',()=>{const a=input();a.account.currency='USD';const r=evaluateAlphaSignal(a,start+240*tf+5000);assert.equal(r.qualityChecks.find(x=>x.id==='account_quote_currency').passed,false);assert.equal(r.permissions.paperIntentEligible,false);});
 test('fails closed when account exposure inventory is omitted',()=>{
  const a=input();delete a.account.exposures;const r=evaluateAlphaSignal(a,start+240*tf+5000);
  assert.equal(r.riskChecks.find(x=>x.id==='account_exposures').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
@@ -36,5 +37,5 @@ test('replay is reproducible and reports separate chronological out-of-sample me
 });
 test('rejects invalid replay assumptions and timeframe',()=>{
  assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'2m'},start+241*tf),/Unsupported replay timeframe/);
- assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'1h',initialCapital:-1},start+241*tf),/positive/);
+ assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'1h',initialCapital:-1},start+241*tf),/positive/);const zeroFee=runAlphaReplay({candles:candles(),timeframe:'1h',feeBps:0,slippageBps:0},start+241*tf);assert.equal(zeroFee.parameters.feeBps,0);
 });
