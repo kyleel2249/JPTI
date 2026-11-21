@@ -20,14 +20,15 @@ marketStreamRouter.get('/market',async(req,res)=>{
  try{options=normalizeStreamRequest(req.query);}catch(error){return res.status(error.status||400).json({error:error.message});}
  if(clients.size>=MAX_CLIENTS)return res.status(503).json({error:'Market stream capacity reached. Retry later.',maxClients:MAX_CLIENTS});
  let exchange;
- let closed=false,inFlight=false,timer;
+ let closed=false,inFlight=false,timer,heartbeat;
  const client={id:Symbol('market-stream')};clients.add(client);
  const close=async()=>{
   if(closed)return;closed=true;clients.delete(client);
   if(timer)clearInterval(timer);
+  if(heartbeat)clearInterval(heartbeat);
   if(exchange&&typeof exchange.close==='function'){try{await exchange.close();}catch{}}
  };
- req.on('close',close);
+ res.on('close',close);
  res.status(200);res.set({'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
  res.flushHeaders?.();
  const send=(event,data)=>{
@@ -56,9 +57,7 @@ marketStreamRouter.get('/market',async(req,res)=>{
   send('status',{status:'connected',transport:'ccxt-rest-polling-sse',exchange:options.exchange,symbol:options.symbol,intervalMs:options.intervalMs});
   await sample();
   timer=setInterval(sample,options.intervalMs);
-  const heartbeat=setInterval(()=>send('heartbeat',{at:new Date().toISOString()}),15000);
-  const priorClose=close;
-  req.once('close',()=>clearInterval(heartbeat));
+  heartbeat=setInterval(()=>send('heartbeat',{at:new Date().toISOString()}),15000);
  }catch(error){
   send('error',{message:error.message,status:error.status||502});
   await close();
