@@ -168,9 +168,11 @@ futuresRouter.get('/compare', async (req,res) => {
   if (!['perpetual','dated','any'].includes(kind)) return res.status(400).json({error:'kind must be perpetual, dated or any.'});
   const depth = Math.min(100,Math.max(5,Number.parseInt(req.query.depth||'20',10)||20));
   const requestedBase = positive(req.query.amount);
-  const requested = String(req.query.exchanges || 'binance,bybit,okx,bitget,gateio,mexc,kucoin').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-  const exchangeIds=[...new Set(requested)].slice(0,12);
-  const known=new Set(listExchangeCatalog().map(x=>x.id));
+  const rawExchanges=String(req.query.exchanges || 'binance,bybit,okx,bitget,gateio,mexc,kucoin').trim().toLowerCase();
+  const knownIds=listExchangeCatalog().map(x=>x.id);
+  const requested=rawExchanges==='all'?knownIds:rawExchanges.split(',').map(x=>x.trim()).filter(Boolean);
+  const exchangeIds=[...new Set(requested)].slice(0,knownIds.length);
+  const known=new Set(knownIds);
   const unsupported=exchangeIds.filter(id=>!known.has(id));
   if (!exchangeIds.length) return res.status(400).json({error:'Select at least one exchange.'});
   if (unsupported.length) return res.status(400).json({error:'Unsupported exchange IDs.',unsupported});
@@ -188,8 +190,9 @@ futuresRouter.get('/funding', async (req,res) => {
   let parsed;
   try { parsed=splitSymbol(req.query.symbol || 'BTC/USDT:USDT'); }
   catch(error) { return res.status(error.status||400).json({error:error.message}); }
-  const ids=[...new Set(String(req.query.exchanges||'binance,bybit,okx,bitget,gateio,mexc,kucoin').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean))].slice(0,12);
-  const venues=await Promise.all(ids.map(id=>fetchVenue(id,parsed,'perpetual',5,null)));
+  const raw=String(req.query.exchanges||'binance,bybit,okx,bitget,gateio,mexc,kucoin').trim().toLowerCase();
+  const ids=raw==='all'?listExchangeCatalog().map(x=>x.id):[...new Set(raw.split(',').map(x=>x.trim()).filter(Boolean))];
+  const venues=await mapLimit(ids,8,id=>fetchVenue(id,parsed,'perpetual',5,null));
   const rows=venues.filter(v=>v.status==='ok').map(v=>({exchange:v.exchange,symbol:v.symbol,rate:v.funding.rate,intervalHours:v.funding.intervalHours,nextFundingAt:v.funding.nextFundingAt,markPrice:v.prices.mark,indexPrice:v.prices.index}));
   res.json({symbol:req.query.symbol||'BTC/USDT:USDT',generatedAt:new Date().toISOString(),funding:rows.sort((a,b)=>(a.rate??Infinity)-(b.rate??Infinity)),note:'Funding values are exchange-reported. Compare payment intervals and timestamps before constructing a hedge.'});
 });
