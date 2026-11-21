@@ -3,6 +3,12 @@ import { withExchange, listExchangeCatalog } from './exchanges.js';
 
 export const futuresRouter = express.Router();
 const cache = new Map();
+const universeCache = new Map();
+async function mapLimit(items, limit, worker) {
+ const output = new Array(items.length); let cursor = 0;
+ await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(true){const index=cursor++;if(index>=items.length)return;try{output[index]=await worker(items[index]);}catch(error){output[index]={status:'error',reason:error.message};}}}));
+ return output;
+}
 const positive = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
 const cleanSymbol = value => String(value || '').trim().toUpperCase();
 const splitSymbol = value => {
@@ -125,6 +131,35 @@ futuresRouter.get('/catalog', (req,res) => {
     derivativeDataCapableCount:derivative.length, exchanges:derivative.map(x=>({id:x.id,name:x.name,configured:x.configured,capabilities:x.capabilities})),
     coverageNote:'Catalog capability does not guarantee a particular derivatives market is listed, accessible or liquid.' });
 });
+
+futuresRouter.get('/universe', async (req,res) => {
+ const kind=String(req.query.kind||'perpetual').toLowerCase();
+ if(!['perpetual','dated','any'].includes(kind))return res.status(400).json({error:'kind must be perpetual, dated or any.'});
+ const search=cleanSymbol(req.query.search||'').slice(0,24);
+ const limit=Math.min(2000,Math.max(20,Number.parseInt(req.query.limit||'500',10)||500));
+ const cacheKey=kind+'|'+search+'|'+limit,hit=universeCache.get(cacheKey);
+ if(hit&&Date.now()-hit.at<Number(process.env.JPTI_FUTURES_UNIVERSE_CACHE_MS||900000))return res.json({...hit.payload,cache:'hit'});
+ const ids=listExchangeCatalog().map(x=>x.id);
+ const results=await mapLimit(ids,8,async id=>withExchange(id,{privateAccess:false},async exchange=>{
+  const markets=Object.values(exchange.markets).filter(m=>m.active!==false&&m.contract===true&&
+   (kind==='perpetual'?m.swap===true:kind==='dated'?m.future===true:(m.swap===true||m.future===true))&&
+   (!search||[m.base,m.quote,m.settle,m.symbol].some(v=>String(v||'').toUpperCase().includes(search))))
+   .map(m=>({exchange:id,symbol:m.symbol,id:m.id,base:m.base,quote:m.quote,settle:m.settle||null,
+    kind:m.swap?'perpetual':'dated',linear:m.linear===true,inverse:m.inverse===true,
+    contractSize:m.contractSize||null,expiry:m.expiry?new Date(m.expiry).toISOString():null,
+    precision:m.precision||null,limits:m.limits||null}));
+  return {exchange:id,markets};
+ }));
+ const rows=results.flatMap(r=>r?.markets||[]).sort((a,b)=>a.base.localeCompare(b.base)||a.exchange.localeCompare(b.exchange));
+ const payload={generatedAt:new Date().toISOString(),kind,search:search||null,exchangeCount:ids.length,
+  respondingExchanges:results.filter(r=>r?.markets).length,totalContracts:rows.length,
+  markets:rows.slice(0,limit),truncated:rows.length>limit,
+  failures:results.filter(r=>!r?.markets).map(r=>({reason:r?.reason||'Exchange market catalog unavailable.'})),
+  note:'Market metadata discovery only. A listed contract may be inaccessible, inactive at the exchange API, restricted by geography/account or illiquid.'};
+ universeCache.set(cacheKey,{at:Date.now(),payload});if(universeCache.size>50)universeCache.delete(universeCache.keys().next().value);
+ res.set('Cache-Control','no-store');res.json({...payload,cache:'miss'});
+});
+
 futuresRouter.get('/compare', async (req,res) => {
   let parsed;
   try { parsed=splitSymbol(req.query.symbol || 'BTC/USDT:USDT'); }
@@ -142,7 +177,7 @@ futuresRouter.get('/compare', async (req,res) => {
   const key=[parsed.base,parsed.quote,parsed.settleHint,kind,depth,requestedBase,exchangeIds.join(',')].join('|');
   const hit=cache.get(key);
   if(hit&&Date.now()-hit.at<Number(process.env.JPTI_FUTURES_CACHE_MS||2000)) return res.json({...hit.payload,cache:'hit'});
-  const venues=await Promise.all(exchangeIds.map(id=>fetchVenue(id,parsed,kind,depth,requestedBase)));
+  const venues=await mapLimit(exchangeIds,8,id=>fetchVenue(id,parsed,kind,depth,requestedBase));
   const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);\n  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});\n  const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:requestedFee});
   payload.results=venues.map(v=>({exchange:v.exchange,status:v.status,reason:v.reason||null}));
   payload.cache='miss'; payload.cacheTtlMs=Number(process.env.JPTI_FUTURES_CACHE_MS||2000);
