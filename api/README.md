@@ -414,3 +414,12 @@ Write and read endpoints use the existing private API authorization policy. The 
 - `POST /api/assets/quote-consensus` — assess up to 30 timestamped provider observations. The quality gate rejects invalid prices, missing timestamps/currencies, future timestamps and stale observations; a median anchor flags outliers and refuses to combine different currencies.
 
 The Asset Intelligence workspace exposes the normalized venue universe and reports provider failures and result truncation. Exchange catalog metadata is not proof of account entitlement, liquidity, legal availability or execution support. The quote-consensus helper is a research reference and does not replace executable bid/ask depth checks. Non-CCXT asset classes remain dependent on their provider-specific endpoints and credentials.
+
+
+## Phase 13 — Explainable multi-agent research council
+
+Private authenticated endpoints:
+- `POST /api/council/evaluate` — evaluates timestamped instrument evidence through six deterministic specialist engines (trend, participation, microstructure, derivatives positioning, macro regime, liquidity/volatility risk), then reports weighted consensus, agreement, dissent, missing evidence and freshness.
+- `GET /api/council/history?limit=25` — reads recent persisted council evaluations from the append-only event store.
+
+The council blocks directional consensus when evidence is stale/missing or fewer than three directional specialists can evaluate. Its permissions are hard-coded research-only: paperEntryEligible=false, liveExecutionAuthorized=false and ordersCreated=0. This phase uses deterministic, explainable specialist logic; it does not claim to invoke external LLMs or train a machine-learning model. See the AI Intelligence workspace for evidence submission and history.
