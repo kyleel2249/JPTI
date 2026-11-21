@@ -7,7 +7,7 @@ function candles(count=240,mode='up'){
 }
 const account={equity:10000,dailyPnl:0,exposures:[]};
 const limits={maxDailyLoss:250,maxOrderNotional:2000,maxGrossExposure:5000,maxRiskPercent:1,maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000};
-function input(mode='up'){const c=candles(240,mode),last=c.at(-1);return{symbol:'BTC/USDT',exchange:'binance',timeframe:'1h',candles:c,account:{...account,currency:'USDT'},quote:{last:last.close,timestamp:new Date(last.timestamp+tf).toISOString()},account,limits,config:{minimumConfidence:55,minimumAgreement:.4}};}
+function input(mode='up'){const c=candles(240,mode),last=c.at(-1);return{symbol:'BTC/USDT',exchange:'binance',timeframe:'1h',candles:c,account:{...account,currency:'USDT'},quote:{last:last.close,timestamp:new Date(last.timestamp+tf).toISOString()},limits,config:{minimumConfidence:55,minimumAgreement:.4}};}
 test('normalizes only completed, chronological candles and rejects malformed history',()=>{
  const c=candles();assert.equal(normalizeAlphaCandles(c,'1h',c.at(-1).timestamp+tf).length,c.length);
  assert.equal(normalizeAlphaCandles(c,'1h',c.at(-1).timestamp+tf-1).length,c.length-1);
