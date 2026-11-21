@@ -222,6 +222,10 @@ export function evaluateAlphaPromotionReadiness({trades=[],replays=[],quoteCurre
   limitations:['Metrics are calculated for one quote currency at a time; convert exposures and PnL before comparing currencies.','Drawdown uses a fixed 10,000 quote-currency reference book and realized closed-trade PnL; it is not account equity drawdown.','The replay must be independently representative and sufficiently broad; this gate does not guarantee future results.']};
 }
 
+alphaSignalRouter.get('/replays',protectedRoute(async(req,res)=>{
+ const events=await readStoredEvents(100,'alpha-signal-replay'),includeSnapshot=String(req.query.includeSnapshot||'').toLowerCase()==='true';
+ res.json({count:events.length,replays:events.map(e=>{const payload={...e.payload};if(!includeSnapshot)delete payload.inputSnapshot;return payload;}).reverse(),snapshotsIncluded:includeSnapshot,liveExecutionAuthorized:false});
+}));
 alphaSignalRouter.get('/history',protectedRoute(async(_req,res)=>{
  const events=await readStoredEvents(500,'alpha-signal-evaluation');
  const includeSnapshot=String(_req.query.includeSnapshot||'').toLowerCase()==='true';
