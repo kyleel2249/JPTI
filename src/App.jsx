@@ -302,7 +302,7 @@ function App() {
     'Futures Intelligence': 'Cross-exchange futures pricing, order-book depth, funding and paper arbitrage research.',
     'Asset Intelligence': 'Normalized spot, perpetual, dated-futures, options and margin instrument discovery across supported venues.',
     'AI Intelligence': 'Signal evidence, market context and explainable analysis.',
-    'Institutional Market Intelligence': 'Shared chart-linked market evidence, regime, structure, liquidity, flow and scenarios.'
+    'Institutional Market Intelligence': 'Shared chart-linked market evidence, regime, structure, liquidity, flow and scenarios.',
     'Market Scanner': 'Configure market watchlists for scheduled live ticker monitoring.',
     'Financial & On-chain': 'Macro, digital-asset, provider and wallet intelligence.',
     'News & Events': 'News discovery and event context from connected sources.',
