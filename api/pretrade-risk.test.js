@@ -10,6 +10,10 @@ test('blocks stale quotes, excessive size, invalid stops and daily loss breaches
  const f=fixture();f.order.quoteTimestamp=new Date(now-60000).toISOString();f.order.quantity=1;f.order.stopPrice=51000;f.account.dailyPnl=-500;
  const r=evaluatePretradeRisk(f,now);assert.equal(r.decision,'blocked');assert.ok(r.failedChecks.includes('quote_freshness'));assert.ok(r.failedChecks.includes('per_order_notional'));assert.ok(r.failedChecks.includes('protective_stop'));assert.ok(r.failedChecks.includes('daily_loss_limit'));
 });
+test('fails closed when account exposure inventory is missing or malformed',()=>{
+ const f=fixture();delete f.account.exposures;assert.ok(evaluatePretradeRisk(f,now).failedChecks.includes('account_exposures'));
+ f.account.exposures=[{symbol:'ETH/USDT',marketValue:-100}];assert.ok(evaluatePretradeRisk(f,now).failedChecks.includes('account_exposures'));
+});
 test('fails closed when any required account or limit input is absent',()=>{
- const r=evaluatePretradeRisk({},now);assert.equal(r.decision,'blocked');assert.ok(r.failedChecks.length>=8);
+ const r=evaluatePretradeRisk({},now);assert.equal(r.decision,'blocked');assert.ok(r.failedChecks.length>=9);
 });
