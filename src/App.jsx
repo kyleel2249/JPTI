@@ -11,10 +11,11 @@ import ResearchCouncil from './ResearchCouncil.jsx';
 import PortfolioAllocation from './PortfolioAllocation.jsx';
 import MarketStream from './MarketStream.jsx';
 import Phase15To21Workspaces from './Phase15To21Workspaces.jsx';
+import AlphaSignalEngine from './AlphaSignalEngine.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
-  ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2,
+  ChevronRight, CircleHelp, Command, Cpu, Database, Gauge, Globe2, TrendingUp,
   LayoutDashboard, Menu, Network, Newspaper, Radio, RefreshCw, Search,
   Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Wallet, X, Zap
 } from 'lucide-react';
@@ -38,6 +39,7 @@ const navigation = [
   { label: 'Pre-trade Gate', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Strategy Registry', icon: Blocks, group: 'RESEARCH' },
   { label: 'Market Replay', icon: Activity, group: 'RESEARCH' },
+  { label: 'Alpha Signal Engine', icon: TrendingUp, group: 'RESEARCH' },
   { label: 'System Diagnostics', icon: Cpu, group: 'SYSTEM' },
   { label: 'Production Readiness', icon: ShieldCheck, group: 'SYSTEM' },
   { label: 'Institutional Governance', icon: ShieldCheck, group: 'OPERATIONS' },
@@ -308,6 +310,7 @@ function App() {
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
+    'Alpha Signal Engine': 'Explainable multi-model signals, deterministic fingerprints, confidence gates and risk-approved paper trading.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
     'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.',
@@ -419,6 +422,7 @@ function App() {
     if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
     if (page === 'Market Stream') return <MarketStream/>;
+    if (page === 'Alpha Signal Engine') return <AlphaSignalEngine/>;
     if (['Portfolio Stress','Pre-trade Gate','Strategy Registry','Market Replay','System Diagnostics','Production Readiness'].includes(page)) return <Phase15To21Workspaces key={page} page={page}/>;
     if (page === 'Asset Intelligence') return <AssetIntelligence/>;
     if (page === 'AI Intelligence') return <ResearchCouncil/>;
