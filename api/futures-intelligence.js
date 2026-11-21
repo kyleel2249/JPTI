@@ -46,7 +46,7 @@ function summarizeBook(book, requestedBase) {
   const sell = requestedBase ? topDepth(book.bids, requestedBase) : null;
   return { bestBid: positive(bid), bestAsk: positive(ask),
     spreadBps: positive(bid) && positive(ask) ? ((ask-bid)/((ask+bid)/2))*10000 : null,
-    requestedBase: requestedBase || null, buyDepth: buy, sellDepth: sell,
+    requestedAmount: requestedBase || null, buyDepth: buy, sellDepth: sell,
     timestamp: book.timestamp ? new Date(book.timestamp).toISOString() : null };
 }
 async function fetchVenue(id, parsed, kind, depth, requestedBase) {
@@ -62,7 +62,9 @@ async function fetchVenue(id, parsed, kind, depth, requestedBase) {
       else tasks.push(Promise.resolve({ fundingError:'Funding-rate capability unavailable for this contract.' }));
       const parts = await Promise.all(tasks);
       const data = Object.assign({}, ...parts), ticker = data.ticker || {};
-      const book = data.book ? summarizeBook(data.book, requestedBase) : null;
+      const requestedBookAmount = requestedBase && market.linear === true && positive(market.contractSize)
+        ? requestedBase / Number(market.contractSize) : null;
+      const book = data.book ? summarizeBook(data.book, requestedBookAmount) : null;
       const info = ticker.info || {};
       const mark = positive(ticker.mark) || positive(ticker.markPrice) || positive(info.markPrice) || null;
       const index = positive(ticker.index) || positive(ticker.indexPrice) || positive(info.indexPrice) || null;
