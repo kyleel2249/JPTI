@@ -139,6 +139,8 @@ function tradeMetrics(trades) {
 }
 export function runAlphaReplay(input={}, now=Date.now()) {
   const timeframe=input.timeframe||'1h',tf=timeframeMs(timeframe);if(!tf)throw new Error('Unsupported replay timeframe.');
+  const symbol=String(input.symbol||'').trim().toUpperCase(),exchange=String(input.exchange||'').trim().toLowerCase();
+  if(symbol&&!/^[A-Z0-9._-]{2,20}\\/[A-Z0-9._-]{2,20}$/.test(symbol))throw new Error('Replay symbol must use BASE/QUOTE format.');
   const candles=normalizeAlphaCandles(input.candles,timeframe,now),config=canonicalConfig(input.config),feeBps=input.feeBps==null?10:Number(input.feeBps),slippageBps=input.slippageBps==null?5:Number(input.slippageBps),initialCapital=input.initialCapital==null?10000:Number(input.initialCapital);
   if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>100)throw new Error('Fee and slippage assumptions must be between 0 and 100 basis points.');
   if(!Number.isFinite(initialCapital)||initialCapital<=0)throw new Error('Initial capital must be positive.');
@@ -166,7 +168,7 @@ export function runAlphaReplay(input={}, now=Date.now()) {
     trades.push(trade);capital+=pnl;activeUntil=exitIndex;
   }
   const inSample=trades.filter(t=>t.split==='in_sample'),outOfSample=trades.filter(t=>t.split==='out_of_sample');
-  return {engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),timeframe,parameters:{...config,feeBps,slippageBps,initialCapital},data:{candles:candles.length,first:new Date(candles[0].timestamp).toISOString(),last:new Date(candles.at(-1).timestamp).toISOString(),sha256:sha(candles),chronological:true,completedCandlesOnly:true},
+  return {engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),timeframe,market:{symbol:symbol||null,exchange:exchange||null,quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null},parameters:{...config,feeBps,slippageBps,initialCapital},data:{candles:candles.length,first:new Date(candles[0].timestamp).toISOString(),last:new Date(candles.at(-1).timestamp).toISOString(),sha256:sha(candles),quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null,chronological:true,completedCandlesOnly:true},
     overall:{...tradeMetrics(trades),endingCapital:round(initialCapital+trades.reduce((s,t)=>s+t.pnl,0),4)},inSample:tradeMetrics(inSample),outOfSample:tradeMetrics(outOfSample),
     trades:trades.slice(-500),validation:{split:'chronological 70/30 by entry candle',outOfSampleUsedForParameterSelection:false,fill:'next candle open',intrabarAmbiguity:'stop is assumed to execute first if stop and target are both touched in one candle',overlappingPositions:false},
     limitations:['Single instrument, long/short simulation with one open position at a time.','No exchange order-book queue, partial fills, market impact, funding, leverage or liquidation model.','Fixed fee and slippage assumptions; actual venue costs may differ.','OHLCV intrabar ordering is unknown; conservative stop-first handling is used.','Historical replay is not proof of future profitability or a production promotion certificate.']};
@@ -188,10 +190,36 @@ alphaSignalRouter.post('/evaluate',protectedRoute(async(req,res)=>{
  res.json({...result,persisted:true,duplicateEvaluation:existing.some(e=>e.payload?.signalId===result.signalId)});
 }));
 alphaSignalRouter.post('/replay',protectedRoute(async(req,res)=>{
- const result=runAlphaReplay(req.body||{}),id=sha([result.data.sha256,result.parameters,result.timeframe].join('|'));
+ const result=runAlphaReplay(req.body||{}),id=sha([result.data.sha256,result.parameters,result.timeframe,result.market].join('|'));
  await persistEvent('alpha-signal-replay','jpti-alpha-signal-engine','replay_completed',id,{id,...result},result.generatedAt);
  res.json({id,...result,persisted:true});
 }));
+export function evaluateAlphaPromotionReadiness({trades=[],replays=[],quoteCurrency,now=Date.now()}={}){
+ const currency=String(quoteCurrency||'').trim().toUpperCase();if(!/^[A-Z0-9]{2,10}$/.test(currency))throw new Error('A valid quoteCurrency is required for promotion assessment.');
+ const closed=trades.filter(t=>t.status==='closed'&&t.close&&String(t.market?.quoteCurrency||t.market?.symbol?.split('/')?.[1]||'').toUpperCase()===currency).sort((a,b)=>Date.parse(a.close.closedAt)-Date.parse(b.close.closedAt));
+ const wins=closed.filter(t=>Number(t.close.netPnl)>0),losses=closed.filter(t=>Number(t.close.netPnl)<0),grossProfit=wins.reduce((s,t)=>s+Number(t.close.netPnl),0),grossLoss=Math.abs(losses.reduce((s,t)=>s+Number(t.close.netPnl),0)),net=closed.reduce((s,t)=>s+Number(t.close.netPnl),0);
+ const profitFactor=grossLoss>0?grossProfit/grossLoss:null,expectancy=closed.length?net/closed.length:null;
+ let equity=10000,peak=equity,maxDrawdown=0;for(const t of closed){equity+=Number(t.close.netPnl);peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,(peak-equity)/peak);}
+ const first=closed[0]?.close?.closedAt,last=closed.at(-1)?.close?.closedAt,sampleDays=first&&last?Math.max(0,(Date.parse(last)-Date.parse(first))/86400000):0;
+ const traceable=closed.length>0&&closed.every(t=>Boolean(t.signalId&&t.signalFingerprint&&t.close.signalId===t.signalId&&t.liveExecutionAuthorized===false&&t.close.liveExecutionAuthorized===false));
+ const eligibleReplays=replays.filter(r=>String(r.data?.quoteCurrency||r.market?.quoteCurrency||'').toUpperCase()===currency).sort((a,b)=>Date.parse(b.generatedAt)-Date.parse(a.generatedAt));
+ const latestReplay=eligibleReplays[0]||null,oos=latestReplay?.outOfSample;
+ const checks=[
+  {id:'paper_sample_size',passed:closed.length>=30,actual:closed.length,required:30,detail:'At least 30 closed paper trades are required.'},
+  {id:'paper_observation_period',passed:sampleDays>=14,actual:round(sampleDays,2),required:14,detail:'Closed paper results must span at least 14 calendar days.'},
+  {id:'profit_factor',passed:profitFactor!==null&&profitFactor>=1.2,actual:profitFactor===null?null:round(profitFactor,3),required:1.2,detail:'Realized profit factor must be at least 1.20.'},
+  {id:'positive_expectancy',passed:expectancy!==null&&expectancy>0,actual:expectancy===null?null:round(expectancy,4),required:'> 0',detail:'Average realized net PnL per closed trade must be positive.'},
+  {id:'drawdown_control',passed:maxDrawdown*100<=10,actual:round(maxDrawdown*100,3),required:10,detail:'Sequential realized paper-equity drawdown must not exceed 10% of the 10,000 quote-currency reference book.'},
+  {id:'trade_traceability',passed:traceable,actual:closed.length,required:'all trades fingerprinted',detail:'Every closed paper trade must trace to its evaluated signal fingerprint and remain paper-only.'},
+  {id:'out_of_sample_replay',passed:Boolean(oos&&oos.trades>=10&&oos.netPnl>0&&oos.profitFactor!==null&&oos.profitFactor>=1.1),actual:oos?{trades:oos.trades,netPnl:oos.netPnl,profitFactor:oos.profitFactor}:null,required:'10+ OOS trades, positive PnL, PF >= 1.10',detail:'A same-quote-currency chronological out-of-sample replay must show at least 10 trades, positive PnL and PF >= 1.10.'}
+ ];
+ const failedChecks=checks.filter(c=>!c.passed).map(c=>c.id),eligible=failedChecks.length===0;
+ return {generatedAt:new Date(now).toISOString(),quoteCurrency:currency,decision:eligible?'candidate_for_independent_governance_review':'blocked',metrics:{closedTrades:closed.length,wins:wins.length,losses:losses.length,winRatePercent:closed.length?round(wins.length/closed.length*100,2):null,grossProfit:round(grossProfit,4),grossLoss:round(grossLoss,4),netPnl:round(net,4),profitFactor:profitFactor===null?null:round(profitFactor,3),expectancy:expectancy===null?null:round(expectancy,4),maxDrawdownPercent:round(maxDrawdown*100,3),sampleDays:round(sampleDays,2)},checks,failedChecks,
+  permissions:{eligibleForIndependentGovernanceReview:eligible,productionExecutionAuthorized:false,liveExecutionAuthorized:false,ordersCreated:0},
+  note:'Passing this evidence gate only makes the strategy a candidate for separate human governance review. It does not certify profitability, authorize production or live trading, or bypass JPTI strategy-registry and institutional-governance controls.',
+  limitations:['Metrics are calculated for one quote currency at a time; convert exposures and PnL before comparing currencies.','Drawdown uses a fixed 10,000 quote-currency reference book and realized closed-trade PnL; it is not account equity drawdown.','The replay must be independently representative and sufficiently broad; this gate does not guarantee future results.']};
+}
+
 alphaSignalRouter.get('/history',protectedRoute(async(_req,res)=>{
  const events=await readStoredEvents(500,'alpha-signal-evaluation');
  res.json({count:events.length,signals:events.map(e=>e.payload).reverse(),liveExecutionAuthorized:false});
@@ -242,6 +270,14 @@ alphaSignalRouter.post('/paper/close',protectedRoute(async(req,res)=>{
  const close={tradeId,signalId:intent.signalId,closedAt:new Date().toISOString(),exitPrice:round(exitPrice),fees:round(fees),grossPnl:round(gross,6),netPnl:round(pnl,6),returnPercent:round(pnl/(intent.entry*intent.quantity)*100,4),reason:String(req.body?.reason||'operator_close').slice(0,80),liveExecutionAuthorized:false,exchangeOrdersCreated:0};
  await persistEvent('alpha-paper-close','jpti-alpha-paper','paper_trade_closed',tradeId,close,close.closedAt);
  res.json({...close,persisted:true});
+}));
+alphaSignalRouter.get('/promotion-readiness',protectedRoute(async(req,res)=>{
+ const quoteCurrency=String(req.query.quoteCurrency||'').trim().toUpperCase();
+ const [intents,closes,replayEvents]=await Promise.all([readStoredEvents(10000,'alpha-paper-intent'),readStoredEvents(10000,'alpha-paper-close'),readStoredEvents(1000,'alpha-signal-replay')]);
+ const closed=new Map(closes.map(e=>[e.payload.tradeId,e.payload]));
+ const trades=intents.map(e=>({...e.payload,close:closed.get(e.payload.tradeId)||null,status:closed.has(e.payload.tradeId)?'closed':'open'}));
+ const result=evaluateAlphaPromotionReadiness({trades,replays:replayEvents.map(e=>e.payload),quoteCurrency});
+ res.json(result);
 }));
 alphaSignalRouter.get('/paper/ledger',protectedRoute(async(_req,res)=>{
  const [intents,closes,marks]=await Promise.all([readStoredEvents(10000,'alpha-paper-intent'),readStoredEvents(10000,'alpha-paper-close'),readStoredEvents(20000,'alpha-paper-mark')]),closed=new Map(closes.map(e=>[e.payload.tradeId,e.payload])),latestMarks=new Map(marks.map(e=>[e.payload.tradeId,e.payload]));

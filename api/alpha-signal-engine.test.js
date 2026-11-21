@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAlphaSignal, evaluatePaperExit, normalizeAlphaCandles, runAlphaReplay } from './alpha-signal-engine.js';
+import { evaluateAlphaPromotionReadiness, evaluateAlphaSignal, evaluatePaperExit, normalizeAlphaCandles, runAlphaReplay } from './alpha-signal-engine.js';
 const start=1700000000000,tf=3600000;
 function candles(count=240,mode='up'){
  return Array.from({length:count},(_,i)=>{const trend=mode==='up'?i*.16:mode==='down'?-i*.16:Math.sin(i/5)*2;const close=100+trend+Math.sin(i/3)*.35;return{timestamp:start+i*tf,open:close-.08,high:close+.45,low:close-.45,close,volume:1000+(i%15)*80};});
@@ -31,11 +31,12 @@ test('fails closed when account exposure inventory is omitted',()=>{
  assert.equal(r.riskChecks.find(x=>x.id==='account_exposures').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
 });
 test('replay is reproducible and reports separate chronological out-of-sample metrics',()=>{
- const c=candles(260);const a={candles:c,timeframe:'1h',config:{minimumConfidence:50,minimumAgreement:.3},feeBps:10,slippageBps:5};
+ const c=candles(260);const a={candles:c,timeframe:'1h',symbol:'BTC/USDT',exchange:'binance',config:{minimumConfidence:50,minimumAgreement:.3},feeBps:10,slippageBps:5};
  const x=runAlphaReplay(a,start+261*tf),y=runAlphaReplay(a,start+261*tf);
  assert.deepEqual(x.trades,y.trades);assert.equal(x.data.sha256,y.data.sha256);assert.equal(x.validation.split,'chronological 70/30 by entry candle');
- assert.equal(x.validation.outOfSampleUsedForParameterSelection,false);assert.ok(Number.isFinite(x.overall.endingCapital));
+ assert.equal(x.validation.outOfSampleUsedForParameterSelection,false);assert.equal(x.data.quoteCurrency,'USDT');assert.ok(Number.isFinite(x.overall.endingCapital));
 });
+test('promotion gate requires measured paper sample, positive expectancy, controlled drawdown and OOS replay',()=>{const trades=Array.from({length:30},(_,i)=>({status:'closed',signalId:'alpha_'+String(i).padStart(32,'0'),signalFingerprint:'fingerprint-'+i,liveExecutionAuthorized:false,market:{quoteCurrency:'USDT'},close:{signalId:'alpha_'+String(i).padStart(32,'0'),closedAt:new Date(start+i*86400000).toISOString(),netPnl:i%5===0?-10:20,liveExecutionAuthorized:false}}));const replay={generatedAt:new Date(start+30*86400000).toISOString(),data:{quoteCurrency:'USDT'},outOfSample:{trades:12,netPnl:120,profitFactor:1.5}};const ready=evaluateAlphaPromotionReadiness({trades,replays:[replay],quoteCurrency:'USDT',now:start+31*86400000});assert.equal(ready.decision,'candidate_for_independent_governance_review');assert.equal(ready.permissions.liveExecutionAuthorized,false);const blocked=evaluateAlphaPromotionReadiness({trades:trades.slice(0,10),replays:[],quoteCurrency:'USDT',now:start+31*86400000});assert.equal(blocked.decision,'blocked');assert.ok(blocked.failedChecks.includes('paper_sample_size'));});
 test('paper exit monitor closes only when stop or second target is crossed',()=>{const trade={direction:'buy',stopLoss:95,takeProfitTwo:110};assert.equal(evaluatePaperExit(trade,94),'stop_loss');assert.equal(evaluatePaperExit(trade,111),'take_profit_2');assert.equal(evaluatePaperExit(trade,100),null);const short={direction:'sell',stopLoss:105,takeProfitTwo:90};assert.equal(evaluatePaperExit(short,106),'stop_loss');assert.equal(evaluatePaperExit(short,89),'take_profit_2');});
 test('rejects invalid replay assumptions and timeframe',()=>{
  assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'2m'},start+241*tf),/Unsupported replay timeframe/);
