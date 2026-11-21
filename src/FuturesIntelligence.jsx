@@ -6,7 +6,8 @@ const number=value=>value==null||!Number.isFinite(Number(value))?'—':Number(va
 const pct=value=>value==null?'—':Number(value).toFixed(3)+'%';
 export default function FuturesIntelligence(){
  const [symbol,setSymbol]=useState('BTC/USDT:USDT'),[kind,setKind]=useState('perpetual'),[venues,setVenues]=useState(DEFAULT_VENUES),[amount,setAmount]=useState('0.01'),[fee,setFee]=useState('6');
- const [catalog,setCatalog]=useState(null),[data,setData]=useState(null),[funding,setFunding]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[auto,setAuto]=useState(true),[updated,setUpdated]=useState(null);
+ const [catalog,setCatalog]=useState(null),[data,setData]=useState(null),[funding,setFunding]=useState(null),[universe,setUniverse]=useState(null),[universeBusy,setUniverseBusy]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[auto,setAuto]=useState(true),[updated,setUpdated]=useState(null);
+ const discover=useCallback(async()=>{setUniverseBusy(true);setError('');try{const base=symbol.split('/')[0].split(':')[0];const q=new URLSearchParams({kind,search:base||'',limit:'500'});const r=await apiFetch('/api/futures/universe?'+q,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Contract discovery failed');setUniverse(d);}catch(e){setError(e.message);}finally{setUniverseBusy(false);}},[symbol,kind]);
  const load=useCallback(async()=>{
   setBusy(true);setError('');
   try{
@@ -27,15 +28,16 @@ export default function FuturesIntelligence(){
    <input value={symbol} onChange={e=>setSymbol(e.target.value)} aria-label="Contract symbol" placeholder="BTC/USDT:USDT"/>
    <select value={kind} onChange={e=>setKind(e.target.value)}><option value="perpetual">Perpetual swaps</option><option value="dated">Dated futures</option><option value="any">Any derivative</option></select>
    <input value={venues} onChange={e=>setVenues(e.target.value)} aria-label="Exchange IDs" placeholder="binance,bybit,okx"/>
-   <button onClick={load} disabled={busy}>{busy?'Scanning…':'Refresh comparison'}</button>
+   <button onClick={load} disabled={busy}>{busy?'Scanning…':'Refresh comparison'}</button><button type="button" onClick={discover} disabled={universeBusy}>{universeBusy?'Discovering…':'Discover contracts'}</button>
   </div>
   <div className="news-search">
    <input type="number" min="0" step="0.0001" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Base amount for depth"/>
    <input type="number" min="0" max="100" step="0.1" value={fee} onChange={e=>setFee(e.target.value)} placeholder="Estimated taker fee bps / side"/>
-   <label className="subtle-note"><input type="checkbox" checked={auto} onChange={e=>setAuto(e.target.checked)}/> Auto-refresh every 15 seconds</label>
+   <label className="subtle-note"><input type="checkbox" checked={auto} onChange={e=>setAuto(e.target.checked)}/> Auto-refresh (15s selected venues · 60s all venues)</label>
    <span className="subtle-note">{updated?'Updated '+updated.toLocaleTimeString():'Awaiting market data'}</span>
   </div>
   {error&&<p className="quote-error">{error}</p>}
+  {universe&&<><div className="section-heading"><div><span className="eyebrow">ALL-VENUE CONTRACT DISCOVERY</span><h3>{number(universe.totalContracts)} listed contracts · {universe.respondingExchanges} exchanges responded</h3></div></div><div className="scanner-table"><div><span>EXCHANGE</span><span>CONTRACT</span><span>SETTLEMENT</span><span>STRUCTURE</span><span>TYPE</span></div>{universe.markets.slice(0,30).map((m,i)=><div key={m.exchange+'-'+m.symbol+'-'+i}><b>{m.exchange}</b><span>{m.symbol}</span><span>{m.settle||'—'}</span><span>{m.linear?'Linear':m.inverse?'Inverse':'Other'}</span><span>{m.kind}</span></div>)}</div><p className="subtle-note">{universe.truncated?'Showing first 500 matching contracts. ':''}{universe.note}</p></>}
   <div className="quote-consensus-stats">
    <div><span>MEDIAN LAST PRICE</span><b>{number(data?.priceConsensus?.medianLast)}</b></div>
    <div><span>MEDIAN MARK PRICE</span><b>{number(data?.priceConsensus?.medianMark)}</b></div>
