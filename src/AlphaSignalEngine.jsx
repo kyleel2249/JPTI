@@ -33,7 +33,7 @@ export default function AlphaSignalEngine(){
    const response=await apiFetch('/api/alpha/evaluate',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
    const data=await response.json();if(!response.ok)throw new Error(data.error||'Alpha analysis failed.');setResult(data);await loadLedger();
   }catch(e){setError(e.message);}finally{setBusy(false);}
- },[getMarketData,equity,dailyPnl,maxNotional,riskPercent,apiToken,exchange,timeframe,loadLedger]);
+ },[getMarketData,equity,dailyPnl,maxNotional,riskPercent,apiToken,exchange,timeframe,loadLedger,inventoryConfirmed,exposuresJson]);
  const createPaper=useCallback(async()=>{
   if(!result?.signalId)return;setPaperBusy(true);setError('');
   try{const r=await apiFetch('/api/alpha/paper/intent',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify({signalId:result.signalId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Paper intent rejected.');await loadLedger();}catch(e){setError(e.message);}finally{setPaperBusy(false);}
