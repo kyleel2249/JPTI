@@ -56,8 +56,10 @@ marketStreamRouter.get('/market',async(req,res)=>{
   };
   send('status',{status:'connected',transport:'ccxt-rest-polling-sse',exchange:options.exchange,symbol:options.symbol,intervalMs:options.intervalMs});
   await sample();
-  timer=setInterval(sample,options.intervalMs);
-  heartbeat=setInterval(()=>send('heartbeat',{at:new Date().toISOString()}),15000);
+  if(!closed){
+   timer=setInterval(sample,options.intervalMs);
+   heartbeat=setInterval(()=>send('heartbeat',{at:new Date().toISOString()}),15000);
+  }
  }catch(error){
   send('error',{message:error.message,status:error.status||502});
   await close();
