@@ -180,7 +180,9 @@ futuresRouter.get('/compare', async (req,res) => {
   const hit=cache.get(key);
   if(hit&&Date.now()-hit.at<Number(process.env.JPTI_FUTURES_CACHE_MS||2000)) return res.json({...hit.payload,cache:'hit'});
   const venues=await mapLimit(exchangeIds,8,id=>fetchVenue(id,parsed,kind,depth,requestedBase));
-  const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);\n  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});\n  const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:requestedFee});
+  const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);
+  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});
+  const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:requestedFee});
   payload.results=venues.map(v=>({exchange:v.exchange,status:v.status,reason:v.reason||null}));
   payload.cache='miss'; payload.cacheTtlMs=Number(process.env.JPTI_FUTURES_CACHE_MS||2000);
   cache.set(key,{at:Date.now(),payload}); if(cache.size>100)cache.delete(cache.keys().next().value);
