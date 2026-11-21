@@ -87,7 +87,7 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   if(!/^[a-z0-9_-]{2,30}$/.test(exchange)) throw new Error('A valid exchange identifier is required.');
   const tf=timeframeMs(timeframe);if(!tf)throw new Error('Unsupported timeframe.');
   const candles=normalizeAlphaCandles(input.candles,timeframe,now),last=candles.at(-1),config=canonicalConfig(input.config),account=input.account||{},limits=input.limits||{},quoteCurrency=symbol.split('/')[1];
-  const marketHash=sha(candles),configHash=sha(config),evidence=buildEvidence(candles);
+  const marketHash=sha(candles),configHash=sha(config),riskHash=sha({account,limits}),evidence=buildEvidence(candles);
   const quote=input.quote||{},quotePrice=Number(quote.last),quoteTime=Date.parse(String(quote.timestamp||''));
   const quoteAgeMs=Number.isFinite(quoteTime)?now-quoteTime:null,quoteValid=Number.isFinite(quotePrice)&&quotePrice>0&&quoteAgeMs!==null&&quoteAgeMs>=-5000&&quoteAgeMs<=15000;
   const candleAgeMs=now-(last.timestamp+tf);
@@ -120,14 +120,15 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
   const qualityPassed=qualityChecks.every(c=>c.passed),riskPassed=Boolean(pretrade?.permissions?.paperIntentEligible);
   const eligible=qualityPassed&&riskPassed;
   const quoteHash=sha({last:quotePrice,timestamp:quoteTime});
-  const fingerprint=sha([ALPHA_ENGINE_VERSION,symbol,exchange,timeframe,last.timestamp,marketHash,quoteHash,configHash].join('|'));
+  const fingerprint=sha([ALPHA_ENGINE_VERSION,symbol,exchange,timeframe,last.timestamp,marketHash,quoteHash,configHash,riskHash].join('|'));
   const signalId='alpha_'+fingerprint.slice(0,32);
   return {signalId,engine:'JPTI Alpha Signal Engine',engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),
     market:{exchange,symbol,timeframe,quoteCurrency,lastCompletedCandleAt:new Date(last.timestamp).toISOString(),candleAgeMs,completedCandles:candles.length,referencePrice:round(entry),quoteAgeMs},
     direction:side,confidence:evidence.confidence,confidenceType:'heuristic_consensus_not_probability',ensembleScore:evidence.score,modelAgreement:evidence.directionalAgreement,
     marketRegime:evidence.marketRegime,levels:{entry:round(entry),stopLoss:stopPrice===null?null:round(stopPrice),takeProfitOne:tp1===null?null:round(tp1),takeProfitTwo:tp2===null?null:round(tp2),riskRewardOne:config.targetOneR,riskRewardTwo:config.targetTwoR,atrStopMultiple:config.atrStopMultiple},
     sizing:{riskPercent:config.riskPercent,riskBudget:riskBudget===null?null:round(riskBudget),quantity:quantity===null?null:round(quantity),notional:quantity===null?null:round(quantity*entry),method:'risk budget divided by ATR stop distance, capped by configured per-order notional'},
-    evidence:{...evidence,marketDataSha256:marketHash,quoteSha256:quoteHash,configurationSha256:configHash,signalFingerprint:fingerprint,usedOnlyCompletedCandles:true,lookaheadBias:'none_in_signal_calculation'},
+    evidence:{...evidence,marketDataSha256:marketHash,quoteSha256:quoteHash,configurationSha256:configHash,riskConfigurationSha256:riskHash,signalFingerprint:fingerprint,usedOnlyCompletedCandles:true,lookaheadBias:'none_in_signal_calculation'},
+    inputSnapshot:{candles,quote:{last:Number.isFinite(quotePrice)?quotePrice:null,timestamp:quote.timestamp||null},config,account,limits,sha256:sha({candles,quote:{last:Number.isFinite(quotePrice)?quotePrice:null,timestamp:quote.timestamp||null},config,account,limits})},
     qualityChecks,riskChecks,pretradeRisk:pretrade,decision:eligible?'paper_intent_eligible':'blocked',
     permissions:{paperIntentEligible:eligible,liveExecutionAuthorized:false,exchangeOrdersCreated:0},
     limitations:['Confidence is a deterministic consensus heuristic, not a statistically calibrated probability.','The five specialist models are deterministic technical rules, not autonomous LLM agents.','Signal evaluation uses completed OHLCV candles and a separately timestamped exchange quote.','Paper eligibility is not a live-order authorization or a profitability guarantee.']};
@@ -168,7 +169,8 @@ export function runAlphaReplay(input={}, now=Date.now()) {
     trades.push(trade);capital+=pnl;activeUntil=exitIndex;
   }
   const inSample=trades.filter(t=>t.split==='in_sample'),outOfSample=trades.filter(t=>t.split==='out_of_sample');
-  return {engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),timeframe,market:{symbol:symbol||null,exchange:exchange||null,quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null},parameters:{...config,feeBps,slippageBps,initialCapital},data:{candles:candles.length,first:new Date(candles[0].timestamp).toISOString(),last:new Date(candles.at(-1).timestamp).toISOString(),sha256:sha(candles),quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null,chronological:true,completedCandlesOnly:true},
+  const inputSnapshot={candles,config,feeBps,slippageBps,initialCapital,symbol:symbol||null,exchange:exchange||null,timeframe,sha256:sha({candles,config,feeBps,slippageBps,initialCapital,symbol,exchange,timeframe})};
+  return {engineVersion:ALPHA_ENGINE_VERSION,generatedAt:new Date(now).toISOString(),timeframe,market:{symbol:symbol||null,exchange:exchange||null,quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null},parameters:{...config,feeBps,slippageBps,initialCapital},inputSnapshot,data:{candles:candles.length,first:new Date(candles[0].timestamp).toISOString(),last:new Date(candles.at(-1).timestamp).toISOString(),sha256:sha(candles),quoteCurrency:symbol?symbol.split('/')[1]:String(input.quoteCurrency||'').toUpperCase()||null,chronological:true,completedCandlesOnly:true},
     overall:{...tradeMetrics(trades),endingCapital:round(initialCapital+trades.reduce((s,t)=>s+t.pnl,0),4)},inSample:tradeMetrics(inSample),outOfSample:tradeMetrics(outOfSample),
     trades:trades.slice(-500),validation:{split:'chronological 70/30 by entry candle',outOfSampleUsedForParameterSelection:false,fill:'next candle open',intrabarAmbiguity:'stop is assumed to execute first if stop and target are both touched in one candle',overlappingPositions:false},
     limitations:['Single instrument, long/short simulation with one open position at a time.','No exchange order-book queue, partial fills, market impact, funding, leverage or liquidation model.','Fixed fee and slippage assumptions; actual venue costs may differ.','OHLCV intrabar ordering is unknown; conservative stop-first handling is used.','Historical replay is not proof of future profitability or a production promotion certificate.']};
@@ -190,7 +192,7 @@ alphaSignalRouter.post('/evaluate',protectedRoute(async(req,res)=>{
  res.json({...result,persisted:true,duplicateEvaluation:existing.some(e=>e.payload?.signalId===result.signalId)});
 }));
 alphaSignalRouter.post('/replay',protectedRoute(async(req,res)=>{
- const result=runAlphaReplay(req.body||{}),id=sha([result.data.sha256,result.parameters,result.timeframe,result.market].join('|'));
+ const result=runAlphaReplay(req.body||{}),id=sha([result.inputSnapshot.sha256,result.parameters,result.timeframe,result.market].join('|'));
  await persistEvent('alpha-signal-replay','jpti-alpha-signal-engine','replay_completed',id,{id,...result},result.generatedAt);
  res.json({id,...result,persisted:true});
 }));
@@ -222,7 +224,8 @@ export function evaluateAlphaPromotionReadiness({trades=[],replays=[],quoteCurre
 
 alphaSignalRouter.get('/history',protectedRoute(async(_req,res)=>{
  const events=await readStoredEvents(500,'alpha-signal-evaluation');
- res.json({count:events.length,signals:events.map(e=>e.payload).reverse(),liveExecutionAuthorized:false});
+ const includeSnapshot=String(_req.query.includeSnapshot||'').toLowerCase()==='true';
+ res.json({count:events.length,signals:events.map(e=>{const payload={...e.payload};if(!includeSnapshot)delete payload.inputSnapshot;return payload;}).reverse(),snapshotsIncluded:includeSnapshot,liveExecutionAuthorized:false});
 }));
 alphaSignalRouter.post('/paper/intent',protectedRoute(async(req,res)=>{
  const signalId=String(req.body?.signalId||'');if(!/^alpha_[a-f0-9]{32}$/.test(signalId))throw new Error('A valid evaluated Alpha signalId is required.');
