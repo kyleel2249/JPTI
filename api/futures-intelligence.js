@@ -70,7 +70,7 @@ async function fetchVenue(id, parsed, kind, depth, requestedBase) {
           inverse:market.inverse === true, contractSize:market.contractSize || null,
           precision:market.precision || null, limits:market.limits || null },
         prices:{ last, mark, index, bid, ask, tickerTimestamp:ticker.timestamp ? new Date(ticker.timestamp).toISOString():null },
-        book, funding:{ rate:fundingRate, intervalHours:positive(funding.interval) ? Number(funding.interval):null,
+        book, funding:{ rate:fundingRate, intervalHours:positive(funding.interval) ? Number(funding.interval) : (typeof funding.interval === 'string' && /^\\d+(?:\\.\\d+)?h$/i.test(funding.interval) ? Number.parseFloat(funding.interval) : null),
           nextFundingAt:fundingTimestamp ? new Date(fundingTimestamp).toISOString():null, timestamp:funding.timestamp ? new Date(funding.timestamp).toISOString():null },
         errors:{ ticker:data.tickerError || null, orderBook:data.bookError || null, funding:data.fundingError || null } };
     });
@@ -143,7 +143,7 @@ futuresRouter.get('/compare', async (req,res) => {
   const hit=cache.get(key);
   if(hit&&Date.now()-hit.at<Number(process.env.JPTI_FUTURES_CACHE_MS||2000)) return res.json({...hit.payload,cache:'hit'});
   const venues=await Promise.all(exchangeIds.map(id=>fetchVenue(id,parsed,kind,depth,requestedBase)));
-  const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS||6)});
+  const requestedFee = req.query.takerFeeBps === undefined ? Number(process.env.JPTI_FUTURES_ESTIMATED_TAKER_FEE_BPS || 6) : Number(req.query.takerFeeBps);\n  if (!Number.isFinite(requestedFee) || requestedFee < 0 || requestedFee > 100) return res.status(400).json({error:'takerFeeBps must be between 0 and 100.'});\n  const payload=buildFuturesComparison(req.query.symbol||'BTC/USDT:USDT',venues,{takerFeeBps:requestedFee});
   payload.results=venues.map(v=>({exchange:v.exchange,status:v.status,reason:v.reason||null}));
   payload.cache='miss'; payload.cacheTtlMs=Number(process.env.JPTI_FUTURES_CACHE_MS||2000);
   cache.set(key,{at:Date.now(),payload}); if(cache.size>100)cache.delete(cache.keys().next().value);
