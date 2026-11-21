@@ -8,6 +8,7 @@ import InstitutionalGovernance from './InstitutionalGovernance.jsx';
 import FuturesIntelligence from './FuturesIntelligence.jsx';
 import AssetIntelligence from './AssetIntelligence.jsx';
 import ResearchCouncil from './ResearchCouncil.jsx';
+import PortfolioAllocation from './PortfolioAllocation.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -29,6 +30,7 @@ const navigation = [
   { label: 'News & Events', icon: Newspaper, group: 'INTELLIGENCE' },
   { label: 'Portfolio & Ledger', icon: Wallet, group: 'OPERATIONS' },
   { label: 'Risk Management', icon: ShieldCheck, group: 'OPERATIONS' },
+  { label: 'Portfolio Allocation', icon: Gauge, group: 'OPERATIONS' },
   { label: 'Institutional Governance', icon: ShieldCheck, group: 'OPERATIONS' },
   { label: 'Trading Bots', icon: Bot, group: 'OPERATIONS' },
   { label: 'Universal Engine', icon: Network, group: 'RESEARCH' },
@@ -292,6 +294,7 @@ function App() {
     'News & Events': 'News discovery and event context from connected sources.',
     'Portfolio & Ledger': 'Append-only transaction events and reconciliation readiness.',
     'Risk Management': 'Execution safeguards, service readiness and risk policy.',
+    'Portfolio Allocation': 'Covariance-aware long-only risk budgeting and constrained portfolio weights.',
     'Institutional Governance': 'Strategy scorecards, T-Bots paper-entry authorization, execution feedback and fail-closed safety controls.',
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
@@ -408,6 +411,7 @@ function App() {
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
     if (page === 'Asset Intelligence') return <AssetIntelligence/>;
     if (page === 'AI Intelligence') return <ResearchCouncil/>;
+    if (page === 'Portfolio Allocation') return <PortfolioAllocation/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
