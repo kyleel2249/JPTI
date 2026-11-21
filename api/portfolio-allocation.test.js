@@ -22,6 +22,12 @@ test('rejects unaligned or insufficient return observations',()=>{
  const f=fixture();f.assets[1].returns=f.assets[1].returns.slice(0,20);
  assert.throws(()=>calculateRiskParityAllocation(f),/30 aligned/);
 });
+test('supports low-volatility series and rejects duplicate instruments',()=>{
+ const f=fixture();f.assets.forEach((a,i)=>a.returns=a.returns.map(v=>v*1e-5*(i+1)));
+ const r=calculateRiskParityAllocation(f);assert.ok(Math.abs(r.weights.reduce((s,x)=>s+x.weight,0)-1)<1e-7);
+ const duplicate=fixture();duplicate.assets[1].symbol=duplicate.assets[0].symbol;
+ assert.throws(()=>calculateRiskParityAllocation(duplicate),/unique, non-empty symbol/);
+});
 test('rejects impossible allocation bounds and zero volatility assets',()=>{
  const f=fixture();f.assets[0].maxWeight=.2;f.assets[1].maxWeight=.2;f.assets[2].maxWeight=.2;
  assert.throws(()=>calculateRiskParityAllocation(f),/cannot sum to 100/);
