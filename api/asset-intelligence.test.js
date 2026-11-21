@@ -6,11 +6,13 @@ test('normalizes CCXT spot and derivatives into a common instrument schema',()=>
  const spot=normalizeAssetMarket('binance',{id:'BTCUSDT',symbol:'BTC/USDT',base:'BTC',quote:'USDT',spot:true,active:true});
  const perp=normalizeAssetMarket('bybit',{id:'BTCUSDT',symbol:'BTC/USDT:USDT',base:'BTC',quote:'USDT',settle:'USDT',swap:true,contract:true,linear:true,contractSize:.001,active:true});
  assert.equal(spot.assetClass,'crypto_spot');assert.equal(perp.assetClass,'crypto_perpetual');assert.equal(perp.contractSize,.001);assert.equal(perp.linear,true);
+ const margin=normalizeAssetMarket('binance',{id:'ETHUSDT',symbol:'ETH/USDT',base:'ETH',quote:'USDT',spot:true,margin:true,active:true});assert.equal(margin.marginEnabled,true);
 });
 
 test('rejects stale, future, missing and invalid quote evidence',()=>{
  const now=Date.now();
  assert.equal(assessQuoteQuality({provider:'a',price:10,currency:'USD',timestamp:now},now).valid,true);
+ assert.equal(assessQuoteQuality({provider:'iso',price:10,currency:'USD',timestamp:new Date(now).toISOString()},now).valid,true);
  assert.ok(assessQuoteQuality({provider:'b',price:10,currency:'USD',timestamp:now-60000},now).reasons.includes('stale_observation'));
  assert.ok(assessQuoteQuality({provider:'c',price:10,currency:'USD',timestamp:now+30000},now).reasons.includes('future_timestamp'));
  assert.ok(assessQuoteQuality({provider:'d',price:0,currency:'USD',timestamp:now},now).reasons.includes('invalid_or_missing_price'));
