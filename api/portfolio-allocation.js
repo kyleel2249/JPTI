@@ -8,7 +8,7 @@ const finite=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?
 const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
 
 function projectBoundedSimplex(values,mins,maxs){
- let lo=-2,hi=2;
+ let lo=Math.min(...values.map((v,i)=>v-maxs[i])),hi=Math.max(...values.map((v,i)=>v-mins[i]));
  for(let n=0;n<100;n++){
   const mid=(lo+hi)/2,sum=values.reduce((s,v,i)=>s+clamp(v-mid,mins[i],maxs[i]),0);
   if(sum>1)lo=mid;else hi=mid;
@@ -29,6 +29,8 @@ function portfolioVariance(weights,cov){
 export function calculateRiskParityAllocation(input={}){
  const assets=Array.isArray(input.assets)?input.assets:[];
  if(assets.length<2||assets.length>20)throw new Error('Provide between 2 and 20 assets.');
+ const symbols=assets.map(a=>String(a.symbol||'').trim().toUpperCase());
+ if(symbols.some(s=>!s)||new Set(symbols).size!==symbols.length)throw new Error('Each asset requires a unique, non-empty symbol.');
  const currencies=[...new Set(assets.map(a=>String(a.quoteCurrency||'').trim().toUpperCase()))];
  if(currencies.length!==1||!currencies[0])throw new Error('All assets must share one explicit quote currency. Cross-currency allocation is not supported.');
  const series=assets.map(a=>Array.isArray(a.returns)?a.returns.map(finite):[]);
