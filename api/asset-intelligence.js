@@ -6,6 +6,7 @@ const DEFAULT_VENUES = ['binance','bybit','okx','bitget'];
 const VALID_CLASSES = new Set(['all','crypto_spot','crypto_perpetual','crypto_future','crypto_option','margin']);
 const finite = value => value === null || value === undefined || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 const positive = value => { const n=finite(value); return n !== null && n > 0 ? n : null; };
+const timestampMs = value => { const numeric=finite(value); if(numeric!==null)return numeric; const parsed=Date.parse(String(value||'')); return Number.isFinite(parsed)?parsed:null; };
 
 export function normalizeAssetMarket(exchangeId, market) {
   const classification = classifyMarket(market);
@@ -14,7 +15,7 @@ export function normalizeAssetMarket(exchangeId, market) {
     id: [exchangeId,market.id || market.symbol].join(':'),
     exchange: exchangeId, symbol: market.symbol, marketId: market.id || null,
     base: market.base || null, quote: market.quote || null, settle: market.settle || null,
-    assetClass, instrumentType: market.option ? 'option' : market.swap ? 'perpetual_swap' : market.future ? 'dated_future' : market.spot ? 'spot' : classification.type,
+    assetClass, marginEnabled:classification.categories.includes('margin'), instrumentType: market.option ? 'option' : market.swap ? 'perpetual_swap' : market.future ? 'dated_future' : market.spot ? 'spot' : classification.type,
     active: market.active !== false, contract: market.contract === true,
     linear: market.linear === true, inverse: market.inverse === true,
     contractSize: positive(market.contractSize), expiry: market.expiry ? new Date(market.expiry).toISOString() : null,
@@ -25,7 +26,7 @@ export function normalizeAssetMarket(exchangeId, market) {
 }
 
 export function assessQuoteQuality(observation, now=Date.now(), maxAgeMs=30000) {
-  const price=positive(observation?.price), timestamp=finite(observation?.timestamp);
+  const price=positive(observation?.price), timestamp=timestampMs(observation?.timestamp);
   const ageMs=timestamp===null?null:now-timestamp;
   const reasons=[];
   if(!price) reasons.push('invalid_or_missing_price');
@@ -76,7 +77,7 @@ assetIntelligenceRouter.get('/universe',async(req,res)=>{
  const limit=Math.max(1,Math.min(500,Number.parseInt(req.query.limit||'200',10)||200));
  const results=await mapLimit(exchanges,4,id=>withExchange(id,async exchange=>{
   const rows=Object.values(exchange.markets||{}).filter(m=>m.active!==false).map(m=>normalizeAssetMarket(id,m))
-   .filter(m=>(assetClass==='all'||m.assetClass===assetClass)&&(!search||[m.symbol,m.base,m.quote,m.settle].some(v=>String(v||'').toUpperCase().includes(search))));
+   .filter(m=>(assetClass==='all'||m.assetClass===assetClass||(assetClass==='margin'&&m.marginEnabled))&&(!search||[m.symbol,m.base,m.quote,m.settle].some(v=>String(v||'').toUpperCase().includes(search))));
   return {exchange:id,status:'ok',marketCount:rows.length,markets:rows};
  }));
  const markets=results.flatMap(r=>r.markets||[]).sort((a,b)=>a.exchange.localeCompare(b.exchange)||a.symbol.localeCompare(b.symbol));
