@@ -316,3 +316,8 @@ The report uses weighted-average cost per exchange/account/market. It does not c
 The local T-Bots integration now includes a bounded browser-local event outbox, sequential retry delivery, stable run-scoped event IDs, and equity telemetry for shared paper-risk analysis. JPTI can pause new T-Bots paper entries when the shared paper-equity drawdown limit is breached. T-Bots rejects stale or unavailable JPTI risk snapshots for new entries while continuing to manage existing exits.
 
 See [Phase 8 shared intelligence documentation](docs/PHASE_8_SHARED_INTELLIGENCE.md). Configure `JPTI_TBOTS_MAX_DRAWDOWN_PCT=10` in the local API environment to set the shared paper drawdown guard. Live trading remains disabled.
+
+
+## Phase 12 — Universal asset intelligence
+
+JPTI adds a normalized cross-venue instrument universe for crypto spot, perpetual swaps, dated futures, options and margin markets. The Asset Intelligence workspace queries a bounded selection of CCXT venues and exposes instrument structure, settlement, contract size, expiry and metadata status. The quote-quality service validates timestamps, currency consistency and stale observations before calculating a median-based provider consensus with explicit outlier flags. This is metadata and research intelligence; it does not imply live data entitlement or execution support for every asset class. See [API documentation](api/README.md).
