@@ -15,7 +15,7 @@ test('normalizes only completed, chronological candles and rejects malformed his
  assert.throws(()=>normalizeAlphaCandles(c.slice(0,50),'1h',Date.now()),/80–5,000/);
 });
 test('produces a deterministic, explainable signal fingerprint for identical data and settings',()=>{
- const a=input(),x=evaluateAlphaSignal(a,start+241*tf),y=evaluateAlphaSignal(a,start+241*tf);
+ const a=input(),x=evaluateAlphaSignal(a,start+240*tf+5000),y=evaluateAlphaSignal(a,start+240*tf+5000);
  assert.equal(x.signalId,y.signalId);assert.equal(x.evidence.marketDataSha256,y.evidence.marketDataSha256);
  assert.equal(x.evidence.models.length,5);assert.equal(x.evidence.usedOnlyCompletedCandles,true);
  assert.equal(x.confidenceType,'heuristic_consensus_not_probability');assert.equal(x.permissions.liveExecutionAuthorized,false);
@@ -25,7 +25,7 @@ test('blocks missing or stale quotes and does not mark them paper eligible',()=>
  assert.equal(r.qualityChecks.find(x=>x.id==='quote_freshness').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
 });
 test('fails closed when account exposure inventory is omitted',()=>{
- const a=input();delete a.account.exposures;const r=evaluateAlphaSignal(a,start+241*tf);
+ const a=input();delete a.account.exposures;const r=evaluateAlphaSignal(a,start+240*tf+5000);
  assert.equal(r.riskChecks.find(x=>x.id==='account_exposures').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
 });
 test('replay is reproducible and reports separate chronological out-of-sample metrics',()=>{

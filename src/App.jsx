@@ -310,6 +310,7 @@ function App() {
     'Trading Bots': 'Agent orchestration status. Live execution remains protected.',
     'Universal Engine': 'Cross-asset strategy profiles, external market evidence, blockchain discovery and unified risk.',
     'Backtesting Lab': 'Strategy research and historical validation workspace.',
+    'Alpha Signal Engine': 'Explainable multi-model signals, deterministic fingerprints, confidence gates and risk-approved paper trading.',
     'Forecast & Strategy': 'Statistical range forecasts, market microstructure, derivatives and research validation.',
     'Walk-Forward Lab': 'Rolling parameter selection, out-of-sample validation and strategy robustness research.',
     'Calendar & Sessions': 'Economic releases, market sessions and scheduled events.',

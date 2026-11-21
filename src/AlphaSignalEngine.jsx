@@ -7,7 +7,7 @@ const fmt=(v,d=4)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocale
 const options={exchange:['binance','bitget','bybit','okx'],timeframe:['5m','15m','1h','4h','1d']};
 export default function AlphaSignalEngine(){
  const [exchange,setExchange]=useState('binance'),[symbol,setSymbol]=useState('BTC/USDT'),[timeframe,setTimeframe]=useState('1h');
- const [equity,setEquity]=useState('10000'),[dailyPnl,setDailyPnl]=useState('0'),[riskPercent,setRiskPercent]=useState('0.5'),[maxNotional,setMaxNotional]=useState('2000'),[apiToken,setApiToken]=useState('');
+ const [equity,setEquity]=useState('10000'),[dailyPnl,setDailyPnl]=useState('0'),[riskPercent,setRiskPercent]=useState('0.5'),[maxNotional,setMaxNotional]=useState('2000'),[apiToken,setApiToken]=useState(''),[inventoryConfirmed,setInventoryConfirmed]=useState(false),[exposuresJson,setExposuresJson]=useState('');
  const [result,setResult]=useState(null),[replay,setReplay]=useState(null),[ledger,setLedger]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[paperBusy,setPaperBusy]=useState(false);
  const headers=()=>apiToken?{'x-jpti-api-token':apiToken}:{};
  const loadLedger=useCallback(async()=>{try{const r=await apiFetch('/api/alpha/paper/ledger',{headers:headers(),cache:'no-store'});const d=await r.json();if(r.ok)setLedger(d);}catch{}},[apiToken]);
@@ -27,7 +27,7 @@ export default function AlphaSignalEngine(){
  },[exchange,symbol,timeframe]);
  const run=useCallback(async()=>{
   setBusy(true);setError('');setReplay(null);
-  try{const market=await getMarketData();const payload={...market,exchange,timeframe,account:{equity:Number(equity),dailyPnl:Number(dailyPnl),exposures:[]},
+  try{let exposures;try{exposures=JSON.parse(exposuresJson);}catch{throw new Error('Existing exposure inventory must be valid JSON. Enter [] only after confirming that the account has no open positions.');}if(!Array.isArray(exposures))throw new Error('Existing exposure inventory must be a JSON array.');if(!inventoryConfirmed)throw new Error('Confirm that the exposure inventory includes every current open position before requesting paper eligibility.');const market=await getMarketData();const payload={...market,exchange,timeframe,account:{equity:Number(equity),dailyPnl:Number(dailyPnl),exposures},
    limits:{maxDailyLoss:Math.max(1,Math.abs(Number(dailyPnl))+Number(equity)*.025),maxOrderNotional:Number(maxNotional),maxGrossExposure:Math.max(Number(maxNotional),Number(equity)*.5),maxRiskPercent:Number(riskPercent),maxSymbolConcentrationPercent:25,maxQuoteAgeMs:15000},
    config:{riskPercent:Number(riskPercent),minimumConfidence:62,minimumAgreement:.5,atrStopMultiple:1.5,targetOneR:1,targetTwoR:2}};
    const response=await apiFetch('/api/alpha/evaluate',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -55,9 +55,9 @@ export default function AlphaSignalEngine(){
     <label>Daily realized PnL<input type="number" value={dailyPnl} onChange={e=>setDailyPnl(e.target.value)}/></label>
     <label>Risk per trade (%)<input type="number" min="0.1" max="2" step="0.1" value={riskPercent} onChange={e=>setRiskPercent(e.target.value)}/></label>
     <label>Max order notional<input type="number" min="1" value={maxNotional} onChange={e=>setMaxNotional(e.target.value)}/></label>
-    <label>API token (if required)<input type="password" value={apiToken} onChange={e=>setApiToken(e.target.value)} placeholder="Local private access may not require one" autoComplete="off"/></label>
+    <label>Existing exposures JSON<input value={exposuresJson} onChange={e=>{setExposuresJson(e.target.value);setInventoryConfirmed(false);}} placeholder='[{"symbol":"BTC/USDT","marketValue":500}] or [] if flat'/></label><label>API token (if required)<input type="password" value={apiToken} onChange={e=>setApiToken(e.target.value)} placeholder="Local private access may not require one" autoComplete="off"/></label>
    </div>
-   <div className="alpha-actions"><button className="alpha-primary" onClick={run} disabled={busy}>{busy?<RefreshCw className="spin" size={15}/>:<Play size={15}/>} {busy?'Analyzing market…':'Generate Alpha assessment'}</button><button className="alpha-secondary" onClick={runReplay} disabled={busy}><FlaskConical size={15}/> Replay historical signals</button></div>
+   <label className="alpha-confirm"><input type="checkbox" checked={inventoryConfirmed} onChange={e=>setInventoryConfirmed(e.target.checked)}/> I confirm this inventory is complete and current, including all open positions.</label><div className="alpha-actions"><button className="alpha-primary" onClick={run} disabled={busy||!inventoryConfirmed}>{busy?<RefreshCw className="spin" size={15}/>:<Play size={15}/>} {busy?'Analyzing market…':'Generate Alpha assessment'}</button><button className="alpha-secondary" onClick={runReplay} disabled={busy}><FlaskConical size={15}/> Replay historical signals</button></div>
    <p className="alpha-footnote">Uses public OHLCV and ticker data from the selected exchange. Risk inventory is explicitly empty in this initial UI; connect a reconciled account exposure feed before using paper eligibility with an existing portfolio.</p>
    {error&&<div className="alpha-error"><AlertTriangle size={15}/>{error}</div>}
   </section>
