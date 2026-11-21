@@ -21,6 +21,7 @@ import { labRouter } from './advanced-lab.js';
 import { tbotsRouter } from './tbots-integration.js';
 import { universalRouter } from './universal-engine.js';
 import { portfolioRouter } from './portfolio-intelligence.js';
+import { marketStreamRouter } from './market-stream.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.JPTI_API_PORT || 8787);
@@ -66,6 +67,7 @@ if (!['127.0.0.1', '::1', 'localhost'].includes(host) && (!process.env.JPTI_ALLO
 }
 
 app.use('/api/intelligence', intelligenceRouter);
+app.use('/api/stream', marketStreamRouter);
 app.use('/api', providerRouter);
 app.use('/api', operationsRouter);
 app.use('/api', advancedRouter);
