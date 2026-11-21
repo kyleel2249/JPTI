@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAlphaSignal, normalizeAlphaCandles, runAlphaReplay } from './alpha-signal-engine.js';
+import { evaluateAlphaSignal, evaluatePaperExit, normalizeAlphaCandles, runAlphaReplay } from './alpha-signal-engine.js';
 const start=1700000000000,tf=3600000;
 function candles(count=240,mode='up'){
  return Array.from({length:count},(_,i)=>{const trend=mode==='up'?i*.16:mode==='down'?-i*.16:Math.sin(i/5)*2;const close=100+trend+Math.sin(i/3)*.35;return{timestamp:start+i*tf,open:close-.08,high:close+.45,low:close-.45,close,volume:1000+(i%15)*80};});
@@ -24,6 +24,7 @@ test('blocks missing or stale quotes and does not mark them paper eligible',()=>
  const a=input();a.quote.timestamp=new Date(start).toISOString();const r=evaluateAlphaSignal(a,start+241*tf);
  assert.equal(r.qualityChecks.find(x=>x.id==='quote_freshness').passed,false);assert.equal(r.permissions.paperIntentEligible,false);
 });
+test('fails closed when exposure inventory uses a different quote currency',()=>{const a=input();a.account.exposures=[{symbol:'ETH/USD',marketValue:250,currency:'USD'}];const r=evaluateAlphaSignal(a,start+240*tf+5000);assert.equal(r.qualityChecks.find(x=>x.id==='exposure_quote_currency').passed,false);assert.equal(r.permissions.paperIntentEligible,false);});
 test('fails closed when account quote currency is missing or mismatched',()=>{const a=input();a.account.currency='USD';const r=evaluateAlphaSignal(a,start+240*tf+5000);assert.equal(r.qualityChecks.find(x=>x.id==='account_quote_currency').passed,false);assert.equal(r.permissions.paperIntentEligible,false);});
 test('fails closed when account exposure inventory is omitted',()=>{
  const a=input();delete a.account.exposures;const r=evaluateAlphaSignal(a,start+240*tf+5000);
@@ -35,6 +36,7 @@ test('replay is reproducible and reports separate chronological out-of-sample me
  assert.deepEqual(x.trades,y.trades);assert.equal(x.data.sha256,y.data.sha256);assert.equal(x.validation.split,'chronological 70/30 by entry candle');
  assert.equal(x.validation.outOfSampleUsedForParameterSelection,false);assert.ok(Number.isFinite(x.overall.endingCapital));
 });
+test('paper exit monitor closes only when stop or second target is crossed',()=>{const trade={direction:'buy',stopLoss:95,takeProfitTwo:110};assert.equal(evaluatePaperExit(trade,94),'stop_loss');assert.equal(evaluatePaperExit(trade,111),'take_profit_2');assert.equal(evaluatePaperExit(trade,100),null);const short={direction:'sell',stopLoss:105,takeProfitTwo:90};assert.equal(evaluatePaperExit(short,106),'stop_loss');assert.equal(evaluatePaperExit(short,89),'take_profit_2');});
 test('rejects invalid replay assumptions and timeframe',()=>{
  assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'2m'},start+241*tf),/Unsupported replay timeframe/);
  assert.throws(()=>runAlphaReplay({candles:candles(),timeframe:'1h',initialCapital:-1},start+241*tf),/positive/);const zeroFee=runAlphaReplay({candles:candles(),timeframe:'1h',feeBps:0,slippageBps:0},start+241*tf);assert.equal(zeroFee.parameters.feeBps,0);

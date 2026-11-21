@@ -99,7 +99,8 @@ export function evaluateAlphaSignal(input={}, now=Date.now()) {
     {id:'signal_direction',passed:evidence.direction!=='neutral',detail:'The ensemble must produce a directional BUY or SELL consensus.'},
     {id:'confidence_threshold',passed:evidence.confidence>=config.minimumConfidence,detail:'Heuristic confidence must meet the configured minimum.'},
     {id:'model_agreement',passed:evidence.directionalAgreement>=config.minimumAgreement,detail:'Active specialist models must meet the minimum directional agreement.'},
-    {id:'volatility_guard',passed:evidence.marketRegime!=='high_volatility',detail:'High-volatility regimes are blocked by the default safety policy.'}
+    {id:'volatility_guard',passed:evidence.marketRegime!=='high_volatility',detail:'High-volatility regimes are blocked by the default safety policy.'},
+    {id:'valid_stop_geometry',passed:stopPrice>0&&riskDistance>0&&tp1>0&&tp2>0,detail:'ATR-based stop and target levels must all be positive and geometrically valid.'}
   ];
   const entry=quoteValid?quotePrice:last.close,side=evidence.direction,stopDistance=evidence.indicators.atr14*config.atrStopMultiple;
   const stopPrice=side==='buy'?entry-stopDistance:side==='sell'?entry+stopDistance:null;
@@ -172,6 +173,13 @@ export function runAlphaReplay(input={}, now=Date.now()) {
 async function persistEvent(kind,source,eventType,externalId,payload,occurredAt=new Date().toISOString()){
  return appendStoredEvent({kind,source,eventType,externalId,occurredAt,payload});
 }
+export function evaluatePaperExit(intent,markPrice){
+ const price=Number(markPrice);if(!Number.isFinite(price)||price<=0)throw new Error('Paper mark price must be positive.');
+ if(intent.direction==='buy'){if(price<=intent.stopLoss)return 'stop_loss';if(price>=intent.takeProfitTwo)return 'take_profit_2';}
+ else if(intent.direction==='sell'){if(price>=intent.stopLoss)return 'stop_loss';if(price<=intent.takeProfitTwo)return 'take_profit_2';}
+ else throw new Error('Paper trade direction is invalid.');
+ return null;
+}
 function protectedRoute(handler){return async(req,res)=>{try{requirePrivateApiAuth(req);await handler(req,res);}catch(error){res.status(error.status||400).json({error:error.message||'Alpha Signal Engine request failed.'});}};}
 alphaSignalRouter.post('/evaluate',protectedRoute(async(req,res)=>{
  const result=evaluateAlphaSignal(req.body||{}),existing=await readStoredEvents(10000,'alpha-signal-evaluation');
@@ -200,6 +208,27 @@ alphaSignalRouter.post('/paper/intent',protectedRoute(async(req,res)=>{
  await persistEvent('alpha-paper-intent','jpti-alpha-paper','paper_intent_opened',intent.tradeId,intent,intent.createdAt);
  res.status(201).json({...intent,persisted:true});
 }));
+alphaSignalRouter.post('/paper/mark',protectedRoute(async(req,res)=>{
+ const tradeId=String(req.body?.tradeId||''),markPrice=Number(req.body?.markPrice),quoteTime=Date.parse(String(req.body?.quoteTimestamp||'')),now=Date.now(),quoteAgeMs=Number.isFinite(quoteTime)?now-quoteTime:null;
+ if(!/^[0-9a-f-]{36}$/i.test(tradeId)||!Number.isFinite(markPrice)||markPrice<=0||quoteAgeMs===null||quoteAgeMs< -5000||quoteAgeMs>15000)throw new Error('Paper mark requires a valid trade, positive price and quote timestamp no older than 15 seconds.');
+ const intents=await readStoredEvents(10000,'alpha-paper-intent'),intent=intents.find(e=>e.payload?.tradeId===tradeId)?.payload;
+ if(!intent)throw new Error('Paper trade was not found.');
+ const closes=await readStoredEvents(10000,'alpha-paper-close');
+ if(closes.some(e=>e.payload?.tradeId===tradeId)){res.json({status:'closed',close:closes.find(e=>e.payload?.tradeId===tradeId).payload,duplicate:true});return;}
+ const trigger=evaluatePaperExit(intent,markPrice);
+ if(trigger){
+  const feeBps=req.body?.feeBps==null?10:Number(req.body.feeBps),slippageBps=req.body?.slippageBps==null?5:Number(req.body.slippageBps);
+  if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>100)throw new Error('Paper monitoring fee and slippage assumptions must be between 0 and 100 basis points.');
+  const direction=intent.direction==='buy'?1:-1,exitPrice=markPrice*(direction===1?1-slippageBps/10000:1+slippageBps/10000),fees=exitPrice*intent.quantity*feeBps/10000,gross=(exitPrice-intent.entry)*intent.quantity*direction;
+  const close={tradeId,signalId:intent.signalId,closedAt:new Date(now).toISOString(),exitPrice:round(exitPrice),markPrice:round(markPrice),fees:round(fees),grossPnl:round(gross,6),netPnl:round(gross-fees,6),returnPercent:round((gross-fees)/(intent.entry*intent.quantity)*100,4),reason:trigger,quoteTimestamp:new Date(quoteTime).toISOString(),liveExecutionAuthorized:false,exchangeOrdersCreated:0};
+  await persistEvent('alpha-paper-close','jpti-alpha-paper','paper_trade_auto_closed',tradeId,close,close.closedAt);
+  res.json({status:'closed',close,persisted:true,liveExecutionAuthorized:false});return;
+ }
+ const direction=intent.direction==='buy'?1:-1,unrealizedPnl=(markPrice-intent.entry)*intent.quantity*direction;
+ const mark={tradeId,price:round(markPrice),quoteTimestamp:new Date(quoteTime).toISOString(),observedAt:new Date(now).toISOString(),quoteAgeMs,unrealizedPnl:round(unrealizedPnl,6),unrealizedReturnPercent:round(unrealizedPnl/(intent.entry*intent.quantity)*100,4),trigger:null};
+ await persistEvent('alpha-paper-mark','jpti-alpha-paper','paper_trade_marked',tradeId+':'+quoteTime,mark,mark.observedAt);
+ res.json({status:'open',mark,persisted:true,liveExecutionAuthorized:false});
+}));
 alphaSignalRouter.post('/paper/close',protectedRoute(async(req,res)=>{
  const tradeId=String(req.body?.tradeId||''),exitPrice=Number(req.body?.exitPrice);
  if(!/^[0-9a-f-]{36}$/i.test(tradeId)||!Number.isFinite(exitPrice)||exitPrice<=0)throw new Error('A valid paper tradeId and positive exitPrice are required.');
@@ -214,8 +243,8 @@ alphaSignalRouter.post('/paper/close',protectedRoute(async(req,res)=>{
  res.json({...close,persisted:true});
 }));
 alphaSignalRouter.get('/paper/ledger',protectedRoute(async(_req,res)=>{
- const [intents,closes]=await Promise.all([readStoredEvents(10000,'alpha-paper-intent'),readStoredEvents(10000,'alpha-paper-close')]),closed=new Map(closes.map(e=>[e.payload.tradeId,e.payload]));
- const trades=intents.map(e=>({...e.payload,close:closed.get(e.payload.tradeId)||null,status:closed.has(e.payload.tradeId)?'closed':'open'}));
+ const [intents,closes,marks]=await Promise.all([readStoredEvents(10000,'alpha-paper-intent'),readStoredEvents(10000,'alpha-paper-close'),readStoredEvents(20000,'alpha-paper-mark')]),closed=new Map(closes.map(e=>[e.payload.tradeId,e.payload])),latestMarks=new Map(marks.map(e=>[e.payload.tradeId,e.payload]));
+ const trades=intents.map(e=>({...e.payload,mark:latestMarks.get(e.payload.tradeId)||null,close:closed.get(e.payload.tradeId)||null,status:closed.has(e.payload.tradeId)?'closed':'open'}));
  const realized=trades.filter(t=>t.close).reduce((s,t)=>s+t.close.netPnl,0);
  res.json({trades:trades.reverse(),summary:{total:trades.length,open:trades.filter(t=>t.status==='open').length,closed:closes.length,realizedPnl:round(realized,6),wins:trades.filter(t=>t.close?.netPnl>0).length,losses:trades.filter(t=>t.close?.netPnl<0).length},liveExecutionAuthorized:false});
 }));
