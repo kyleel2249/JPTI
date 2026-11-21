@@ -7,12 +7,12 @@ export const productionReadinessRouter=express.Router();
 const loopback=host=>['127.0.0.1','::1','localhost'].includes(host);
 const positive=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
 export function evaluateProductionReadiness({env=process.env,storage=getStorageStatus(),scheduler=getSchedulerLeaseStatus(),exchanges=listExchangeCatalog()}={}){
- const host=String(env.JPTI_API_HOST||'127.0.0.1'),remote=!loopback(host),token=String(env.JPTI_API_TOKEN||''),strongToken=strongToken&&new Set(token).size>=12&&!/(password|changeme|example|placeholder)/i.test(token),backend=String(env.JPTI_STORAGE_BACKEND||(env.DATABASE_URL?'postgres':'file')).toLowerCase();
+ const host=String(env.JPTI_API_HOST||'127.0.0.1'),remote=!loopback(host),token=String(env.JPTI_API_TOKEN||''),strongToken=token.length>=32&&new Set(token).size>=12&&!/(password|changeme|example|placeholder)/i.test(token),backend=String(env.JPTI_STORAGE_BACKEND||(env.DATABASE_URL?'postgres':'file')).toLowerCase();
  const origins=String(env.JPTI_CORS_ORIGINS||'https://localhost,capacitor://localhost').split(',').map(x=>x.trim()).filter(Boolean);
  const signoff=env.JPTI_LIVE_TRADING_SIGNOFF==='I_HAVE_REVIEWED_AND_ACCEPT_THE_LIVE_TRADING_RISK';
  const checks=[
   {id:'api_binding',passed:!remote||(env.JPTI_ALLOW_REMOTE_API==='true'&&strongToken),severity:'critical',detail:'Remote binding requires explicit enablement and a strong API token.'},
-  {id:'api_token',passed:token.length>=32,severity:'critical',detail:'API token must contain at least 32 characters.'},
+  {id:'api_token',passed:strongToken,severity:'critical',detail:'API token must contain at least 32 characters.'},
   {id:'durable_storage',passed:backend==='postgres'&&Boolean(env.DATABASE_URL)&&storage.initialized===true&&storage.durable===true,severity:'critical',detail:'Initialized PostgreSQL storage is required for multi-instance production operation.'},
   {id:'distributed_scheduler',passed:scheduler.initialized===true&&scheduler.coordination==='postgres-distributed',severity:'critical',detail:'PostgreSQL scheduler lease coordination must be initialized.'},
   {id:'cors_origins',passed:origins.length>0&&!origins.includes('*')&&origins.every(x=>x.startsWith('https://')||x==='capacitor://localhost'),severity:'high',detail:'CORS must use explicit HTTPS or Capacitor origins; wildcard origins are forbidden.'},
