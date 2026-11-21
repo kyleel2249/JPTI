@@ -7,6 +7,7 @@ import InstitutionalTerminal from './InstitutionalTerminal.jsx';
 import InstitutionalGovernance from './InstitutionalGovernance.jsx';
 import FuturesIntelligence from './FuturesIntelligence.jsx';
 import AssetIntelligence from './AssetIntelligence.jsx';
+import ResearchCouncil from './ResearchCouncil.jsx';
 import { apiFetch, apiUrl } from './lib/api.js';
 import {
   Activity, BarChart3, Bell, Blocks, Bot, BrainCircuit, CandlestickChart,
@@ -406,6 +407,7 @@ function App() {
     if (page === 'Institutional Governance') return <InstitutionalGovernance/>;
     if (page === 'Futures Intelligence') return <FuturesIntelligence/>;
     if (page === 'Asset Intelligence') return <AssetIntelligence/>;
+    if (page === 'AI Intelligence') return <ResearchCouncil/>;
     if (page === 'Universal Engine') return <UniversalEngine localPrivateAccess={health?.localPrivateAccess === true}/>;
     if (page === 'Overview') return renderOverview();
     if (page === 'Financial & On-chain') return <FinancialIntelligence/>;
