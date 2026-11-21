@@ -430,3 +430,41 @@ The council blocks directional consensus when evidence is stale/missing or fewer
 - `POST /api/portfolio/allocation/risk-parity` — authenticated long-only covariance-aware equal-risk-contribution allocation. The request contains 2–20 assets with unique symbols, one common explicit quote currency, and at least 30 aligned finite return observations per asset. Optional `minWeight`/`maxWeight` constraints are applied through bounded-simplex projection.
 - The result includes per-asset weights and risk contributions, portfolio volatility, diversification ratio and concentration. Each calculation is persisted as a portfolio-allocation recommendation event.
 - No order is submitted and execution authorization remains false. Returns are assumed to share one sampling interval; annualization depends on the supplied `periodsPerYear`. Shorting, leverage, FX conversion, transaction costs, liquidity constraints and market impact are excluded.
+
+
+## Phase 15 — Market stream transport gateway
+
+- `GET /api/stream/status` — reports transport type, active client count and capacity.
+- `GET /api/stream/market?exchange=binance&symbol=BTC/USDT&intervalMs=5000` — bounded Server-Sent Events quote stream using a public CCXT REST ticker poller. Default capacity is 25 clients; interval is 3–60 seconds; per-client exchange instances close when the response disconnects.
+- This is explicitly REST-polling over SSE. It is not an exchange-native WebSocket feed and does not stream full order-book deltas.
+
+## Phase 16 — Portfolio stress and historical risk
+
+- `POST /api/portfolio/risk/stress` — authenticated historical VaR/expected shortfall, max drawdown and deterministic scenario shocks from aligned simple-return observations. One explicit quote currency is required; each asset must have at least 30 aligned observations. The result is persisted as an audit event.
+- Historical risk is descriptive and cannot model derivatives margin/liquidation, funding, FX conversion or liquidity impact.
+
+## Phase 17 — Fail-closed pre-trade risk preflight
+
+- `POST /api/risk/preflight` — authenticated assessment of account equity, daily PnL, fresh timestamped quote, position size, protective stop, order notional, gross exposure, symbol concentration and risk budget. Missing required evidence blocks the intent.
+- A passing result only marks a paper intent eligible. No exchange order is created and live execution remains unauthorized.
+
+## Phase 18 — Immutable strategy registry and paper promotion review
+
+- `POST /api/strategies/registry` — publish an immutable semantic-versioned strategy definition with asset classes, timeframes, rules, risk policy and SHA-256 checksum. Duplicate strategy/version pairs are rejected.
+- `GET /api/strategies/registry` — list persisted immutable versions.
+- `POST /api/strategies/promotion-review` — review minimum sample size, profit factor, drawdown, positive out-of-sample return, walk-forward consistency, data quality and risk-control evidence. A pass is a paper-trial candidate only; live promotion is always false.
+
+## Phase 19 — Deterministic market replay
+
+- `POST /api/research/replay` — authenticated replay of 60–20,000 chronological OHLCV candles using `ema_cross` or `breakout`, next-candle-open fills, fixed fee/slippage assumptions, long-only position sizing, equity/drawdown, trades and chronological 70/30 reporting split.
+- The JSON body parser is bounded at 4 MB. The replay does not optimize parameters, guarantee fills, or model intrabar queue position, partial fills, funding, margin or liquidation.
+
+## Phase 20 — Operational observability
+
+- `GET /api/observability/diagnostics` — authenticated request counts, 5xx counts, route latency aggregates, event-loop delay, process memory, uptime, storage and scheduler state, configured exchange count and non-secret readiness checks.
+- Telemetry stores only bounded route/method aggregates; it does not capture request bodies, API keys or order payloads.
+
+## Phase 21 — Production readiness gate
+
+- `GET /api/governance/readiness` — authenticated read-only assessment of API binding, API token strength, durable PostgreSQL storage, distributed scheduler, CORS allowlist, order-notional cap, exchange credential configuration and explicit operator acknowledgement.
+- Passing the configuration checks only means the listed gates are configured. The endpoint never authorizes live execution, changes environment flags or submits orders. Security review, venue permission review, legal/regulatory assessment and operator approval remain separate requirements.
