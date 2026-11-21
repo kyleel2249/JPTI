@@ -4,7 +4,7 @@ import { calculatePaperPosition, foldPaperEvents, normalizePaperPositionInput } 
 
 const contract = { base: 'BTC', quote: 'USDT', settle: 'USDT', linear: true, inverse: false, swap: true, future: false, contractSize: 0.001 };
 const input = (overrides = {}) => ({
-  symbol: 'BTC/USDT:USDT', quantityBase: 0.01, feeBps: 6,
+  symbol: 'BTC/USDT:USDT', quantityBase: 0.001, feeBps: 6,
   buy: { exchange: 'binance', symbol: 'BTC/USDT:USDT', contract, entryPrice: 100000 },
   sell: { exchange: 'bybit', symbol: 'BTC/USDT:USDT', contract, entryPrice: 100100 },
   ...overrides
@@ -13,7 +13,7 @@ const input = (overrides = {}) => ({
 test('normalizes a compatible two-venue linear paired position', () => {
   const result = normalizePaperPositionInput(input());
   assert.equal(result.legs.length, 2);
-  assert.equal(result.legs[0].contracts, 10);
+  assert.equal(result.legs[0].contracts, 1);
   assert.equal(result.legs[1].side, 'sell');
 });
 
@@ -28,7 +28,7 @@ test('computes paired linear PnL after estimated entry and exit fees', () => {
   const normalized = normalizePaperPositionInput(input());
   const position = { ...normalized, legs: normalized.legs };
   const result = calculatePaperPosition(position, { buy: 100200, sell: 99900 });
-  assert.equal(result.grossPnlUsd, 4);
+  assert.equal(result.grossPnlUsd, 0.4);
   assert.ok(result.estimatedFeesUsd > 0);
   assert.equal(result.netPnlUsd, result.grossPnlUsd - result.estimatedFeesUsd);
   assert.equal(result.fundingIncluded, false);
