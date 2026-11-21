@@ -331,3 +331,16 @@ The AI Intelligence workspace now includes six specialist research engines cover
 ## Phase 14 — Portfolio construction and risk parity
 
 The Portfolio Allocation workspace calculates long-only covariance-aware equal-risk-contribution weights from timestamp-aligned historical return series. It enforces one quote currency per calculation, unique instruments, finite aligned observations and explicit minimum/maximum weights. Allocation recommendations are persisted for audit and do not create orders. Historical covariance is not a forecast. See [API documentation](api/README.md).
+
+
+## Phases 15–21 — Streaming, risk, strategy governance and operational readiness
+
+- **Phase 15 — Market stream gateway:** bounded Server-Sent Events with public CCXT REST ticker polling, per-client cleanup, freshness flags and a live monitor. It is not represented as native exchange WebSocket streaming.
+- **Phase 16 — Portfolio stress:** historical VaR, expected shortfall, drawdown and explicit scenario shocks with quote-currency and aligned-return validation.
+- **Phase 17 — Pre-trade risk:** fail-closed checks for equity, daily loss, quote freshness, stop placement, risk budget, order notional, gross exposure and symbol concentration. Passing is paper-intent eligibility only.
+- **Phase 18 — Strategy registry:** immutable semantic versions, SHA-256 fingerprints, persisted versions and evidence-based paper promotion review.
+- **Phase 19 — Market replay:** chronological OHLCV replay with next-candle-open fills, fee/slippage assumptions, drawdown and chronological reporting split.
+- **Phase 20 — Observability:** route request/error/latency aggregates, event-loop delay, memory, uptime, storage, scheduler and exchange catalog diagnostics.
+- **Phase 21 — Production readiness:** read-only checks for durable storage, distributed scheduler, strong secrets, CORS, risk caps and operator acknowledgement. It never unlocks live trading or creates orders.
+
+All seven phases expose API and dashboard surfaces and include focused automated tests. Their limitations and exact request contracts are documented in [API documentation](api/README.md). Native venue WebSockets, full exchange execution, cross-currency risk, derivatives liquidation modeling, and regulatory certification are not claimed by this delivery.
