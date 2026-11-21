@@ -14,7 +14,7 @@ test('calculates net cross-venue edge after estimated two-sided fees',()=>{
  assert.ok(edge.netEdgeBps>0);
 });
 test('depth-aware average prices are preferred over displayed top of book',()=>{
- const edges=calculateCrossVenueEdges([venue('a',99,100,101),venue('b',103,104,102)],{takerFeeBps:0});
+ const edges=calculateCrossVenueEdges([venue('a',99,100,101),venue('b',103,104,102,102)],{takerFeeBps:0});
  const edge=edges.find(x=>x.buyExchange==='a'&&x.sellExchange==='b');
  assert.equal(edge.buyPrice,101);
  assert.equal(edge.sellPrice,102);
