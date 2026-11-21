@@ -7,7 +7,7 @@ import { buildSafetySnapshot } from './institutional-governance.js';
 export const futuresPaperRouter = express.Router();
 const finite = value => value === null || value === undefined || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 const positive = value => { const n = finite(value); return n !== null && n > 0 ? n : null; };
-const MAX_EVENTS = 50000;
+const MAX_EVENTS = Number.MAX_SAFE_INTEGER;
 
 function badRequest(message) { throw Object.assign(new Error(message), { status: 400 }); }
 
@@ -33,11 +33,13 @@ export function normalizePaperPositionInput(input = {}) {
     return { side, exchange, symbol: venueSymbol, base: String(contract.base || symbol.split('/')[0]).toUpperCase(),
       quote: String(contract.quote || symbol.split('/')[1].split(':')[0]).toUpperCase(),
       settle: String(contract.settle || '').toUpperCase(), contractSize, linear: true, inverse: false,
-      entryPrice, contracts: quantityBase / contractSize, quantityBase, swap: contract.swap === true, future: contract.future === true,
+      entryPrice, contracts: quantityBase / contractSize, quantityBase, swap: contract.swap === true, future: contract.future === true, expiry: contract.expiry || null,
       entryFeeUsd: quantityBase * entryPrice * feeBps / 10000 };
   });
   const [buy, sell] = legs;
   if (buy.exchange === sell.exchange) badRequest('Buy and sell legs must use different exchanges.');
+  if (buy.swap !== sell.swap || buy.future !== sell.future || (buy.swap === buy.future)) badRequest('Both legs must use the same perpetual or dated contract type.');
+  if (buy.future && (!buy.expiry || buy.expiry !== sell.expiry)) badRequest('Dated futures legs must have the same verified expiry.');
   for (const field of ['base', 'quote', 'settle']) if (!buy[field] || buy[field] !== sell[field]) badRequest('Both legs must match on base, quote and settlement currency.');
   if (buy.quote !== 'USDT' || buy.settle !== 'USDT') badRequest('The first paper PnL model is restricted to USDT-quoted, USDT-settled linear contracts.');
   if (buy.symbol.split(':')[0] !== sell.symbol.split(':')[0]) badRequest('Both legs must reference the same BASE/QUOTE instrument.');
@@ -110,7 +112,7 @@ futuresPaperRouter.post('/paper/positions', async (req, res) => {
     }
     const positionId = randomUUID(), occurredAt = new Date().toISOString();
     const position = { id: positionId, clientRequestId: clientRequestId || null, symbol: normalized.symbol,
-      quantityBase: normalized.quantityBase, feeBps: normalized.feeBps, kind: normalized.legs[0].swap ? 'perpetual' : 'dated', legs: normalized.legs,
+      quantityBase: normalized.quantityBase, feeBps: normalized.feeBps, kind: normalized.legs[0].swap ? 'perpetual' : 'dated', expiry: normalized.legs[0].expiry, legs: normalized.legs,
       maxNotionalPerLegUsd: normalized.maxNotional, fundingIncluded: false };
     await appendStoredEvent({ kind: 'futures-paper-event', source: 'jpti-futures-paper', eventType: 'position_opened',
       positionId, occurredAt, payload: position });
