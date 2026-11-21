@@ -66,7 +66,7 @@ marketStreamRouter.get('/market',async(req,res)=>{
     connectTimeout=setTimeout(()=>{if(!nativeConnected){try{socket.close();}catch{}startFallback();}},8000);
     socket.addEventListener('open',()=>{
      if(closed)return;
-     nativeConnected=true;if(connectTimeout)clearTimeout(connectTimeout);
+     nativeConnected=true;fallbackStarted=false;if(connectTimeout)clearTimeout(connectTimeout);
      if(timer)clearInterval(timer);
      send('status',{status:'connected',transport:'native-websocket-sse',exchange:options.exchange,symbol:options.symbol});
      if(config.subscribe)socket.send(JSON.stringify(config.subscribe));
@@ -77,7 +77,7 @@ marketStreamRouter.get('/market',async(req,res)=>{
      if(typeof event.data==='string')handle(event.data);
      else if(event.data&&typeof event.data.text==='function')event.data.text().then(handle).catch(()=>{});
     });
-    socket.addEventListener('error',()=>{send('warning',{message:'Native exchange WebSocket encountered an error; switching to REST fallback.'});if(!nativeConnected)startFallback();else{try{socket.close();}catch{}startFallback();}});
+    socket.addEventListener('error',()=>{send('warning',{message:'Native exchange WebSocket encountered an error; switching to REST fallback.'});if(!nativeConnected)startFallback();else{nativeConnected=false;if(nativeHeartbeat)clearInterval(nativeHeartbeat);try{socket.close();}catch{}startFallback();}});
     socket.addEventListener('close',()=>{nativeConnected=false;if(connectTimeout)clearTimeout(connectTimeout);if(nativeHeartbeat)clearInterval(nativeHeartbeat);startFallback();});
    }catch{startFallback();}
   }else startFallback();
